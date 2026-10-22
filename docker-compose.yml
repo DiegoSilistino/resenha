@@ -1,0 +1,53 @@
+# Produção: app + LiveKit (voz/vídeo) + Caddy (HTTPS automático), num único servidor.
+# Antes de subir: copie .env.example para .env e preencha.
+#   docker compose up -d --build
+#   docker compose logs app     <- o link de convite do administrador aparece aqui
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      LIVEKIT_API_URL: http://livekit:7880
+      TRUST_PROXY: "true"
+    volumes:
+      - app-data:/data
+    depends_on:
+      - livekit
+
+  livekit:
+    # Fixe uma versão (ex.: livekit/livekit-server:v1.9.0) para atualizações previsíveis.
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+    volumes:
+      - ./deploy/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7881:7881/tcp" # mídia via TCP (redes que bloqueiam UDP)
+      - "7882:7882/udp" # mídia via UDP (o caminho normal)
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+      - livekit
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:

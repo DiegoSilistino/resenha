@@ -1,0 +1,10 @@
+# HTTPS automático (Let's Encrypt) para o seu domínio.
+# Tudo num domínio só: /rtc vai para o LiveKit, o resto para o app.
+{$DOMAIN} {
+	encode zstd gzip
+
+	@livekit path /rtc*
+	reverse_proxy @livekit livekit:7880
+
+	reverse_proxy app:3000
+}

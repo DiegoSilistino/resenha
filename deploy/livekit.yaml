@@ -1,0 +1,15 @@
+# Configuração do LiveKit em produção.
+# As chaves vêm da variável LIVEKIT_KEYS (definida no docker-compose.yml a partir do .env).
+port: 7880
+rtc:
+  tcp_port: 7881
+  # Uma única porta UDP para toda a mídia: só ela precisa estar liberada no firewall.
+  udp_port: 7882
+  # Descobre o IP público do servidor para anunciar aos navegadores.
+  use_external_ip: true
+logging:
+  level: info
+room:
+  # Salas vazias somem sozinhas.
+  empty_timeout: 300
+  max_participants: 25

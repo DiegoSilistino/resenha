@@ -87,7 +87,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     logLevel: e.LOG_LEVEL,
     livekit: {
       apiUrl: e.LIVEKIT_API_URL,
-      publicUrl: e.LIVEKIT_PUBLIC_URL?.replace(/\/+$/, "") || null,
+      // Produção: vazio = mesmo domínio (o Caddy repassa /rtc). Desenvolvimento: LiveKit local direto.
+      publicUrl: e.LIVEKIT_PUBLIC_URL?.replace(/\/+$/, "") || (production ? null : "ws://localhost:7880"),
       apiKey,
       apiSecret,
     },

@@ -170,9 +170,10 @@ async function registerFrontend(app: FastifyInstance, config: Config) {
     decorateReply: false,
     wildcard: false,
     index: false,
-    setHeaders(res, filePath) {
+    cacheControl: false, // o cabeçalho é definido abaixo, por tipo de arquivo
+    setHeaders(reply, filePath) {
       // Arquivos com hash no nome podem ficar em cache para sempre; o index.html nunca.
-      res.setHeader(
+      reply.header(
         "Cache-Control",
         filePath.includes(`${path.sep}assets${path.sep}`) ? "public, max-age=31536000, immutable" : "no-cache",
       );
@@ -180,11 +181,11 @@ async function registerFrontend(app: FastifyInstance, config: Config) {
   });
   // SPA: qualquer rota GET que não seja API/arquivo cai no index.html.
   app.setNotFoundHandler((req, reply) => {
-    if (req.method !== "GET" || req.url.startsWith("/api/") || req.url.startsWith("/ws")) {
+    if ((req.method !== "GET" && req.method !== "HEAD") || req.url.startsWith("/api/") || req.url.startsWith("/ws")) {
       return sendError(reply, new HttpError(404, "Não encontrado"));
     }
     reply.header("Cache-Control", "no-cache");
-    return reply.sendFile("index.html", dist);
+    return reply.sendFile("index.html", dist, { cacheControl: false });
   });
 }
 

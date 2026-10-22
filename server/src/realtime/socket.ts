@@ -8,7 +8,8 @@ import { toPublicUser } from "../store.ts";
 import { WatchError } from "../watch/service.ts";
 import type { Connection } from "./hub.ts";
 
-const TYPING_INTERVAL_MS = 2_500;
+/** O cliente avisa a cada 2,5 s; aqui só se descartam repetições coladas (o flood geral é barrado abaixo). */
+const TYPING_INTERVAL_MS = 250;
 /** Proteção simples contra flood: no máximo N mensagens por janela de 1 s. */
 const MAX_MESSAGES_PER_SECOND = 20;
 

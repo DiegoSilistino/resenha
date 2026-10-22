@@ -33,6 +33,11 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
     me: toPublicUser(currentUser(req)),
   }));
 
+  /** Para o app saber se há sessão ao abrir: sempre 200 (sem erro no console de quem não entrou). */
+  app.get("/api/auth/session", async (req) => ({
+    me: req.auth ? toPublicUser(req.auth.user) : null,
+  }));
+
   app.post("/api/auth/login", { config: rateLimited(ctx, 10, "15 minutes") }, async (req, reply) => {
     const body = parse(loginBody, req.body);
     const user = store.userByUsername(body.username);

@@ -1,0 +1,13 @@
+{
+  "name": "Resenha",
+  "short_name": "Resenha",
+  "description": "Voz, chat e vídeo para a sua turma.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#13202a",
+  "theme_color": "#13202a",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
