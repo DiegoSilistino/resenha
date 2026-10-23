@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router";
-import { ExternalLink, Pause, Play, SkipForward, Volume2 } from "lucide-react";
+import { ExternalLink, Pause, Play, SkipForward, Square, Volume2, X } from "lucide-react";
 import { watchPositionAt, youTubeWatchUrl, type WatchClientAction, type WatchState } from "@resenha/shared";
 import { clock, realtime } from "../lib/realtime.ts";
 import { formatDuration } from "../lib/format.ts";
@@ -9,6 +9,7 @@ import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useVoice } from "../voice/controller.ts";
 import { useWatchSlot } from "./slot.ts";
+import { useWatchUi, useWatchVisibility } from "./visibility.ts";
 import { loadYouTubeApi, YT_STATE, type YTPlayer } from "./youtube.ts";
 
 /** Diferença tolerada entre o seu player e o relógio do servidor antes de corrigir. */
@@ -18,11 +19,13 @@ const DRIFT_PAUSED_S = 1;
 export function WatchDock() {
   const channelId = useVoice((s) => (s.status !== "idle" ? s.channelId : null));
   const state = useApp((s) => (channelId ? s.watch[channelId] : undefined));
-  if (!channelId || !state?.current) return null;
-  return <Dock state={state} />;
+  const { playerVisible, sessionId } = useWatchVisibility(channelId, state);
+  // Escondido = o player é desmontado: sem som e sem gastar internet.
+  if (!channelId || !state?.current || !playerVisible || !sessionId) return null;
+  return <Dock state={state} sessionId={sessionId} />;
 }
 
-function Dock({ state }: { state: WatchState }) {
+function Dock({ state, sessionId }: { state: WatchState; sessionId: string }) {
   const slot = useWatchSlot((s) => s.slot);
   const style = useSlotStyle(slot);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -240,15 +243,42 @@ function Dock({ state }: { state: WatchState }) {
             />
           </label>
         )}
-        <a
+        {!mini && (
+          <a
+            className="icon-btn"
+            href={youTubeWatchUrl(current.videoId)}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Abrir no YouTube"
+            title="Abrir no YouTube"
+          >
+            <ExternalLink size={16} />
+          </a>
+        )}
+        <button
+          type="button"
           className="icon-btn"
-          href={youTubeWatchUrl(current.videoId)}
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Abrir no YouTube"
+          data-danger
+          aria-label="Encerrar para todos"
+          title="Encerrar para todos"
+          onClick={() => {
+            const queued = state.queue.length;
+            if (queued > 0 && !confirm(`Encerrar para todos e limpar a fila (${queued} na fila)?`)) return;
+            send({ kind: "clear" });
+            useWatchUi.getState().setPanelOpen(state.channelId, false); // fecha tudo para quem encerrou
+          }}
         >
-          <ExternalLink size={16} />
-        </a>
+          <Square size={16} />
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Esconder só para você"
+          title="Esconder só para você (continua para os outros)"
+          onClick={() => useWatchUi.getState().hide(state.channelId, sessionId)}
+        >
+          <X size={18} />
+        </button>
       </div>
     </section>
   );

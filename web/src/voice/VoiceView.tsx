@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   Captions as CaptionsIcon,
   Headphones,
@@ -22,6 +22,7 @@ import { useSettings } from "../state/settings.ts";
 import { useUi } from "../state/ui.ts";
 import { WatchPanel } from "../watch/WatchPanel.tsx";
 import { useWatchSlot } from "../watch/slot.ts";
+import { useWatchUi, useWatchVisibility, type WatchVisibility } from "../watch/visibility.ts";
 import { Captions } from "./Captions.tsx";
 import {
   joinVoice,
@@ -110,9 +111,7 @@ function Stage({ channel }: { channel: Channel }) {
   const audioBlocked = useVoice((s) => s.audioBlocked);
   const captionsView = useSettings((s) => s.captionsView);
   const watch = useApp((s) => s.watch[channel.id]);
-  const [panelOpen, setPanelOpen] = useState(() => !!watch?.current);
-  const playing = !!watch?.current;
-  const showWatch = panelOpen || playing;
+  const visibility = useWatchVisibility(channel.id, watch);
 
   const participants = roomParticipants();
   const screens = participants.filter((p) => p.getTrackPublication(Track.Source.ScreenShare)?.track);
@@ -127,9 +126,9 @@ function Stage({ channel }: { channel: Channel }) {
       )}
 
       {/* Fora da área que rola: o player (posicionado sobre a vaga) nunca sobe por cima do cabeçalho. */}
-      {showWatch && (
-        <div className="watch-area" data-playing={playing || undefined}>
-          {playing && <WatchSlot />}
+      {visibility.areaVisible && (
+        <div className="watch-area" data-playing={visibility.playerVisible || undefined}>
+          {visibility.playerVisible && <WatchSlot />}
           <WatchPanel channelId={channel.id} state={watch} />
         </div>
       )}
@@ -152,7 +151,7 @@ function Stage({ channel }: { channel: Channel }) {
 
       {captionsView && <Captions />}
 
-      <ControlBar watchOpen={showWatch} onToggleWatch={() => setPanelOpen((o) => !o || playing)} playing={playing} />
+      <ControlBar channelId={channel.id} watch={visibility} />
     </div>
   );
 }
@@ -169,15 +168,32 @@ function WatchSlot() {
   return <div ref={ref} className="watch-slot" />;
 }
 
-function ControlBar({
-  watchOpen,
-  onToggleWatch,
-  playing,
-}: {
-  watchOpen: boolean;
-  onToggleWatch(): void;
-  playing: boolean;
-}) {
+/**
+ * Botão da TV:
+ * - nada tocando: abre/fecha o painel para colocar um vídeo;
+ * - tocando e visível: esconde SÓ para você (os outros continuam assistindo);
+ * - tocando e escondido: mostra de novo (o pontinho avisa que tem algo rolando).
+ */
+function toggleWatch(channelId: string, watch: WatchVisibility) {
+  const ui = useWatchUi.getState();
+  if (watch.active && watch.sessionId) {
+    if (watch.playerVisible) ui.hide(channelId, watch.sessionId);
+    else ui.show(channelId);
+    return;
+  }
+  ui.setPanelOpen(channelId, !watch.areaVisible);
+}
+
+function watchButtonLabel(watch: WatchVisibility): string {
+  if (watch.active) {
+    return watch.playerVisible
+      ? "Esconder o Assistir juntos (só para você)"
+      : "Voltar ao Assistir juntos (tem vídeo tocando)";
+  }
+  return watch.areaVisible ? "Fechar Assistir juntos" : "Assistir juntos";
+}
+
+function ControlBar({ channelId, watch }: { channelId: string; watch: WatchVisibility }) {
   const muted = useVoice((s) => s.muted);
   const deafened = useVoice((s) => s.deafened);
   const sharing = useVoice((s) => s.screenSharing);
@@ -223,9 +239,10 @@ function ControlBar({
         <CaptionsIcon />
       </ControlButton>
       <ControlButton
-        label={playing ? "Assistir juntos (tocando)" : watchOpen ? "Fechar Assistir juntos" : "Assistir juntos"}
-        active={watchOpen}
-        onClick={onToggleWatch}
+        label={watchButtonLabel(watch)}
+        active={watch.areaVisible}
+        badge={watch.active && !watch.playerVisible}
+        onClick={() => toggleWatch(channelId, watch)}
       >
         <Tv />
       </ControlButton>
@@ -241,6 +258,7 @@ function ControlButton({
   active,
   danger,
   solid,
+  badge,
   disabled,
   onClick,
   children,
@@ -249,6 +267,8 @@ function ControlButton({
   active?: boolean;
   danger?: boolean;
   solid?: boolean;
+  /** Pontinho âmbar: algo acontecendo que você não está vendo. */
+  badge?: boolean;
   disabled?: boolean;
   onClick(): void;
   children: React.ReactNode;
@@ -258,6 +278,7 @@ function ControlButton({
       type="button"
       className="control-btn"
       data-active={active || undefined}
+      data-badge={badge || undefined}
       data-danger={danger || undefined}
       data-solid={solid || undefined}
       aria-pressed={active}

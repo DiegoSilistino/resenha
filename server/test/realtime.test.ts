@@ -221,19 +221,47 @@ describe("assistir juntos", () => {
     expect(t.ctx.watch.get(voice).current).toBeNull();
   });
 
-  it("pausa sozinho quando a sala esvazia e aparece no estado inicial de quem chega", async () => {
+  it("encerra quando a call esvazia: quem volta encontra a sala limpa", async () => {
     const voice = voiceChannelId(t);
     const a = await connect(alice);
     a.send({ type: "voice.join", channelId: voice });
     await a.waitFor("voice.channel", (e) => e.members.length === 1);
     a.send({ type: "watch", channelId: voice, action: { kind: "add", url: VIDEO } });
-    await a.waitFor("watch.state");
+    await a.waitFor("watch.state", (e) => e.state.sessionId !== null);
     a.send({ type: "voice.leave" });
-    await a.waitFor("watch.state", (e) => !e.state.playing);
+    await a.waitFor("watch.state", (e) => e.state.current === null && e.state.sessionId === null);
 
     const b = await connect(bob);
     const hello = await b.waitFor("hello");
-    expect(hello.watch[voice]?.current?.videoId).toBe("dQw4w9WgXcQ");
-    expect(hello.watch[voice]?.playing).toBe(false);
+    expect(hello.watch[voice]).toBeUndefined();
+  });
+
+  it("com gente na call, quem sai não encerra para os outros", async () => {
+    const voice = voiceChannelId(t);
+    const a = await connect(alice);
+    const b = await connect(bob);
+    a.send({ type: "voice.join", channelId: voice });
+    b.send({ type: "voice.join", channelId: voice });
+    await a.waitFor("voice.channel", (e) => e.members.length === 2);
+    a.send({ type: "watch", channelId: voice, action: { kind: "add", url: VIDEO } });
+    await b.waitFor("watch.state", (e) => e.state.current !== null);
+    a.send({ type: "voice.leave" });
+    await b.waitFor("voice.channel", (e) => e.members.length === 1);
+    expect(t.ctx.watch.get(voice).current?.videoId).toBe("dQw4w9WgXcQ");
+    expect(t.ctx.watch.get(voice).playing).toBe(true);
+  });
+
+  it("encerrar para todos (clear) some com o player de todo mundo", async () => {
+    const voice = voiceChannelId(t);
+    const a = await connect(alice);
+    const b = await connect(bob);
+    a.send({ type: "voice.join", channelId: voice });
+    b.send({ type: "voice.join", channelId: voice });
+    await a.waitFor("voice.channel", (e) => e.members.length === 2);
+    a.send({ type: "watch", channelId: voice, action: { kind: "add", url: VIDEO } });
+    await b.waitFor("watch.state", (e) => e.state.current !== null);
+    b.send({ type: "watch", channelId: voice, action: { kind: "clear" } });
+    const ev = await a.waitFor("watch.state", (e) => e.state.current === null);
+    expect(ev.state.sessionId).toBeNull();
   });
 });

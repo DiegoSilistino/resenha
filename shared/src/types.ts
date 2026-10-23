@@ -67,6 +67,12 @@ export interface WatchItem {
  */
 export interface WatchState {
   channelId: string;
+  /**
+   * Identifica a "sessão" atual: nasce quando o primeiro vídeo começa e some quando
+   * a fila acaba ou alguém encerra. Quem escondeu o player para si esconde ESTA sessão;
+   * a próxima reaparece para todo mundo.
+   */
+  sessionId: string | null;
   current: WatchItem | null;
   queue: WatchItem[];
   playing: boolean;

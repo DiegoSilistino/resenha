@@ -76,7 +76,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
     uploads: new UploadStorage(config.uploadsDir),
   };
   await ctx.uploads.init();
-  voice.onChannelEmpty((channelId) => ctx.watch.pauseIfPlaying(channelId));
+  voice.onChannelEmpty((channelId) => ctx.watch.endSession(channelId));
 
   const app = Fastify({
     trustProxy: config.trustProxy,

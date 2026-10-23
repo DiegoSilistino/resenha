@@ -122,4 +122,22 @@ describe("reduceWatch", () => {
     }
     expect(s.queue).toHaveLength(LIMITS.watchQueueMax);
   });
+
+  it("sessão: nasce com o primeiro vídeo, continua pela fila e acaba no fim", () => {
+    let s = withItems("a", "b");
+    expect(s.sessionId).toBe("a");
+    s = reduceWatch(s, { kind: "skip" }, 2_000);
+    expect(s.current?.id).toBe("b");
+    expect(s.sessionId).toBe("a"); // mesma sessão enquanto houver fila
+    s = reduceWatch(s, { kind: "ended", itemId: "b" }, 3_000);
+    expect(s.sessionId).toBeNull();
+
+    s = reduceWatch(s, { kind: "add", item: item("c") }, 4_000);
+    expect(s.sessionId).toBe("c"); // sessão nova, outra identidade
+  });
+
+  it("encerrar (clear) acaba a sessão", () => {
+    const s = reduceWatch(withItems("a", "b"), { kind: "clear" }, 2_000);
+    expect(s).toMatchObject({ sessionId: null, current: null, queue: [], playing: false });
+  });
 });

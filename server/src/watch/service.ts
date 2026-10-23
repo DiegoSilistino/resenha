@@ -63,10 +63,9 @@ export class WatchService {
     this.apply(channelId, action);
   }
 
-  /** Quando o último sai da sala, pausa: ninguém volta e encontra o vídeo 40 minutos à frente. */
-  pauseIfPlaying(channelId: string): void {
-    const s = this.states.get(channelId);
-    if (s?.playing) this.apply(channelId, { kind: "pause" });
+  /** Quando o último sai da call, o Assistir juntos acaba: quem voltar encontra a sala limpa. */
+  endSession(channelId: string): void {
+    this.apply(channelId, { kind: "clear" });
   }
 
   removeChannel(channelId: string): void {

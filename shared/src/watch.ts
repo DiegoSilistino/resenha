@@ -16,6 +16,7 @@ export type WatchAction =
 export function createWatchState(channelId: string): WatchState {
   return {
     channelId,
+    sessionId: null,
     current: null,
     queue: [],
     playing: false,
@@ -44,7 +45,8 @@ export function reduceWatch(state: WatchState, action: WatchAction, nowMs: numbe
 function applyAction(s: WatchState, action: WatchAction, now: number): WatchState {
   switch (action.kind) {
     case "add": {
-      if (!s.current) return playItem(s, action.item, s.queue, now);
+      // Sem nada tocando: começa uma sessão nova, identificada pelo primeiro vídeo.
+      if (!s.current) return { ...playItem(s, action.item, s.queue, now), sessionId: action.item.id };
       if (s.queue.length >= LIMITS.watchQueueMax) return s;
       return { ...s, queue: [...s.queue, action.item] };
     }
@@ -72,16 +74,18 @@ function applyAction(s: WatchState, action: WatchAction, now: number): WatchStat
     }
     case "clear":
       if (!s.current && s.queue.length === 0) return s;
-      return { ...s, current: null, queue: [], playing: false, startedAt: 0, pausedPosition: 0 };
+      return endSession(s);
   }
 }
 
 function advance(s: WatchState, now: number): WatchState {
   const [nextItem, ...rest] = s.queue;
-  if (!nextItem) {
-    return { ...s, current: null, queue: [], playing: false, startedAt: 0, pausedPosition: 0 };
-  }
-  return playItem(s, nextItem, rest, now);
+  if (!nextItem) return endSession(s);
+  return playItem(s, nextItem, rest, now); // mesma sessão
+}
+
+function endSession(s: WatchState): WatchState {
+  return { ...s, sessionId: null, current: null, queue: [], playing: false, startedAt: 0, pausedPosition: 0 };
 }
 
 function playItem(s: WatchState, item: WatchItem, queue: WatchItem[], now: number): WatchState {

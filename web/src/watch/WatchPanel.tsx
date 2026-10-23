@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ListX, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { parseYouTubeVideoId, youTubeThumbnailUrl, type WatchState } from "@resenha/shared";
 import { realtime } from "../lib/realtime.ts";
 import { useApp } from "../state/app.ts";
@@ -48,17 +48,6 @@ export function WatchPanel({ channelId, state }: { channelId: string; state: Wat
         <>
           <div className="watch-queue-head">
             <h3>A seguir</h3>
-            <button
-              type="button"
-              className="btn btn-small btn-ghost"
-              onClick={() => {
-                if (confirm("Limpar a fila e parar o vídeo atual?")) {
-                  realtime.send({ type: "watch", channelId, action: { kind: "clear" } });
-                }
-              }}
-            >
-              <ListX size={14} aria-hidden="true" /> Limpar
-            </button>
           </div>
           <ol className="watch-queue">
             {queue.map((item) => (

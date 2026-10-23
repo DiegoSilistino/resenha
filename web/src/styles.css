@@ -1184,6 +1184,7 @@ input[type="range"] {
   padding: 14px 16px 18px;
 }
 .control-btn {
+  position: relative;
   display: grid;
   place-items: center;
   width: 50px;
@@ -1211,6 +1212,17 @@ input[type="range"] {
 }
 .control-btn[data-danger] {
   color: var(--danger);
+}
+.control-btn[data-badge]::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--lamp);
+  box-shadow: 0 0 0 3px var(--night);
 }
 .control-btn[data-solid] {
   background: var(--danger);
