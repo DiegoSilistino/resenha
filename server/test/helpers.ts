@@ -8,12 +8,16 @@ import { buildApp, type AppContext } from "../src/app.ts";
 import { loadConfig } from "../src/config.ts";
 import { openDatabase } from "../src/db.ts";
 import { bootstrap } from "../src/bootstrap.ts";
-import type { VoiceGateway } from "../src/voice/livekit.ts";
+import type { VoiceGateway, VoiceHealth } from "../src/voice/livekit.ts";
 import type { TitleFetcher, TitleLookup } from "../src/watch/oembed.ts";
 import { newInviteCode } from "../src/routes/admin.ts";
 
 export class FakeGateway implements VoiceGateway {
   kicked: { userId: string; channelId: string }[] = [];
+  health: VoiceHealth = { ok: true };
+  async check() {
+    return this.health;
+  }
   async createToken(user: { id: string }, channelId: string) {
     return `token:${user.id}:${channelId}`;
   }

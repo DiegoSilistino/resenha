@@ -1,6 +1,7 @@
-# Desenvolvimento: só o LiveKit, em modo --dev (chave "devkey", segredo "secret").
-#   docker compose -f docker-compose.dev.yml up
-# Depois, em outro terminal: npm run dev  (e abra http://localhost:5173)
+# OPCIONAL. O `npm run dev` já baixa e inicia o LiveKit sozinho, sem Docker.
+# Use este arquivo só se preferir rodar o LiveKit no Docker:
+#   docker compose -f docker-compose.dev.yml up -d
+#   npm run dev   (ele detecta o LiveKit já rodando e usa este)
 
 services:
   livekit:

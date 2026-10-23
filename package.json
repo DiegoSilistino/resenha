@@ -13,7 +13,8 @@
     "node": ">=22.16"
   },
   "scripts": {
-    "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
+    "dev": "concurrently --kill-others-on-fail -n voz,server,web -c yellow,blue,magenta \"npm run livekit\" \"npm run dev -w server\" \"npm run dev -w web\"",
+    "livekit": "node scripts/livekit-dev.mjs",
     "build": "npm run build -w web && npm run build -w server",
     "start": "npm run start -w server",
     "test": "npm run test -w shared && npm run test -w server",

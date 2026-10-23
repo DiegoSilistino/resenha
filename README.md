@@ -45,17 +45,47 @@ Como a sincronia do **Assistir juntos** funciona:
 - A partir disso, cada um calcula onde o vídeo deve estar, e corrige se desviar mais de 1,5 s.
 - Por isso, quem entra no meio cai no ponto certo.
 
-## Rodar no seu computador
+## Quem precisa instalar o quê
 
-Pré-requisitos: **Node 24 LTS** (ou 22.16+) e **Docker Desktop** (para o servidor de voz).
+- **Seus amigos não instalam nada.** Abrem o link no Chrome ou no Edge, e podem "instalar" como app pelo próprio navegador.
+- **O servidor roda num lugar só.** Para testar, roda no seu PC. Para a turma usar no dia a dia, numa VPS (seção "Colocar no ar"). O Docker só é usado na VPS.
 
-```bash
+## Rodar no seu computador (Windows, sem Docker)
+
+Pré-requisitos: **Node 24 LTS** ([nodejs.org](https://nodejs.org)) e **Git**.
+
+```powershell
+git clone https://github.com/DiegoSilistino/resenha.git
+cd resenha
 npm install
-docker compose -f docker-compose.dev.yml up -d   # LiveKit em modo desenvolvimento
-npm run dev                                      # API (porta 3000) + site (porta 5173)
+npm run dev
 ```
 
-O terminal mostra um link `http://localhost:5173/convite/...`. Abra-o para criar a conta de **administrador**. Para testar a voz, crie um convite em **⚙ Administrar → Convites** e abra-o numa janela anônima, que funciona como uma segunda pessoa.
+O `npm run dev` sobe três coisas, cada uma com uma etiqueta no terminal:
+
+| Etiqueta | O que é |
+|---|---|
+| `[voz]` | Servidor de voz (LiveKit). Na primeira vez, baixa o programa oficial (~19 MB) do GitHub, confere a assinatura SHA-256 e guarda em `.livekit/`. Se o **Firewall do Windows** perguntar, clique em **Permitir**. |
+| `[server]` | API e tempo real (porta 3000). |
+| `[web]` | O site, em `http://localhost:5173`. |
+
+1. O terminal mostra um link `http://localhost:5173/convite/...`. Abra-o para criar a conta de **administrador**.
+2. Para testar a voz com uma segunda pessoa, crie um convite em **⚙ Administrar → Convites** e abra-o numa **janela anônima**.
+
+Se você tem Docker e prefere usá-lo, rode `docker compose -f docker-compose.dev.yml up -d` antes: o `npm run dev` percebe que já há um LiveKit rodando e usa esse.
+
+### Problemas com a voz
+
+O app diz exatamente onde está o problema:
+
+| Mensagem | O que fazer |
+|---|---|
+| "O servidor de voz (LiveKit) não está rodando" | Veja as linhas `[voz]` no terminal. Se o download falhou (rede, proxy), baixe manualmente o arquivo indicado ali e extraia em `.livekit/1.13.10/`. |
+| "Conectou ao servidor de voz, mas o áudio não passou" | No PC: permita o `livekit-server` no Firewall do Windows. Na VPS: libere `7881/tcp` e `7882/udp`. |
+| "Seu navegador não alcançou o servidor de voz em …" | Na VPS: confira `LIVEKIT_PUBLIC_URL` (vazio = mesmo domínio) e o encaminhamento de `/rtc` no Caddy. |
+| "…recusou as credenciais…" | `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` do app diferentes das do LiveKit. |
+
+Para um diagnóstico rápido, entre no app e abra `/api/voice/health` (ex.: `http://localhost:5173/api/voice/health`).
 
 ## Colocar no ar (VPS)
 
@@ -132,10 +162,11 @@ shared/   tipos, protocolo (zod), máquina de estados do Assistir juntos, relóg
 server/   Fastify: rotas, WebSocket, LiveKit, SQLite, anexos, CLI
 web/      React: chat, voz (livekit-client), player sincronizado, telas de admin
 deploy/   Caddyfile e configuração do LiveKit
+scripts/  livekit-dev.mjs: baixa (com SHA-256 fixado) e inicia o LiveKit no npm run dev
 ```
 
 ```bash
-npm test          # 80 testes (protocolo, sincronia, autenticação, permissões, CSRF, anexos, tempo real)
+npm test          # 90 testes (protocolo, sincronia, autenticação, permissões, CSRF, anexos, tempo real, diagnóstico da voz)
 npm run typecheck
 npm run build
 ```

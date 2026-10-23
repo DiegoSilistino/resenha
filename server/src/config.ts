@@ -18,7 +18,7 @@ const envSchema = z.object({
   TRUST_PROXY: boolFromEnv.optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   /** Endereço interno da API do LiveKit (o servidor fala com ele). */
-  LIVEKIT_API_URL: z.url().default("http://localhost:7880"),
+  LIVEKIT_API_URL: z.url().default("http://127.0.0.1:7880"),
   /**
    * Endereço que o NAVEGADOR usa para conectar no LiveKit (ws:// ou wss://).
    * Vazio = mesmo domínio do app (o Caddy encaminha /rtc para o LiveKit).
@@ -88,7 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     livekit: {
       apiUrl: e.LIVEKIT_API_URL,
       // Produção: vazio = mesmo domínio (o Caddy repassa /rtc). Desenvolvimento: LiveKit local direto.
-      publicUrl: e.LIVEKIT_PUBLIC_URL?.replace(/\/+$/, "") || (production ? null : "ws://localhost:7880"),
+      publicUrl: e.LIVEKIT_PUBLIC_URL?.replace(/\/+$/, "") || (production ? null : "ws://127.0.0.1:7880"),
       apiKey,
       apiSecret,
     },

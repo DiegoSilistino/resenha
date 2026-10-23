@@ -3,6 +3,8 @@
  * à troca de páginas, igual ao Discord (você navega pelo chat e continua na voz).
  */
 import {
+  ConnectionError,
+  ConnectionErrorReason,
   ConnectionState,
   DisconnectReason,
   type LocalAudioTrack,
@@ -88,8 +90,11 @@ export async function joinVoice(channelId: string): Promise<void> {
   const seq = ++joinSeq;
   setV({ status: "connecting", channelId, screenSharing: false, cameraOn: false, speaking: {}, captions: {} });
   let r: Room | null = null;
+  let url = "";
   try {
-    const { url, token } = await api.voiceToken(channelId);
+    const credentials = await api.voiceToken(channelId);
+    url = credentials.url;
+    const { token } = credentials;
     if (seq !== joinSeq) return;
 
     const s = useSettings.getState();
@@ -126,12 +131,34 @@ export async function joinVoice(channelId: string): Promise<void> {
     if (r) await r.disconnect().catch(() => undefined);
     if (room === r) room = null;
     resetCallState();
-    toast.error(
-      err instanceof ApiError
-        ? err.message
-        : "Não foi possível conectar à voz. Verifique se o servidor de voz (LiveKit) está no ar.",
-    );
+    console.error("[voz] falha ao conectar em", url || "(sem URL)", err);
+    toast.error(joinErrorMessage(err, url));
   }
+}
+
+/**
+ * O servidor já confirmou que o LiveKit está no ar antes de liberar o token; então,
+ * se falhou aqui, o problema está entre ESTE navegador e o LiveKit.
+ */
+export function joinErrorMessage(err: unknown, url: string): string {
+  if (err instanceof ApiError) return err.message; // ex.: "O servidor de voz não está rodando…"
+  if (err instanceof ConnectionError) {
+    if (err.reason === ConnectionErrorReason.NotAllowed) {
+      return "O servidor de voz recusou a entrada (credenciais do LiveKit diferentes das do app).";
+    }
+    if (err.reason === ConnectionErrorReason.Cancelled) return "Conexão de voz cancelada.";
+    if (/pc connection/i.test(err.message) || err.reason === ConnectionErrorReason.Timeout) {
+      return import.meta.env.DEV
+        ? "Conectou ao servidor de voz, mas o áudio não passou. Se o Windows perguntou sobre o Firewall, permita o livekit-server e tente de novo."
+        : "Conectou ao servidor de voz, mas o áudio não passou: libere as portas 7881/TCP e 7882/UDP no servidor (e confira o firewall da sua rede).";
+    }
+    return `Seu navegador não alcançou o servidor de voz em ${url}. ${
+      import.meta.env.DEV
+        ? "Ele está rodando? Veja as linhas [voz] no terminal do npm run dev."
+        : "Confira LIVEKIT_PUBLIC_URL e o encaminhamento de /rtc no Caddy."
+    }`;
+  }
+  return "Não foi possível conectar à voz. Tente de novo; se continuar, recarregue a página.";
 }
 
 export async function leaveVoice(): Promise<void> {
