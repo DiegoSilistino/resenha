@@ -84,6 +84,7 @@ O app diz exatamente onde está o problema:
 | "Conectou ao servidor de voz, mas o áudio não passou" | No PC: permita o `livekit-server` no Firewall do Windows. Na VPS: libere `7881/tcp` e `7882/udp`. |
 | "Seu navegador não alcançou o servidor de voz em …" | Na VPS: confira `LIVEKIT_PUBLIC_URL` (vazio = mesmo domínio) e o encaminhamento de `/rtc` no Caddy. |
 | "…recusou as credenciais…" | `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` do app diferentes das do LiveKit. |
+| "O Windows não liberou o som do computador" (ao transmitir a tela) | Em Configurações → Sistema → Som → seu fone, desative **Aprimoramentos de áudio** e **Áudio espacial**; no software do headset, desligue surround/7.1. Ou transmita sem som. |
 
 Para um diagnóstico rápido, entre no app e abra `/api/voice/health` (ex.: `http://localhost:5173/api/voice/health`).
 

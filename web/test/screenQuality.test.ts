@@ -40,7 +40,8 @@ describe("perfis de qualidade da tela", () => {
     const { capture, publish } = screenShareOptions(screenQuality("games"));
     expect(capture.resolution).toEqual({ width: 1920, height: 1080, frameRate: 60 });
     expect(capture.contentHint).toBe("motion");
-    expect(capture.audio).toBe(true);
+    // som do sistema sem as vozes da própria call (evita eco para a turma)
+    expect(capture.audio).toEqual({ restrictOwnAudio: true });
     expect(publish.screenShareEncoding).toEqual({ maxBitrate: 9_000_000, maxFramerate: 60, priority: "high" });
     expect(publish.degradationPreference).toBe("maintain-framerate");
     expect(publish.dtx).toBe(false);
@@ -75,10 +76,11 @@ describe("diagnóstico de falha ao transmitir", () => {
     expect(a.message).toMatch(/OBS|anti-cheat/);
   });
 
-  it("falha de áudio reabre no mesmo perfil, sem som, e aponta o surround do headset", () => {
+  it("falha de áudio reabre no mesmo perfil, sem som, e aponta os aprimoramentos de áudio", () => {
     const a = screenShareErrorAdvice(err("NotReadableError", "Could not start audio source"), "games");
     expect(a.retryWith).toBe("games");
     expect(a.retryWithoutAudio).toBe(true);
+    expect(a.message).toMatch(/Aprimoramentos de áudio/);
     expect(a.message).toMatch(/surround/);
   });
 
@@ -86,7 +88,7 @@ describe("diagnóstico de falha ao transmitir", () => {
     const { capture } = screenShareOptions(screenQuality("high"), { audio: false });
     expect(capture.audio).toBe(false);
     expect(capture.systemAudio).toBe("exclude");
-    expect(screenShareOptions(screenQuality("high")).capture.audio).toBe(true);
+    expect(screenShareOptions(screenQuality("high")).capture.audio).toEqual({ restrictOwnAudio: true });
   });
 
   it("erro desconhecido mostra o detalhe técnico", () => {

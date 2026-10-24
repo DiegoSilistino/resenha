@@ -4,7 +4,7 @@
  * Só importa TIPOS do livekit-client (apagados na compilação), para este arquivo
  * ser testável sem navegador.
  */
-import type { ScreenShareCaptureOptions, TrackPublishOptions } from "livekit-client";
+import type { AudioCaptureOptions, ScreenShareCaptureOptions, TrackPublishOptions } from "livekit-client";
 
 export type ScreenQualityId = "text" | "high" | "games" | "max";
 
@@ -86,6 +86,13 @@ export function uploadMbps(q: ScreenQuality): number {
 /** Som da tela (jogo, música, vídeo): estéreo a 128 kbps, igual a AudioPresets.musicHighQualityStereo. */
 const SCREEN_AUDIO = { maxBitrate: 128_000 };
 
+/**
+ * Pede ao navegador para tirar do "som do sistema" o áudio desta própria aba (as vozes
+ * da call). Sem isso, ao transmitir a tela inteira com som, a turma ouve a própria voz
+ * de volta. Opção experimental: navegadores que não a conhecem simplesmente ignoram.
+ */
+const SCREEN_AUDIO_CAPTURE = { restrictOwnAudio: true } as unknown as AudioCaptureOptions;
+
 export function screenShareOptions(
   q: ScreenQuality,
   { audio = true }: { audio?: boolean } = {},
@@ -96,7 +103,7 @@ export function screenShareOptions(
   return {
     capture: {
       // Sem som: o navegador nem oferece a opção de áudio, e o Windows não é consultado.
-      audio,
+      audio: audio ? SCREEN_AUDIO_CAPTURE : false,
       systemAudio: audio ? "include" : "exclude",
       selfBrowserSurface: "exclude",
       surfaceSwitching: "include",
@@ -144,7 +151,7 @@ export function screenShareErrorAdvice(err: unknown, qualityId: ScreenQualityId)
     if (/audio/i.test(detail)) {
       return {
         message:
-          "O Windows não liberou o som do computador. A causa mais comum é o som surround / 7.1 do software do headset ou o Áudio espacial do Windows. Deixei pronto para transmitir sem som; para ter som, desligue esses recursos e tente de novo.",
+          "O Windows não liberou o som do computador. Desative os Aprimoramentos de áudio (Configurações → Sistema → Som → seu fone → Aprimoramentos de áudio) e o surround/7.1 do software do headset. Deixei pronto para transmitir sem som por enquanto.",
         retryWith: q.id,
         retryWithoutAudio: true,
       };
