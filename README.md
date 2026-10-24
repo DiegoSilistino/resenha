@@ -89,21 +89,17 @@ Para um diagnóstico rápido, entre no app e abra `/api/voice/health` (ex.: `htt
 
 ## Colocar no ar (VPS)
 
-1. **Servidor.** Uma VPS Linux com 2 vCPU e 2 GB de RAM basta para 10 pessoas. Escolha um data center **em São Paulo**: a latência da voz depende disso. Confira também a franquia de tráfego: uma tela compartilhada para 9 pessoas consome ~20 Mbps de saída enquanto dura.
-2. **Domínio.** Crie um registro DNS do tipo `A` apontando para o IP da VPS. Um subdomínio grátis do DuckDNS também serve.
-3. **Firewall.** Libere `80/tcp`, `443/tcp`, `443/udp`, `7881/tcp` e `7882/udp`.
-4. **Subir o serviço:**
-   ```bash
-   git clone <seu-repositorio> resenha && cd resenha
-   cp .env.example .env
-   openssl rand -base64 48        # cole o resultado em LIVEKIT_API_SECRET no .env
-   nano .env                      # preencha DOMAIN e PUBLIC_URL
-   docker compose up -d --build
-   docker compose logs app | grep convite
-   ```
-5. Abra o link de convite que apareceu no log e crie a conta de administrador. Depois, convide a turma em **⚙ Administrar → Convites**.
+O guia completo, passo a passo pelo Windows, está em **[DEPLOY.md](DEPLOY.md)**. Resumo:
 
-**Atualizar:** `git pull && docker compose up -d --build`
+1. Contrate uma VPS Ubuntu **em São Paulo** (ex.: Hostinger KVM 1).
+2. Aponte um domínio para o IP dela. Um subdomínio grátis do DuckDNS serve.
+3. Na VPS, clone o repositório e rode:
+   ```bash
+   bash deploy/setup-vps.sh SEU_DOMINIO
+   ```
+   O script instala o Docker, gera o `.env` com um segredo aleatório, sobe app, LiveKit e Caddy (HTTPS automático) e mostra o link de convite do administrador.
+
+**Atualizar:** `git pull && bash deploy/setup-vps.sh`
 
 ## Manutenção
 

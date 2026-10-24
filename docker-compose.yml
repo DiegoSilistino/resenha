@@ -18,8 +18,8 @@ services:
       - livekit
 
   livekit:
-    # Fixe uma versão (ex.: livekit/livekit-server:v1.9.0) para atualizações previsíveis.
-    image: livekit/livekit-server:latest
+    # Versão fixa (a mesma do npm run dev). Atualize junto com scripts/livekit-dev.mjs.
+    image: livekit/livekit-server:v1.13.10
     restart: unless-stopped
     command: --config /etc/livekit.yaml
     environment:
