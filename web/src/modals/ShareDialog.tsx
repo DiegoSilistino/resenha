@@ -10,7 +10,9 @@ const mbps = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 1
 /** Escolha da qualidade antes de abrir a janela de seleção de tela do navegador. */
 export function ShareDialog() {
   const saved = useSettings((s) => s.screenQuality);
+  const savedAudio = useSettings((s) => s.screenAudio);
   const [choice, setChoice] = useState<ScreenQualityId>(() => screenQuality(saved).id);
+  const [withAudio, setWithAudio] = useState(savedAudio);
   const close = () => useUi.getState().setShareDialogOpen(false);
 
   return (
@@ -21,7 +23,7 @@ export function ShareDialog() {
           e.preventDefault();
           close();
           // Ainda dentro do clique: o navegador só abre a escolha de tela a partir de um gesto.
-          void startScreenShare(choice);
+          void startScreenShare(choice, withAudio);
         }}
       >
         <fieldset className="quality-options">
@@ -48,9 +50,17 @@ export function ShareDialog() {
             </label>
           ))}
         </fieldset>
-        <p className="muted quality-note">
-          Na janela seguinte, marque <strong>Compartilhar áudio</strong> para a turma ouvir o som do jogo ou do vídeo.
-        </p>
+        <label className="check">
+          <input type="checkbox" checked={withAudio} onChange={(e) => setWithAudio(e.target.checked)} />
+          <span>
+            Transmitir o som do computador
+            <small>
+              {withAudio
+                ? "Na janela seguinte, deixe marcado \"Compartilhar áudio\". Se der erro de som, desmarque esta opção."
+                : "A turma vai ver a tela, sem o som do jogo ou do vídeo."}
+            </small>
+          </span>
+        </label>
         <button className="btn btn-primary">Escolher o que transmitir</button>
       </form>
     </Modal>

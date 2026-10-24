@@ -75,10 +75,18 @@ describe("diagnóstico de falha ao transmitir", () => {
     expect(a.message).toMatch(/OBS|anti-cheat/);
   });
 
-  it("falha de áudio manda desmarcar o som do sistema e mantém o perfil", () => {
+  it("falha de áudio reabre no mesmo perfil, sem som, e aponta o surround do headset", () => {
     const a = screenShareErrorAdvice(err("NotReadableError", "Could not start audio source"), "games");
     expect(a.retryWith).toBe("games");
-    expect(a.message).toMatch(/áudio do sistema/);
+    expect(a.retryWithoutAudio).toBe(true);
+    expect(a.message).toMatch(/surround/);
+  });
+
+  it("sem som: não pede áudio ao navegador", () => {
+    const { capture } = screenShareOptions(screenQuality("high"), { audio: false });
+    expect(capture.audio).toBe(false);
+    expect(capture.systemAudio).toBe("exclude");
+    expect(screenShareOptions(screenQuality("high")).capture.audio).toBe(true);
   });
 
   it("erro desconhecido mostra o detalhe técnico", () => {

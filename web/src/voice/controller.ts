@@ -428,11 +428,11 @@ export async function stopScreenShare(): Promise<void> {
 let capturingScreen = false;
 
 /** Começa a transmitir. Chame direto do clique (o navegador exige um gesto para abrir a escolha de tela). */
-export async function startScreenShare(qualityId: ScreenQualityId): Promise<void> {
+export async function startScreenShare(qualityId: ScreenQualityId, withAudio: boolean): Promise<void> {
   const r = room;
   if (!r) return;
-  useSettings.getState().set({ screenQuality: qualityId });
-  const { capture, publish } = screenShareOptions(screenQuality(qualityId));
+  useSettings.getState().set({ screenQuality: qualityId, screenAudio: withAudio });
+  const { capture, publish } = screenShareOptions(screenQuality(qualityId), { audio: withAudio });
   capturingScreen = true;
   try {
     await r.localParticipant.setScreenShareEnabled(true, capture, publish);
@@ -445,7 +445,10 @@ export async function startScreenShare(qualityId: ScreenQualityId): Promise<void
     }
     if (advice.retryWith) {
       // Reabre a escolha já no perfil sugerido: tentar de novo é um clique.
-      useSettings.getState().set({ screenQuality: advice.retryWith });
+      useSettings.getState().set({
+        screenQuality: advice.retryWith,
+        ...(advice.retryWithoutAudio ? { screenAudio: false } : {}),
+      });
       useUi.getState().setShareDialogOpen(true);
     }
   } finally {

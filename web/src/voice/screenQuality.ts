@@ -86,14 +86,18 @@ export function uploadMbps(q: ScreenQuality): number {
 /** Som da tela (jogo, música, vídeo): estéreo a 128 kbps, igual a AudioPresets.musicHighQualityStereo. */
 const SCREEN_AUDIO = { maxBitrate: 128_000 };
 
-export function screenShareOptions(q: ScreenQuality): {
+export function screenShareOptions(
+  q: ScreenQuality,
+  { audio = true }: { audio?: boolean } = {},
+): {
   capture: ScreenShareCaptureOptions;
   publish: TrackPublishOptions;
 } {
   return {
     capture: {
-      audio: true,
-      systemAudio: "include",
+      // Sem som: o navegador nem oferece a opção de áudio, e o Windows não é consultado.
+      audio,
+      systemAudio: audio ? "include" : "exclude",
       selfBrowserSurface: "exclude",
       surfaceSwitching: "include",
       // Teto de captura: telas maiores são reduzidas; menores ficam como estão.
@@ -115,6 +119,8 @@ export interface ScreenShareAdvice {
   message: string | null;
   /** Reabrir a escolha já com este perfil selecionado. */
   retryWith?: ScreenQualityId;
+  /** Reabrir com o som desmarcado (o Windows recusou o áudio). */
+  retryWithoutAudio?: boolean;
 }
 
 /**
@@ -138,8 +144,9 @@ export function screenShareErrorAdvice(err: unknown, qualityId: ScreenQualityId)
     if (/audio/i.test(detail)) {
       return {
         message:
-          "O Windows não liberou o som do computador. Tente de novo e desmarque \"Compartilhar áudio do sistema\" na janela do navegador.",
+          "O Windows não liberou o som do computador. A causa mais comum é o som surround / 7.1 do software do headset ou o Áudio espacial do Windows. Deixei pronto para transmitir sem som; para ter som, desligue esses recursos e tente de novo.",
         retryWith: q.id,
+        retryWithoutAudio: true,
       };
     }
     if (demanding) {

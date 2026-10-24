@@ -20,6 +20,8 @@ export interface Settings {
   watchVolume: number;
   /** Último perfil de qualidade usado para transmitir a tela. */
   screenQuality: ScreenQualityId;
+  /** Transmitir também o som do computador junto com a tela. */
+  screenAudio: boolean;
   set(patch: Partial<Omit<Settings, "set" | "setUserVolume">>): void;
   setUserVolume(userId: string, volume: number): void;
 }
@@ -39,6 +41,7 @@ export const useSettings = create<Settings>()(
       captionsLang: "pt-BR",
       watchVolume: 60,
       screenQuality: DEFAULT_SCREEN_QUALITY,
+      screenAudio: true,
       set: (patch) => set(patch),
       setUserVolume: (userId, volume) =>
         set((s) => ({ userVolumes: { ...s.userVolumes, [userId]: Math.min(2, Math.max(0, volume)) } })),
