@@ -109,3 +109,49 @@ export function screenShareOptions(q: ScreenQuality): {
     },
   };
 }
+
+export interface ScreenShareAdvice {
+  /** O que dizer para a pessoa (null = não avisar, ex.: ela cancelou). */
+  message: string | null;
+  /** Reabrir a escolha já com este perfil selecionado. */
+  retryWith?: ScreenQualityId;
+}
+
+/**
+ * Traduz a falha da captura de tela em algo acionável. O navegador diz "NotReadableError"
+ * quando o Windows recusa a captura; a mensagem informa se foi o vídeo ou o som.
+ */
+export function screenShareErrorAdvice(err: unknown, qualityId: ScreenQualityId): ScreenShareAdvice {
+  const name = (err as { name?: string } | null)?.name ?? "";
+  const detail = (err as { message?: string } | null)?.message ?? "";
+  const q = screenQuality(qualityId);
+  const demanding = q.fps > 30 || q.height > 1080;
+
+  if (name === "NotAllowedError") {
+    // Cancelar a janela de escolha também gera NotAllowedError: aí não há o que avisar.
+    return /system/i.test(detail) ? { message: "O sistema bloqueou a captura de tela neste computador." } : { message: null };
+  }
+  if (name === "InvalidStateError") {
+    return { message: "O navegador pediu um clique novo. Clique em compartilhar a tela de novo." };
+  }
+  if (name === "NotReadableError" || name === "AbortError" || name === "OverconstrainedError") {
+    if (/audio/i.test(detail)) {
+      return {
+        message:
+          "O Windows não liberou o som do computador. Tente de novo e desmarque \"Compartilhar áudio do sistema\" na janela do navegador.",
+        retryWith: q.id,
+      };
+    }
+    if (demanding) {
+      return {
+        message: `O Windows não conseguiu capturar no perfil ${q.label} (${q.height}p a ${q.fps} fps) neste PC. Tente o perfil Alta, que já deixei selecionado.`,
+        retryWith: "high",
+      };
+    }
+    return {
+      message:
+        "O Windows bloqueou a captura dessa tela ou janela. Feche programas que gravam a tela (OBS, Xbox Game Bar), veja se não é um jogo com anti-cheat, ou compartilhe uma aba do navegador.",
+    };
+  }
+  return { message: `Não foi possível compartilhar a tela${detail ? ` (${detail})` : ""}.` };
+}

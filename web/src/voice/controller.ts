@@ -23,7 +23,7 @@ import { realtime } from "../lib/realtime.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { SpeechCaptioner, type CaptionChunk } from "./speech.ts";
-import { screenQuality, screenShareOptions, type ScreenQualityId } from "./screenQuality.ts";
+import { screenQuality, screenShareErrorAdvice, screenShareOptions, type ScreenQualityId } from "./screenQuality.ts";
 import { useUi } from "../state/ui.ts";
 
 export type VoiceStatus = "idle" | "connecting" | "connected" | "reconnecting";
@@ -231,7 +231,10 @@ function wire(r: Room) {
     .on(RoomEvent.AudioPlaybackStatusChanged, () => setV({ audioBlocked: !r.canPlaybackAudio }))
     .on(RoomEvent.Reconnecting, () => setV({ status: "reconnecting" }))
     .on(RoomEvent.Reconnected, () => setV({ status: "connected" }))
-    .on(RoomEvent.MediaDevicesError, (err: Error) => toast.error(deviceErrorMessage(err)))
+    .on(RoomEvent.MediaDevicesError, (err: Error) => {
+      // Falhas da captura de tela têm aviso próprio (em startScreenShare); este é de microfone/câmera.
+      if (!capturingScreen) toast.error(deviceErrorMessage(err));
+    })
     .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
       // saída iniciada por nós, ou falha ao conectar (o joinVoice avisa com a mensagem certa)
       if (room !== r || !established.has(r)) return;
@@ -422,19 +425,31 @@ export async function stopScreenShare(): Promise<void> {
 }
 
 /** Começa a transmitir. Chame direto do clique (o navegador exige um gesto para abrir a escolha de tela). */
+let capturingScreen = false;
+
+/** Começa a transmitir. Chame direto do clique (o navegador exige um gesto para abrir a escolha de tela). */
 export async function startScreenShare(qualityId: ScreenQualityId): Promise<void> {
   const r = room;
   if (!r) return;
   useSettings.getState().set({ screenQuality: qualityId });
   const { capture, publish } = screenShareOptions(screenQuality(qualityId));
+  capturingScreen = true;
   try {
     await r.localParticipant.setScreenShareEnabled(true, capture, publish);
   } catch (err) {
-    // Cancelar a janela de escolha da tela não é erro.
-    if ((err as { name?: string })?.name === "NotAllowedError") return;
-    console.error("[voz] falha ao transmitir a tela", err);
-    toast.error("Não foi possível compartilhar a tela.");
+    const advice = screenShareErrorAdvice(err, qualityId);
+    if (advice.message) {
+      const e = err as { name?: string; message?: string };
+      console.error(`[voz] falha ao transmitir a tela (perfil ${qualityId}): ${e?.name}: ${e?.message}`, err);
+      toast.error(advice.message);
+    }
+    if (advice.retryWith) {
+      // Reabre a escolha já no perfil sugerido: tentar de novo é um clique.
+      useSettings.getState().set({ screenQuality: advice.retryWith });
+      useUi.getState().setShareDialogOpen(true);
+    }
   } finally {
+    capturingScreen = false;
     onLocalTracksChanged(r);
   }
 }

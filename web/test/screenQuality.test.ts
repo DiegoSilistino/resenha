@@ -4,6 +4,7 @@ import {
   SCREEN_QUALITIES,
   screenQuality,
   screenShareOptions,
+  screenShareErrorAdvice,
   uploadMbps,
 } from "../src/voice/screenQuality.ts";
 
@@ -52,5 +53,35 @@ describe("perfis de qualidade da tela", () => {
 
   it("estimativa de upload inclui a cópia em meia resolução", () => {
     expect(uploadMbps(screenQuality("games"))).toBeCloseTo(11.25);
+  });
+});
+
+describe("diagnóstico de falha ao transmitir", () => {
+  const err = (name: string, message = "") => Object.assign(new Error(message), { name });
+
+  it("cancelar a janela de escolha não gera aviso", () => {
+    expect(screenShareErrorAdvice(err("NotAllowedError", "Permission denied"), "high").message).toBeNull();
+  });
+
+  it("falha de vídeo num perfil pesado sugere o Alta", () => {
+    const a = screenShareErrorAdvice(err("NotReadableError", "Could not start video source"), "games");
+    expect(a.retryWith).toBe("high");
+    expect(a.message).toMatch(/Jogos/);
+  });
+
+  it("falha de vídeo já no Alta explica o bloqueio do Windows, sem sugerir repetir", () => {
+    const a = screenShareErrorAdvice(err("NotReadableError", "Could not start video source"), "high");
+    expect(a.retryWith).toBeUndefined();
+    expect(a.message).toMatch(/OBS|anti-cheat/);
+  });
+
+  it("falha de áudio manda desmarcar o som do sistema e mantém o perfil", () => {
+    const a = screenShareErrorAdvice(err("NotReadableError", "Could not start audio source"), "games");
+    expect(a.retryWith).toBe("games");
+    expect(a.message).toMatch(/áudio do sistema/);
+  });
+
+  it("erro desconhecido mostra o detalhe técnico", () => {
+    expect(screenShareErrorAdvice(err("WeirdError", "algo raro"), "high").message).toMatch(/algo raro/);
   });
 });
