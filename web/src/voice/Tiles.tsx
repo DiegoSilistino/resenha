@@ -6,16 +6,29 @@ import { useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { useVoice } from "./controller.ts";
 
-function VideoView({ track, mirror, contain }: { track: VideoTrack; mirror?: boolean; contain?: boolean }) {
+function VideoView({
+  track,
+  mirror,
+  contain,
+  onElement,
+}: {
+  track: VideoTrack;
+  mirror?: boolean;
+  contain?: boolean;
+  /** Recebe o elemento <video> (para medir a qualidade recebida). */
+  onElement?: (el: HTMLVideoElement | null) => void;
+}) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     track.attach(el);
+    onElement?.(el);
     return () => {
       track.detach(el);
+      onElement?.(null);
     };
-  }, [track]);
+  }, [track, onElement]);
   return (
     <video
       ref={ref}
@@ -99,22 +112,73 @@ function VolumeControl({ userId, name }: { userId: string; name: string }) {
   );
 }
 
+interface VideoStats {
+  width: number;
+  height: number;
+  fps: number;
+  mbps: number;
+}
+
+/** Mede o que está chegando de fato: resolução e quadros exibidos, e a taxa de dados do LiveKit. */
+function useVideoStats(el: HTMLVideoElement | null, track: VideoTrack | undefined): VideoStats | null {
+  const [stats, setStats] = useState<VideoStats | null>(null);
+  useEffect(() => {
+    if (!el || !track) {
+      setStats(null);
+      return;
+    }
+    let lastFrames = el.getVideoPlaybackQuality?.().totalVideoFrames ?? 0;
+    let lastAt = performance.now();
+    const id = setInterval(() => {
+      const now = performance.now();
+      const frames = el.getVideoPlaybackQuality?.().totalVideoFrames ?? 0;
+      const fps = ((frames - lastFrames) * 1000) / Math.max(1, now - lastAt);
+      lastFrames = frames;
+      lastAt = now;
+      setStats({
+        width: el.videoWidth,
+        height: el.videoHeight,
+        fps: Math.max(0, Math.round(fps)),
+        mbps: track.currentBitrate / 1_000_000,
+      });
+    }, 1_000);
+    return () => clearInterval(id);
+  }, [el, track]);
+  return stats;
+}
+
+function formatStats(s: VideoStats): string {
+  const parts = [`${s.height}p`, `${s.fps} fps`];
+  if (s.mbps > 0) parts.push(`${s.mbps.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} Mbps`);
+  return parts.join(" · ");
+}
+
 export function ScreenTile({ participant }: { participant: Participant }) {
   const user = useApp((s) => s.users[participant.identity]);
   const ref = useRef<HTMLDivElement>(null);
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   useVoice((s) => s.version);
   const pub = participant.getTrackPublication(Track.Source.ScreenShare);
   const track = pub?.track as VideoTrack | undefined;
+  const stats = useVideoStats(videoEl, track);
   if (!track) return null;
   const name = user?.displayName ?? participant.name ?? "Alguém";
 
   return (
     <div className="screen-tile" ref={ref}>
-      <VideoView track={track} contain />
+      <VideoView track={track} contain onElement={setVideoEl} />
       <div className="tile-label">
         <span className="live-chip">ao vivo</span>
         <span className="tile-name">{participant.isLocal ? "Sua tela" : `Tela de ${name}`}</span>
       </div>
+      {stats && stats.height > 0 && (
+        <span
+          className="screen-stats"
+          title={`${stats.width}×${stats.height}, ${participant.isLocal ? "enviando" : "recebendo"} agora`}
+        >
+          {formatStats(stats)}
+        </span>
+      )}
       <button
         type="button"
         className="icon-btn screen-full"

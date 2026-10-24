@@ -13,7 +13,6 @@ import {
   type RemoteTrack,
   Room,
   RoomEvent,
-  ScreenSharePresets,
   Track,
   VideoPresets,
 } from "livekit-client";
@@ -24,6 +23,8 @@ import { realtime } from "../lib/realtime.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { SpeechCaptioner, type CaptionChunk } from "./speech.ts";
+import { screenQuality, screenShareOptions, type ScreenQualityId } from "./screenQuality.ts";
+import { useUi } from "../state/ui.ts";
 
 export type VoiceStatus = "idle" | "connecting" | "connected" | "reconnecting";
 
@@ -99,7 +100,9 @@ export async function joinVoice(channelId: string): Promise<void> {
 
     const s = useSettings.getState();
     r = new Room({
-      adaptiveStream: true,
+      // "screen": usa a escala real da tela (125%/150% no Windows) para pedir a camada
+      // de vídeo certa; sem isso, quem assiste recebe uma resolução abaixo da que vê.
+      adaptiveStream: { pixelDensity: "screen" },
       dynacast: true,
       // Mixagem via Web Audio: permite volume individual acima de 100%.
       webAudioMix: true,
@@ -108,7 +111,6 @@ export async function joinVoice(channelId: string): Promise<void> {
       publishDefaults: {
         dtx: true,
         red: true,
-        screenShareEncoding: ScreenSharePresets.h1080fps30.encoding,
       },
     });
     room = r;
@@ -173,6 +175,7 @@ export async function leaveVoice(): Promise<void> {
 }
 
 function resetCallState() {
+  useUi.getState().setShareDialogOpen(false);
   setV((s) => ({
     status: "idle",
     channelId: null,
@@ -402,21 +405,34 @@ if (typeof window !== "undefined") {
 
 // ---------------------------------------------------------------- tela e câmera
 
-export async function toggleScreenShare(): Promise<void> {
+/** Botão de tela: se já transmite, para; senão abre a escolha de qualidade. */
+export function toggleScreenShare(): void {
+  if (room?.localParticipant.isScreenShareEnabled) void stopScreenShare();
+  else if (room) useUi.getState().setShareDialogOpen(true);
+}
+
+export async function stopScreenShare(): Promise<void> {
   const r = room;
   if (!r) return;
-  const enable = !r.localParticipant.isScreenShareEnabled;
   try {
-    await r.localParticipant.setScreenShareEnabled(enable, {
-      audio: true,
-      systemAudio: "include",
-      selfBrowserSurface: "exclude",
-      surfaceSwitching: "include",
-      resolution: ScreenSharePresets.h1080fps30.resolution,
-    });
+    await r.localParticipant.setScreenShareEnabled(false);
+  } finally {
+    onLocalTracksChanged(r);
+  }
+}
+
+/** Começa a transmitir. Chame direto do clique (o navegador exige um gesto para abrir a escolha de tela). */
+export async function startScreenShare(qualityId: ScreenQualityId): Promise<void> {
+  const r = room;
+  if (!r) return;
+  useSettings.getState().set({ screenQuality: qualityId });
+  const { capture, publish } = screenShareOptions(screenQuality(qualityId));
+  try {
+    await r.localParticipant.setScreenShareEnabled(true, capture, publish);
   } catch (err) {
     // Cancelar a janela de escolha da tela não é erro.
     if ((err as { name?: string })?.name === "NotAllowedError") return;
+    console.error("[voz] falha ao transmitir a tela", err);
     toast.error("Não foi possível compartilhar a tela.");
   } finally {
     onLocalTracksChanged(r);

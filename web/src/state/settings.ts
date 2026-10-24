@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { DEFAULT_SCREEN_QUALITY, type ScreenQualityId } from "../voice/screenQuality.ts";
 
 /** Preferências deste aparelho (ficam no navegador, não no servidor). */
 export interface Settings {
@@ -17,6 +18,8 @@ export interface Settings {
   transcribe: boolean;
   captionsLang: string;
   watchVolume: number;
+  /** Último perfil de qualidade usado para transmitir a tela. */
+  screenQuality: ScreenQualityId;
   set(patch: Partial<Omit<Settings, "set" | "setUserVolume">>): void;
   setUserVolume(userId: string, volume: number): void;
 }
@@ -35,6 +38,7 @@ export const useSettings = create<Settings>()(
       transcribe: false,
       captionsLang: "pt-BR",
       watchVolume: 60,
+      screenQuality: DEFAULT_SCREEN_QUALITY,
       set: (patch) => set(patch),
       setUserVolume: (userId, volume) =>
         set((s) => ({ userVolumes: { ...s.userVolumes, [userId]: Math.min(2, Math.max(0, volume)) } })),

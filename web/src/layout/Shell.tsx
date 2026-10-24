@@ -7,6 +7,7 @@ import { VoiceView } from "../voice/VoiceView.tsx";
 import { WatchDock } from "../watch/WatchDock.tsx";
 import { AdminModal } from "../modals/AdminModal.tsx";
 import { SettingsModal } from "../modals/SettingsModal.tsx";
+import { ShareDialog } from "../modals/ShareDialog.tsx";
 import { MemberList } from "./MemberList.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 
@@ -16,6 +17,7 @@ export function Shell() {
   const navOpen = useUi((s) => s.navOpen);
   const settingsOpen = useUi((s) => s.settingsOpen);
   const adminOpen = useUi((s) => s.adminOpen);
+  const shareDialogOpen = useUi((s) => s.shareDialogOpen);
   const location = useLocation();
 
   // No celular, a gaveta de canais fecha ao navegar.
@@ -53,6 +55,7 @@ export function Shell() {
       <WatchDock />
       {settingsOpen && <SettingsModal />}
       {adminOpen && <AdminModal />}
+      {shareDialogOpen && <ShareDialog />}
     </div>
   );
 }

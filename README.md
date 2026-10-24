@@ -13,7 +13,7 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
   - mutar e ensurdecer;
   - volume individual de 0 a 200%;
   - push-to-talk;
-  - compartilhamento de tela com áudio (1080p30) e câmera;
+  - compartilhamento de tela com áudio e câmera, com perfis de qualidade (de "texto nítido" a 1440p a 60 fps) e indicador de resolução, fps e Mbps;
   - quem fala "acende".
 - **Assistir juntos.** Uma fila do YouTube sincronizada no mesmo segundo para todos, que serve para música e para cinema. Quem está no canal pausa, pula e adianta. O player continua tocando enquanto você navega pelo chat.
 - **Legendas ao vivo.** Cada pessoa transcreve a própria fala no navegador e o texto vai para a sala, sem custo de servidor.

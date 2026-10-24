@@ -12,6 +12,8 @@ Tempo total: cerca de 30 minutos. Você faz tudo pelo navegador e pelo PowerShel
 | Hostinger KVM 2, São Paulo | R$ 42,99/mês na promoção; renova a R$ 77,99/mês | Se quiser folga para crescer. |
 | Oracle Cloud "Always Free", São Paulo | R$ 0 | ARM com 2 núcleos e 12 GB (limite reduzido em jun/2026). Exige cartão, costuma faltar capacidade para criar a máquina e tem firewall em dois lugares. Só vale se você quiser gastar zero e topar mais configuração. |
 
+**Sobre o tráfego:** uma tela no perfil "Jogos" (1080p a 60 fps, ~9 Mbps) para 9 pessoas consome ~36 GB por hora. Os 4 TB do KVM 1 dão para mais de 100 horas de transmissão por mês.
+
 **Escolha São Paulo**, seja qual for o provedor. A latência da voz depende da distância até o servidor.
 
 Os preços mudam, então confira na hora da compra. O preço promocional costuma exigir pagar o período inteiro adiantado.

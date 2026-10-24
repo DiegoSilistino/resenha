@@ -244,7 +244,7 @@ hr {
   flex: 1;
 }
 
-input:not([type="checkbox"]):not([type="range"]):not([type="file"]),
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
 select,
 textarea {
   width: 100%;
@@ -1136,6 +1136,83 @@ input[type="range"] {
 .screen-tile:fullscreen {
   border-radius: 0;
 }
+.screen-stats {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: rgb(14 24 32 / 0.78);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.screen-tile:hover .screen-stats,
+.screen-tile:focus-within .screen-stats,
+.screen-tile:fullscreen .screen-stats {
+  opacity: 1;
+}
+
+.quality-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.quality-option {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.quality-option[data-selected] {
+  border-color: var(--lamp);
+}
+.quality-option input {
+  flex: none;
+  margin: 4px 0 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--lamp);
+}
+.quality-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.quality-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 700;
+}
+.quality-spec {
+  font-weight: 400;
+  font-size: 13.5px;
+  color: var(--lamp);
+  font-variant-numeric: tabular-nums;
+}
+.quality-hint {
+  font-size: 14px;
+  color: var(--muted);
+}
+.quality-upload {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+.quality-note {
+  margin: 0;
+  font-size: 14px;
+}
+
 .screen-full {
   position: absolute;
   top: 8px;
@@ -1426,6 +1503,7 @@ input[type="range"] {
 .modal {
   width: min(560px, calc(100vw - 24px));
   max-height: min(86dvh, 760px);
+  overflow: auto;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
