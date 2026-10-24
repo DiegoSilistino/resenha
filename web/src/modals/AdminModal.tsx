@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowDown, ArrowUp, Copy, Hash, Trash2, Volume2 } from "lucide-react";
-import type { ChannelKind, Role } from "@resenha/shared";
+import { ArrowDown, ArrowUp, Copy, Download, Hash, Trash2, Volume2 } from "lucide-react";
+import type { BackupInfo, ChannelKind, Role } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Modal } from "../components/Modal.tsx";
-import { api, type InviteWithUrl } from "../lib/api.ts";
-import { formatFull } from "../lib/format.ts";
+import { api, BACKUP_DOWNLOAD_URL, type InviteWithUrl } from "../lib/api.ts";
+import { formatBytes, formatDay, formatFull } from "../lib/format.ts";
 import { useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
@@ -13,6 +13,7 @@ const TABS = [
   { id: "invites", label: "Convites" },
   { id: "channels", label: "Canais" },
   { id: "members", label: "Membros" },
+  { id: "backup", label: "Backup" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -38,6 +39,7 @@ export function AdminModal() {
         {tab === "invites" && <InvitesTab />}
         {tab === "channels" && <ChannelsTab />}
         {tab === "members" && <MembersTab />}
+        {tab === "backup" && <BackupTab />}
       </div>
     </Modal>
   );
@@ -325,5 +327,83 @@ function MembersTab() {
         </li>
       ))}
     </ul>
+  );
+}
+
+const DAY = 86_400_000;
+/** Depois disso, o lembrete de baixar o backup fica em destaque. */
+const BACKUP_STALE_DAYS = 7;
+
+function BackupTab() {
+  const [info, setInfo] = useState<BackupInfo | null>(null);
+  const load = useCallback(() => {
+    api
+      .backupInfo()
+      .then(setInfo)
+      .catch((err) => toast.fromError(err));
+  }, []);
+
+  useEffect(() => {
+    load();
+    // O download termina fora do app (na barra do navegador): ao voltar para a janela, atualiza a data.
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, [load]);
+
+  if (!info) return <p className="muted">Carregando…</p>;
+
+  const now = Date.now();
+  const ageDays = info.lastDownloadAt ? Math.floor((now - info.lastDownloadAt) / DAY) : null;
+  const stale = ageDays === null || ageDays >= BACKUP_STALE_DAYS;
+  const lowDisk = info.disk !== null && (info.disk.free < 2 * 1024 ** 3 || info.disk.free / info.disk.total < 0.1);
+  const newest = info.snapshots[0];
+
+  return (
+    <div className="form backup-tab">
+      <div className={stale ? "callout callout-warn" : "callout"}>
+        <strong>
+          {ageDays === null
+            ? "Você ainda não baixou nenhum backup."
+            : ageDays === 0
+              ? "Último backup baixado hoje."
+              : `Último backup baixado há ${ageDays} ${ageDays === 1 ? "dia" : "dias"} (${formatFull(info.lastDownloadAt!)}).`}
+        </strong>
+        <span>
+          O backup completo tem as contas, as mensagens, os anexos e as fotos. Guarde no seu PC ou no Google Drive: se a
+          VPS se perder, é com ele que o Resenha volta.{stale ? " Vale baixar um agora e repetir toda semana." : ""}
+        </span>
+      </div>
+
+      <div>
+        <a
+          className="btn btn-primary"
+          href={BACKUP_DOWNLOAD_URL}
+          download
+          onClick={() => {
+            for (const ms of [3_000, 15_000, 60_000]) setTimeout(load, ms);
+          }}
+        >
+          <Download size={16} aria-hidden="true" /> Baixar backup completo (~{formatBytes(info.totalBytes)})
+        </a>
+      </div>
+
+      <h3>No servidor</h3>
+      <ul className="backup-facts">
+        <li>
+          Cópias diárias do banco: <strong>{info.snapshots.length}</strong>
+          {newest ? ` (a mais recente de ${formatDay(newest.createdAt, now).toLowerCase()})` : " (a primeira sai em até 1 hora)"}.
+          Servem para voltar atrás se algo for apagado sem querer; ficam as últimas 7.
+        </li>
+        {info.disk && (
+          <li data-warn={lowDisk || undefined}>
+            Disco: <strong>{formatBytes(info.disk.free)}</strong> livres de {formatBytes(info.disk.total)}.
+            {lowDisk ? " Está acabando: apague anexos grandes antigos ou aumente o plano." : ""}
+          </li>
+        )}
+      </ul>
+      <p className="muted small-note">
+        Para restaurar, use o comando <code>bash deploy/restore.sh</code> na VPS (o passo a passo está no DEPLOY.md).
+      </p>
+    </div>
   );
 }

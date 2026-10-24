@@ -58,12 +58,19 @@ export function Sidebar() {
 
 function TextChannelItem({ channel }: { channel: Channel }) {
   const unread = useApp((s) => !!s.unread[channel.id]);
+  const mentions = useApp((s) => s.mentions[channel.id] ?? 0);
   return (
     <li>
       <NavLink to={`/c/${channel.id}`} className="channel-link" data-unread={unread || undefined}>
         <Hash size={18} aria-hidden="true" />
         <span className="channel-name">{channel.name}</span>
-        {unread && <span className="unread-dot" aria-label="mensagens novas" />}
+        {mentions > 0 ? (
+          <span className="mention-badge" aria-label={`${mentions} ${mentions === 1 ? "menção" : "menções"} a você`}>
+            {mentions > 99 ? "99+" : mentions}
+          </span>
+        ) : (
+          unread && <span className="unread-dot" aria-label="mensagens novas" />
+        )}
       </NavLink>
     </li>
   );

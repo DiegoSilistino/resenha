@@ -1,14 +1,18 @@
-import { memo, useState, type KeyboardEvent } from "react";
-import { Download, FileText, Pencil, Trash2, Tv } from "lucide-react";
+import { memo, useCallback, useState, type KeyboardEvent } from "react";
+import { Download, FileText, Pencil, SmilePlus, Trash2, Tv } from "lucide-react";
 import type { Attachment, Message } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { api } from "../lib/api.ts";
 import { formatBytes, formatFull, formatTime } from "../lib/format.ts";
 import { realtime } from "../lib/realtime.ts";
 import { useApp } from "../state/app.ts";
+import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useVoice } from "../voice/controller.ts";
+import { EmojiPicker } from "./EmojiPicker.tsx";
+import { emojiName, QUICK_REACTIONS } from "./emojis.ts";
 import { renderMessage, youTubeLinks } from "./markdown.tsx";
+import { ReactionBar, toggleReaction } from "./Reactions.tsx";
 
 export const MessageItem = memo(function MessageItem({ message, grouped }: { message: Message; grouped: boolean }) {
   const author = useApp((s) => s.users[message.authorId]);
@@ -16,6 +20,10 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
   const users = useApp((s) => s.users);
   const voiceChannelId = useVoice((s) => (s.status === "connected" ? s.channelId : null));
   const [editing, setEditing] = useState(false);
+  const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
+  const closePicker = useCallback(() => setPickerAnchor(null), []);
+  const recent = useSettings((s) => s.recentEmojis);
+  const quick = [...new Set([...recent, ...QUICK_REACTIONS])].slice(0, 3);
 
   const mine = !!me && me.id === message.authorId;
   const canDelete = mine || (!!me && me.role === "admin");
@@ -32,7 +40,7 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
   }
 
   return (
-    <article className="message" data-grouped={grouped || undefined}>
+    <article className="message" data-grouped={grouped || undefined} data-menu-open={pickerAnchor ? true : undefined}>
       <div className="message-gutter">
         {grouped ? (
           <time className="message-hover-time" dateTime={new Date(message.createdAt).toISOString()}>
@@ -73,6 +81,7 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
             ))}
           </div>
         )}
+        <ReactionBar message={message} />
         {ytLinks.map((url) => (
           <button
             key={url}
@@ -84,8 +93,29 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
           </button>
         ))}
       </div>
-      {!editing && (mine || canDelete) && (
+      {!editing && (
         <div className="message-actions">
+          {quick.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              className="icon-btn emoji-quick"
+              onClick={() => void toggleReaction(message, emoji)}
+              aria-label={`Reagir com ${emojiName(emoji)}`}
+              title={`Reagir com ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={(e) => setPickerAnchor(pickerAnchor ? null : e.currentTarget)}
+            aria-label="Adicionar reação"
+            title="Adicionar reação"
+          >
+            <SmilePlus size={16} />
+          </button>
           {mine && (
             <button type="button" className="icon-btn" onClick={() => setEditing(true)} aria-label="Editar mensagem">
               <Pencil size={16} />
@@ -97,6 +127,16 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
             </button>
           )}
         </div>
+      )}
+      {pickerAnchor && (
+        <EmojiPicker
+          anchor={pickerAnchor}
+          onClose={closePicker}
+          onPick={(emoji) => {
+            closePicker();
+            void toggleReaction(message, emoji);
+          }}
+        />
       )}
     </article>
   );

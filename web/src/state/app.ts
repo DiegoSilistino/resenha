@@ -5,10 +5,12 @@ import type {
   Me,
   Message,
   PublicUser,
+  Reaction,
   ServerEvent,
   VoiceMember,
   WatchState,
 } from "@resenha/shared";
+import { mentionsUser } from "../chat/mentions.ts";
 
 export interface ChannelMessages {
   items: Message[];
@@ -33,17 +35,26 @@ interface AppState {
   messages: Record<string, ChannelMessages>;
   /** canal -> usuário -> horário em que o "digitando" expira */
   typing: Record<string, Record<string, number>>;
-  unread: Record<string, true>;
+  /** canal -> mensagens novas desde a última visita */
+  unread: Record<string, number>;
+  /** canal -> menções a você entre as não lidas */
+  mentions: Record<string, number>;
+  /** Mensagens que chegaram no canal aberto enquanto a janela estava em segundo plano. */
+  awayUnread: number;
   /** canal de texto aberto agora (para não marcar como não lido) */
   activeChannelId: string | null;
 
   setMe(me: Me | false): void;
   setConnection(status: ConnectionStatus): void;
   setActiveChannel(id: string | null): void;
+  /** A pessoa voltou para a janela: o que chegou no canal aberto foi visto. */
+  markWindowSeen(): void;
   applyEvent(event: ServerEvent): void;
   setMessages(channelId: string, patch: Partial<ChannelMessages>): void;
   prependMessages(channelId: string, older: Message[], hasMore: boolean): void;
   upsertMessage(message: Message): void;
+  /** Reação aplicada na hora, antes da confirmação do servidor. */
+  applyLocalReaction(message: Message, emoji: string, userId: string, on: boolean): void;
   reset(): void;
 }
 
@@ -62,8 +73,14 @@ const initial = {
   messages: {},
   typing: {},
   unread: {},
+  mentions: {},
+  awayUnread: 0,
   activeChannelId: null,
 };
+
+/** A pessoa está olhando para o app agora? */
+export const windowFocused = () =>
+  typeof document === "undefined" || (document.visibilityState === "visible" && document.hasFocus());
 
 export const useApp = create<AppState>()((set, get) => ({
   ...initial,
@@ -72,11 +89,17 @@ export const useApp = create<AppState>()((set, get) => ({
   setConnection: (connection) => set({ connection }),
   setActiveChannel: (id) =>
     set((s) => {
-      if (!id || !s.unread[id]) return { activeChannelId: id };
+      if (!id || (!s.unread[id] && !s.mentions[id])) return { activeChannelId: id, awayUnread: 0 };
       const unread = { ...s.unread };
+      const mentions = { ...s.mentions };
       delete unread[id];
-      return { activeChannelId: id, unread };
+      delete mentions[id];
+      return { activeChannelId: id, unread, mentions, awayUnread: 0 };
     }),
+
+  markWindowSeen: () => {
+    if (get().awayUnread) set({ awayUnread: 0 });
+  },
 
   setMessages: (channelId, patch) =>
     set((s) => ({
@@ -102,6 +125,12 @@ export const useApp = create<AppState>()((set, get) => ({
           : cur.items.map((m) => (m.id === message.id ? message : m));
       return { messages: { ...s.messages, [message.channelId]: { ...cur, items } } };
     }),
+
+  applyLocalReaction: (message, emoji, userId, on) => {
+    const cur = get().messages[message.channelId]?.items.find((m) => m.id === message.id);
+    if (!cur) return;
+    get().upsertMessage({ ...cur, reactions: toggleReactionList(cur.reactions, emoji, userId, on) });
+  },
 
   reset: () => set({ ...initial, me: false }),
 
@@ -135,18 +164,35 @@ export const useApp = create<AppState>()((set, get) => ({
         return set({ channels: s.channels.filter((c) => c.id !== event.channelId), messages, voice, watch });
       }
       case "message.create": {
-        get().upsertMessage(event.message);
+        const m = event.message;
+        get().upsertMessage(m);
         // quem enviou já não está "digitando"
-        const typing = withoutTyping(get().typing, event.message.channelId, event.message.authorId);
-        const mine = s.me && event.message.authorId === s.me.id;
-        const unread =
-          mine || event.message.channelId === s.activeChannelId
-            ? s.unread
-            : { ...s.unread, [event.message.channelId]: true as const };
-        return set({ typing, unread });
+        const typing = withoutTyping(get().typing, m.channelId, m.authorId);
+        if (!s.me || m.authorId === s.me.id) return set({ typing });
+        if (m.channelId === s.activeChannelId) {
+          return set({ typing, awayUnread: windowFocused() ? 0 : s.awayUnread + 1 });
+        }
+        const patch: Partial<AppState> = { typing, unread: { ...s.unread, [m.channelId]: (s.unread[m.channelId] ?? 0) + 1 } };
+        if (mentionsUser(m.content, s.me.username)) {
+          patch.mentions = { ...s.mentions, [m.channelId]: (s.mentions[m.channelId] ?? 0) + 1 };
+        }
+        return set(patch);
       }
       case "message.update":
         return get().upsertMessage(event.message);
+      case "message.reactions": {
+        const cur = s.messages[event.channelId];
+        if (!cur?.loaded) return;
+        return set({
+          messages: {
+            ...s.messages,
+            [event.channelId]: {
+              ...cur,
+              items: cur.items.map((m) => (m.id === event.messageId ? { ...m, reactions: event.reactions } : m)),
+            },
+          },
+        });
+      }
       case "message.delete": {
         const cur = s.messages[event.channelId];
         if (!cur) return;
@@ -187,6 +233,20 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
   return patch;
 }
 
+/** Lista de reações com `userId` ligado ou desligado em `emoji` (sem mudar a ordem dos outros). */
+export function toggleReactionList(reactions: Reaction[], emoji: string, userId: string, on: boolean): Reaction[] {
+  const existing = reactions.find((r) => r.emoji === emoji);
+  if (on) {
+    if (existing?.userIds.includes(userId)) return reactions;
+    if (!existing) return [...reactions, { emoji, userIds: [userId] }];
+    return reactions.map((r) => (r.emoji === emoji ? { ...r, userIds: [...r.userIds, userId] } : r));
+  }
+  if (!existing?.userIds.includes(userId)) return reactions;
+  return reactions
+    .map((r) => (r.emoji === emoji ? { ...r, userIds: r.userIds.filter((id) => id !== userId) } : r))
+    .filter((r) => r.userIds.length > 0);
+}
+
 function withoutTyping(typing: AppState["typing"], channelId: string, userId: string) {
   if (!typing[channelId]?.[userId]) return typing;
   const ch = { ...typing[channelId] };
@@ -204,3 +264,7 @@ export const userById = (id: string) => (s: AppState) => s.users[id];
 export function displayNameOf(users: Record<string, PublicUser>, id: string): string {
   return users[id]?.displayName ?? "Alguém";
 }
+
+/** Total para o título da aba: "(3) #geral". */
+export const unreadTotal = (s: Pick<AppState, "unread" | "awayUnread">) =>
+  Object.values(s.unread).reduce((a, b) => a + b, 0) + s.awayUnread;

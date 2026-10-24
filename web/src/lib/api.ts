@@ -1,6 +1,7 @@
 import type {
   ApiErrorBody,
   Attachment,
+  BackupInfo,
   Channel,
   ChannelKind,
   Invite,
@@ -23,12 +24,13 @@ export class ApiError extends Error {
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   let res: Response;
+  const isForm = body instanceof FormData;
   try {
     res = await fetch(url, {
       method,
       credentials: "same-origin",
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: body === undefined || isForm ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, "Sem conexão com o servidor. Verifique sua internet.");
@@ -55,6 +57,12 @@ export const api = {
   updateMe: (b: { displayName?: string; avatarColor?: string }) => request<{ me: Me }>("PATCH", "/api/me", b),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>("POST", "/api/me/password", { currentPassword, newPassword }),
+  uploadAvatar: (image: Blob) => {
+    const form = new FormData();
+    form.append("file", image, image.type === "image/webp" ? "avatar.webp" : "avatar.png");
+    return request<{ me: Me }>("POST", "/api/me/avatar", form);
+  },
+  removeAvatar: () => request<{ me: Me }>("DELETE", "/api/me/avatar"),
 
   messages: (channelId: string, before?: number) =>
     request<{ messages: Message[]; hasMore: boolean }>(
@@ -65,6 +73,8 @@ export const api = {
     request<{ message: Message }>("POST", `/api/channels/${channelId}/messages`, { content, attachmentIds }),
   editMessage: (id: number, content: string) => request<{ message: Message }>("PATCH", `/api/messages/${id}`, { content }),
   deleteMessage: (id: number) => request<void>("DELETE", `/api/messages/${id}`),
+  react: (id: number, emoji: string, on: boolean) =>
+    request<void>(on ? "PUT" : "DELETE", `/api/messages/${id}/reactions/${encodeURIComponent(emoji)}`),
 
   voiceToken: (channelId: string) => request<VoiceTokenResponse>("POST", "/api/voice/token", { channelId }),
 
@@ -80,7 +90,11 @@ export const api = {
   setUserDisabled: (id: string, disabled: boolean) =>
     request<{ user: PublicUser }>("POST", `/api/admin/users/${id}/${disabled ? "disable" : "enable"}`),
   setUserRole: (id: string, role: Role) => request<{ user: PublicUser }>("PATCH", `/api/admin/users/${id}/role`, { role }),
+  backupInfo: () => request<BackupInfo>("GET", "/api/admin/backup/info"),
 };
+
+/** O download do backup é uma navegação normal (o navegador mostra o progresso). */
+export const BACKUP_DOWNLOAD_URL = "/api/admin/backup";
 
 /**
  * Envio de arquivo com progresso (fetch ainda não informa progresso de upload).

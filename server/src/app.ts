@@ -14,7 +14,10 @@ import { forbidden, HttpError, sendError, unauthorized } from "./http.ts";
 import { Hub } from "./realtime/hub.ts";
 import { registerSocket } from "./realtime/socket.ts";
 import { resolveSession, SESSION_COOKIE } from "./auth/sessions.ts";
+import { BackupService } from "./backup/service.ts";
 import { registerAdminRoutes } from "./routes/admin.ts";
+import { registerAvatarRoutes } from "./routes/avatars.ts";
+import { registerBackupRoutes } from "./routes/backup.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
 import { registerChannelRoutes } from "./routes/channels.ts";
 import { registerMeRoutes } from "./routes/me.ts";
@@ -44,6 +47,8 @@ export interface AppContext {
   watch: WatchService;
   gateway: VoiceGateway;
   uploads: UploadStorage;
+  avatars: UploadStorage;
+  backups: BackupService;
 }
 
 export const requireUser = async (req: FastifyRequest) => {
@@ -66,16 +71,26 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   const { config } = deps;
   const hub = new Hub();
   const voice = new VoicePresence(hub);
+  const store = new Store(deps.db);
   const ctx: AppContext = {
     config,
-    store: new Store(deps.db),
+    store,
     hub,
     voice,
     watch: new WatchService(hub, deps.fetchTitle ?? createOEmbedFetcher()),
     gateway: deps.voiceGateway ?? new LiveKitGateway(config.livekit),
     uploads: new UploadStorage(config.uploadsDir),
+    avatars: new UploadStorage(config.avatarsDir),
+    backups: new BackupService(deps.db, store, {
+      data: config.dataDir,
+      backups: config.backupsDir,
+      uploads: config.uploadsDir,
+      avatars: config.avatarsDir,
+    }),
   };
   await ctx.uploads.init();
+  await ctx.avatars.init();
+  await ctx.backups.init();
   voice.onChannelEmpty((channelId) => ctx.watch.endSession(channelId));
 
   const app = Fastify({
@@ -141,6 +156,8 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   registerChannelRoutes(app, ctx);
   registerMessageRoutes(app, ctx);
   registerUploadRoutes(app, ctx);
+  registerAvatarRoutes(app, ctx);
+  registerBackupRoutes(app, ctx);
   registerVoiceRoutes(app, ctx);
   registerSocket(app, ctx);
 

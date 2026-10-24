@@ -5,14 +5,18 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
 - **Contas só por convite.** O admin gera links de uso único ou limitado, com validade.
 - **Canais de texto** em tempo real:
   - anexos (imagens e vídeos aparecem na conversa);
+  - reações com emoji (barra rápida e seletor com busca em português);
   - edição e exclusão;
   - "fulano está digitando";
-  - marcação de não lidas;
+  - não lidas com contador na aba ("(3) #geral") e menções (@usuario) destacadas;
+  - notificações do Windows quando o app está minimizado (todas as mensagens, só menções ou nunca);
   - formatação estilo Discord.
+- **Perfil com foto**, recortada no próprio navegador (arrastar e zoom).
 - **Canais de voz** com qualidade de SFU:
-  - mutar e ensurdecer;
+  - mutar e ensurdecer, com sons de entrar, sair e mutar;
   - volume individual de 0 a 200%;
   - push-to-talk;
+  - sensibilidade do microfone (automática ou manual, com medidor): só transmite quando você fala;
   - compartilhamento de tela com áudio e câmera, com perfis de qualidade (de "texto nítido" a 1440p a 60 fps) e indicador de resolução, fps e Mbps;
   - quem fala "acende".
 - **Assistir juntos.** Uma fila do YouTube sincronizada no mesmo segundo para todos, que serve para música e para cinema. Quem está no canal pausa, pula e adianta. O player continua tocando enquanto você navega pelo chat.
@@ -84,6 +88,8 @@ O app diz exatamente onde está o problema:
 | "Conectou ao servidor de voz, mas o áudio não passou" | No PC: permita o `livekit-server` no Firewall do Windows. Na VPS: libere `7881/tcp` e `7882/udp`. |
 | "Seu navegador não alcançou o servidor de voz em …" | Na VPS: confira `LIVEKIT_PUBLIC_URL` (vazio = mesmo domínio) e o encaminhamento de `/rtc` no Caddy. |
 | "…recusou as credenciais…" | `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` do app diferentes das do LiveKit. |
+| Os amigos dizem que suas primeiras sílabas somem ou a voz picota | Em Configurações → Áudio → Sensibilidade, desmarque "Ajustar automaticamente" e baixe o nível até a barra passar da marca quando você fala baixo. Ou desligue a opção. |
+| As notificações não aparecem | Configurações → Notificações mostra o estado. Se estiverem bloqueadas, libere no cadeado ao lado do endereço do site. No Windows, confira também se o "Não incomodar" (Assistente de foco) está desligado. |
 | "O Windows não liberou o som do computador" (ao transmitir a tela) | Em Configurações → Sistema → Som → seu fone, desative **Aprimoramentos de áudio** e **Áudio espacial**; no software do headset, desligue surround/7.1. Ou transmita sem som. |
 
 Para um diagnóstico rápido, entre no app e abra `/api/voice/health` (ex.: `http://localhost:5173/api/voice/health`).
@@ -109,17 +115,29 @@ O guia completo, passo a passo pelo Windows, está em **[DEPLOY.md](DEPLOY.md)**
 | Novo convite pelo terminal | `docker compose exec app node dist/cli.js invite` (`--admin`, `--uses 5`, `--hours 24`) |
 | Alguém esqueceu a senha | `docker compose exec app node dist/cli.js reset-password <usuario>` |
 | Listar contas | `docker compose exec app node dist/cli.js users` |
-| Backup | veja abaixo |
+| Restaurar um backup | `bash deploy/restore.sh` (veja abaixo) |
 
 Em desenvolvimento, os mesmos comandos rodam com `npm run cli -- invite --admin`.
 
-**Backup.** Todos os dados (banco e anexos) ficam no volume `app-data`. Para salvar:
+### Backup
+
+Os dados (banco, anexos e fotos) ficam no volume `app-data`. Há três camadas, todas automáticas menos a última:
+
+1. **Cópia diária do banco** em `backups/` dentro do volume, guardando as últimas 7. Serve para voltar atrás se algo for apagado sem querer.
+2. **Cópia antes de cada atualização** que mude a estrutura do banco (`backups/resenha-antes-da-vN-….db`).
+3. **Backup completo para guardar fora da VPS.** Em ⚙ Administrar → Backup, o botão "Baixar backup completo" gera um `.tar` com tudo. Baixe toda semana e guarde no PC ou no Google Drive; a aba avisa quando faz mais de 7 dias. Se a VPS se perder, é com esse arquivo que o Resenha volta.
+
+**Restaurar** (na VPS, dentro de `/opt/resenha`):
 
 ```bash
-docker compose stop app
-docker run --rm -v "$(basename "$PWD")_app-data":/data -v "$PWD":/backup alpine tar czf /backup/resenha-$(date +%F).tgz -C /data .
-docker compose start app
+bash deploy/restore.sh                               # lista as cópias guardadas no servidor
+bash deploy/restore.sh resenha-2026-10-20.db         # volta o banco para a cópia daquele dia
+bash deploy/restore.sh /root/resenha-backup-2026-10-24.tar   # restaura o backup completo baixado pelo app
 ```
+
+O script pede confirmação e guarda os dados atuais em `backups/antes-da-restauracao-*.tar` antes de substituir, então dá para desfazer. Para levar o backup do PC para a VPS: `scp resenha-backup-AAAA-MM-DD.tar root@SEU_IP:/root/`.
+
+Os logs do Docker têm tamanho máximo (3 arquivos de 10 MB por serviço), então não enchem o disco com o tempo. O espaço livre aparece na aba Backup.
 
 ## Segurança (já implementado)
 
@@ -136,6 +154,8 @@ docker compose start app
 - As legendas só funcionam no Chrome e no Edge, e o áudio é processado pelo Google ou pela Microsoft. Por isso a transcrição é opcional e desliga com o microfone mudo.
 - Vídeos cujo dono proibiu a incorporação são recusados ao adicionar (exigência do YouTube).
 - O push-to-talk só funciona com a janela em foco. Um atalho global exige o app desktop (fase 2).
+- As notificações precisam do Resenha aberto (pode estar minimizado ou atrás de outra janela).
+- As não lidas valem só enquanto a página está aberta: ao recarregar, o contador recomeça do zero.
 - Não há TURN com TLS. Redes corporativas muito fechadas podem não conectar a voz; o TCP 7881 cobre a maioria dos casos.
 
 ## Próximos passos (fase 2)
@@ -148,7 +168,7 @@ docker compose start app
    - atualização automática.
 2. **Clipes:** gravar os últimos 30 s da tela com um atalho (LiveKit Egress).
 3. **Detecção de jogo** pela Steam Web API, com ícone do jogo ao lado do nome.
-4. **Notificações push** (Web Push/VAPID) para menções e "fulano entrou na voz".
+4. **Notificações push** (Web Push/VAPID), que chegam mesmo com o navegador fechado, e não lidas guardadas no servidor.
 5. **Supressão de ruído com IA** (RNNoise em WASM, sem custo).
 6. **Twitch e Kick no cinema;** persistir a fila no banco.
 

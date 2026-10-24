@@ -8,6 +8,7 @@ import {
   ConnectionState,
   DisconnectReason,
   type LocalAudioTrack,
+  type LocalTrackPublication,
   type Participant,
   type RemoteParticipant,
   type RemoteTrack,
@@ -20,11 +21,14 @@ import { create } from "zustand";
 import { CAPTIONS_TOPIC } from "@resenha/shared";
 import { api, ApiError } from "../lib/api.ts";
 import { realtime } from "../lib/realtime.ts";
+import { playSound } from "../lib/sounds.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { SpeechCaptioner, type CaptionChunk } from "./speech.ts";
 import { screenQuality, screenShareErrorAdvice, screenShareOptions, type ScreenQualityId } from "./screenQuality.ts";
 import { useUi } from "../state/ui.ts";
+import type { GateConfig } from "./gate/engine.ts";
+import { GateProcessor } from "./gate/processor.ts";
 
 export type VoiceStatus = "idle" | "connecting" | "connected" | "reconnecting";
 
@@ -70,6 +74,10 @@ const bump = () => setV((s) => ({ version: s.version + 1 }));
 
 let room: Room | null = null;
 let joinSeq = 0;
+/** Portão (sensibilidade) do microfone da chamada atual. */
+let gate: GateProcessor | null = null;
+/** Até quando ignorar entradas/saídas dos outros (a reconexão da sala gera eventos em rajada). */
+let quietUntil = 0;
 /** Salas que chegaram a conectar (antes disso, falhas são tratadas pelo joinVoice). */
 const established = new WeakSet<Room>();
 
@@ -86,9 +94,10 @@ export function roomParticipants(): Participant[] {
 export async function joinVoice(channelId: string): Promise<void> {
   const st = useVoice.getState();
   if (st.channelId === channelId && st.status !== "idle") return;
-  if (room) await leaveVoice();
+  if (room) await leaveVoice({ sound: false });
 
   const seq = ++joinSeq;
+  quietUntil = 0;
   setV({ status: "connecting", channelId, screenSharing: false, cameraOn: false, speaking: {}, captions: {} });
   let r: Room | null = null;
   let url = "";
@@ -123,6 +132,7 @@ export async function joinVoice(channelId: string): Promise<void> {
 
     established.add(r);
     setV({ status: "connected", audioBlocked: !r.canPlaybackAudio });
+    playSound("join");
     realtime.send({ type: "voice.join", channelId });
     applyVolumes();
     await applyMic();
@@ -163,10 +173,13 @@ export function joinErrorMessage(err: unknown, url: string): string {
   return "Não foi possível conectar à voz. Tente de novo; se continuar, recarregue a página.";
 }
 
-export async function leaveVoice(): Promise<void> {
+/** `sound: false` ao trocar de canal (só toca o som de entrar no novo). */
+export async function leaveVoice({ sound = true }: { sound?: boolean } = {}): Promise<void> {
   joinSeq++;
   const r = room;
   room = null;
+  gate = null;
+  if (r && sound) playSound("leave");
   captioner.setActive(false, useSettings.getState().captionsLang);
   if (r) await r.disconnect().catch(() => undefined);
   clearAudioSink();
@@ -201,8 +214,13 @@ function wire(r: Room) {
       for (const el of track.detach()) el.remove();
       bump();
     })
-    .on(RoomEvent.ParticipantConnected, bump)
+    .on(RoomEvent.ParticipantConnected, () => {
+      if (room === r && performance.now() > quietUntil) playSound("join");
+      bump();
+    })
     .on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => {
+      // Ao sairmos, o LiveKit "desconecta" cada participante: room já é null aqui e nada toca.
+      if (room === r && performance.now() > quietUntil) playSound("leave");
       setV((s) => {
         const captions = { ...s.captions };
         delete captions[p.identity];
@@ -214,7 +232,10 @@ function wire(r: Room) {
     .on(RoomEvent.TrackPublished, bump)
     .on(RoomEvent.TrackUnpublished, bump)
     .on(RoomEvent.ParticipantNameChanged, bump)
-    .on(RoomEvent.LocalTrackPublished, () => onLocalTracksChanged(r))
+    .on(RoomEvent.LocalTrackPublished, (pub: LocalTrackPublication) => {
+      onLocalTracksChanged(r);
+      if (pub.source === Track.Source.Microphone && pub.track) void attachGate(pub.track as LocalAudioTrack);
+    })
     .on(RoomEvent.LocalTrackUnpublished, () => onLocalTracksChanged(r))
     .on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
       setV({ speaking: Object.fromEntries(speakers.map((p) => [p.identity, true as const])) });
@@ -229,8 +250,14 @@ function wire(r: Room) {
       }
     })
     .on(RoomEvent.AudioPlaybackStatusChanged, () => setV({ audioBlocked: !r.canPlaybackAudio }))
-    .on(RoomEvent.Reconnecting, () => setV({ status: "reconnecting" }))
-    .on(RoomEvent.Reconnected, () => setV({ status: "connected" }))
+    .on(RoomEvent.Reconnecting, () => {
+      quietUntil = Infinity;
+      setV({ status: "reconnecting" });
+    })
+    .on(RoomEvent.Reconnected, () => {
+      quietUntil = performance.now() + 2_000;
+      setV({ status: "connected" });
+    })
     .on(RoomEvent.MediaDevicesError, (err: Error) => {
       // Falhas da captura de tela têm aviso próprio (em startScreenShare); este é de microfone/câmera.
       if (!capturingScreen) toast.error(deviceErrorMessage(err));
@@ -239,6 +266,8 @@ function wire(r: Room) {
       // saída iniciada por nós, ou falha ao conectar (o joinVoice avisa com a mensagem certa)
       if (room !== r || !established.has(r)) return;
       room = null;
+      gate = null;
+      playSound("leave");
       captioner.setActive(false, useSettings.getState().captionsLang);
       clearAudioSink();
       resetCallState();
@@ -308,7 +337,7 @@ export async function unlockAudio(): Promise<void> {
 
 // ---------------------------------------------------------------- microfone
 
-function micOptions() {
+export function micOptions() {
   const s = useSettings.getState();
   return {
     ...(s.micDeviceId ? { deviceId: s.micDeviceId } : {}),
@@ -316,6 +345,24 @@ function micOptions() {
     noiseSuppression: s.noiseSuppression,
     autoGainControl: true,
   };
+}
+
+/** Preferência de sensibilidade em vigor. Com push-to-talk, a tecla já decide: o portão fica aberto. */
+export function gateConfig(): GateConfig {
+  const s = useSettings.getState();
+  return { enabled: s.micGate && !s.pttEnabled, auto: s.micGateAuto, thresholdDb: s.micGateDb };
+}
+
+async function attachGate(track: LocalAudioTrack) {
+  if (track.getProcessor()) return;
+  const g = new GateProcessor(gateConfig);
+  try {
+    await track.setProcessor(g);
+    gate = g;
+  } catch (err) {
+    // sem o portão a chamada funciona igual, só sem cortar o ruído entre as falas
+    console.warn("[voz] não foi possível ligar a sensibilidade do microfone", err);
+  }
 }
 
 /** Microfone deve estar aberto agora? */
@@ -360,13 +407,20 @@ function deviceErrorMessage(err: unknown): string {
 export function toggleMute() {
   const v = useVoice.getState();
   // Como no Discord: ligar o microfone enquanto ensurdecido também volta a ouvir.
-  if (v.deafened) setV({ deafened: false, muted: false });
-  else setV({ muted: !v.muted });
+  if (v.deafened) {
+    setV({ deafened: false, muted: false });
+    playSound("undeafen");
+  } else {
+    setV({ muted: !v.muted });
+    playSound(v.muted ? "unmute" : "mute");
+  }
   afterLocalAudioChange();
 }
 
 export function toggleDeafen() {
-  setV((s) => ({ deafened: !s.deafened }));
+  const was = useVoice.getState().deafened;
+  setV({ deafened: !was });
+  playSound(was ? "undeafen" : "deafen");
   afterLocalAudioChange();
 }
 
@@ -554,6 +608,14 @@ useSettings.subscribe((s, prev) => {
     void applyMic();
   }
   if (s.transcribe !== prev.transcribe || s.captionsLang !== prev.captionsLang) updateCaptioner();
+  if (
+    s.micGate !== prev.micGate ||
+    s.micGateAuto !== prev.micGateAuto ||
+    s.micGateDb !== prev.micGateDb ||
+    s.pttEnabled !== prev.pttEnabled
+  ) {
+    gate?.reconfigure();
+  }
   if (!r) return;
   if (s.micDeviceId !== prev.micDeviceId && s.micDeviceId) {
     void r.switchActiveDevice("audioinput", s.micDeviceId).catch((e) => toast.error(deviceErrorMessage(e)));

@@ -7,6 +7,7 @@ import {
 } from "@resenha/shared";
 import { useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
+import { onNewMessage } from "./notify.ts";
 
 /** Relógio do servidor estimado, usado para sincronizar o "Assistir juntos". */
 export const clock = new ClockSync();
@@ -108,6 +109,7 @@ class RealtimeClient {
         return;
       default:
         useApp.getState().applyEvent(event);
+        if (event.type === "message.create") onNewMessage(event.message);
     }
   }
 

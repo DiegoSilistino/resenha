@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { splitMention } from "./mentions.ts";
 
 /**
  * Formatação leve estilo Discord, gerando elementos React (nunca HTML cru, então
@@ -44,12 +45,16 @@ function renderInline(text: string, isKnownUser: (u: string) => boolean, keyPref
           {token}
         </a>,
       );
-    } else if (m[7] && isKnownUser(token.slice(1).toLowerCase())) {
-      nodes.push(
-        <span key={key} className="mention">
-          {token}
-        </span>,
-      );
+    } else if (m[7]) {
+      const split = splitMention(token, isKnownUser);
+      if (split) {
+        nodes.push(
+          <span key={key} className="mention">
+            {split.mention}
+          </span>,
+        );
+        if (split.rest) nodes.push(split.rest);
+      } else nodes.push(token);
     } else nodes.push(token);
     last = index + token.length;
   }

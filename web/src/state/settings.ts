@@ -22,8 +22,35 @@ export interface Settings {
   screenQuality: ScreenQualityId;
   /** Transmitir também o som do computador junto com a tela. */
   screenAudio: boolean;
+  /** Só transmite o microfone quando o volume passa do limiar (corta teclado e ruído entre falas). */
+  micGate: boolean;
+  /** Limiar automático: acompanha o ruído de fundo do ambiente. */
+  micGateAuto: boolean;
+  /** Limiar manual, em dB (de -80 a -10). */
+  micGateDb: number;
+  /** Quando avisar no Windows: todas as mensagens, só menções ou nunca. */
+  notifyMode: NotifyMode;
+  notifySound: boolean;
+  /** Sons de entrar, sair, mutar e ensurdecer na chamada. */
+  callSounds: boolean;
+  /** Volume dos sons do app, de 0 a 1. */
+  soundVolume: number;
+  /** A pessoa fechou o aviso "ativar notificações" sem ativar. */
+  notifyPromptDismissed: boolean;
+  /** Emojis usados por último nas reações (o mais recente primeiro). */
+  recentEmojis: string[];
   set(patch: Partial<Omit<Settings, "set" | "setUserVolume">>): void;
   setUserVolume(userId: string, volume: number): void;
+}
+
+export type NotifyMode = "all" | "mentions" | "none";
+
+const RECENT_EMOJIS_MAX = 8;
+
+/** Coloca o emoji na frente da lista de recentes (sem repetir). */
+export function rememberEmoji(emoji: string) {
+  const recent = useSettings.getState().recentEmojis.filter((e) => e !== emoji);
+  useSettings.getState().set({ recentEmojis: [emoji, ...recent].slice(0, RECENT_EMOJIS_MAX) });
 }
 
 export const useSettings = create<Settings>()(
@@ -42,6 +69,15 @@ export const useSettings = create<Settings>()(
       watchVolume: 60,
       screenQuality: DEFAULT_SCREEN_QUALITY,
       screenAudio: true,
+      micGate: true,
+      micGateAuto: true,
+      micGateDb: -50,
+      notifyMode: "all",
+      notifySound: true,
+      callSounds: true,
+      soundVolume: 0.6,
+      notifyPromptDismissed: false,
+      recentEmojis: [],
       set: (patch) => set(patch),
       setUserVolume: (userId, volume) =>
         set((s) => ({ userVolumes: { ...s.userVolumes, [userId]: Math.min(2, Math.max(0, volume)) } })),

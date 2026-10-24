@@ -106,7 +106,21 @@ ssh root@SEU_IP
 cd /opt/resenha && git pull && bash deploy/setup-vps.sh
 ```
 
-Contas, mensagens e arquivos ficam guardados: a atualização só troca o programa.
+Contas, mensagens e arquivos ficam guardados: a atualização só troca o programa. Se ela mudar a estrutura do banco, o servidor guarda antes uma cópia em `backups/resenha-antes-da-vN-….db`.
+
+## Backup e restauração
+
+- **Automático, no servidor:** uma cópia do banco por dia (as últimas 7).
+- **Para guardar fora da VPS:** no app, ⚙ Administrar → Backup → **Baixar backup completo**. Faça isso toda semana e guarde o arquivo no PC ou no Google Drive.
+
+Para restaurar, conecte na VPS e rode de dentro de `/opt/resenha`:
+
+| O que aconteceu | Comando |
+|---|---|
+| Alguém apagou algo sem querer | `bash deploy/restore.sh` lista as cópias; depois `bash deploy/restore.sh resenha-AAAA-MM-DD.db` |
+| A VPS se perdeu e você criou outra | Instale normalmente (passos 1 a 5), mande o backup do PC com `scp resenha-backup-AAAA-MM-DD.tar root@NOVO_IP:/root/` e rode `bash deploy/restore.sh /root/resenha-backup-AAAA-MM-DD.tar` |
+
+O script pede confirmação e guarda os dados atuais antes de substituir (dá para desfazer).
 
 ## Quando algo dá errado
 
@@ -117,5 +131,6 @@ Contas, mensagens e arquivos ficam guardados: a atualização só troca o progra
 | Alguém esqueceu a senha | `docker compose exec app node dist/cli.js reset-password USUARIO` |
 | Gerar um convite pelo terminal | `docker compose exec app node dist/cli.js invite` |
 | Ver se tudo está rodando | `docker compose ps` |
+| Disco enchendo | Veja o espaço em ⚙ Administrar → Backup. Os logs já têm limite; o que cresce são os anexos. |
 
 Para backup, veja a seção **Manutenção** do [README](README.md).

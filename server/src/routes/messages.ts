@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { createMessageBody, editMessageBody, listMessagesQuery } from "@resenha/shared";
+import { createMessageBody, editMessageBody, LIMITS, listMessagesQuery, reactionEmojiSchema } from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, forbidden, notFound, parse } from "../http.ts";
 import { AttachmentLinkError } from "../store.ts";
@@ -63,6 +63,41 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
     hub.broadcast({ type: "message.update", message });
     return { message };
   });
+
+  // ---------- reações ----------
+
+  const reactionTarget = (params: { id: string; emoji: string }) => {
+    const message = store.messageById(parseMessageId(params.id));
+    if (!message) throw notFound("Mensagem não encontrada");
+    return { message, emoji: parse(reactionEmojiSchema, params.emoji) };
+  };
+
+  const broadcastReactions = (channelId: string, messageId: number) =>
+    hub.broadcast({ type: "message.reactions", channelId, messageId, reactions: store.reactionsFor(messageId) });
+
+  app.put<{ Params: { id: string; emoji: string } }>(
+    "/api/messages/:id/reactions/:emoji",
+    { preHandler: requireUser, config: rateLimited(ctx, 40, "10 seconds") },
+    async (req, reply) => {
+      const { message, emoji } = reactionTarget(req.params);
+      const result = store.addReaction(message.id, currentUser(req).id, emoji);
+      if (result === "limit") throw badRequest(`Esta mensagem já tem ${LIMITS.reactionsPerMessage} emojis diferentes`);
+      if (result === "added") broadcastReactions(message.channelId, message.id);
+      return reply.status(204).send();
+    },
+  );
+
+  app.delete<{ Params: { id: string; emoji: string } }>(
+    "/api/messages/:id/reactions/:emoji",
+    { preHandler: requireUser, config: rateLimited(ctx, 40, "10 seconds") },
+    async (req, reply) => {
+      const { message, emoji } = reactionTarget(req.params);
+      if (store.removeReaction(message.id, currentUser(req).id, emoji)) {
+        broadcastReactions(message.channelId, message.id);
+      }
+      return reply.status(204).send();
+    },
+  );
 
   app.delete<{ Params: { id: string } }>("/api/messages/:id", { preHandler: requireUser }, async (req, reply) => {
     const existing = store.messageById(parseMessageId(req.params.id));

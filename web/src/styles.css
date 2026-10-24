@@ -295,12 +295,81 @@ input[type="range"] {
   color: var(--danger);
 }
 
+.small-note {
+  margin: 0;
+  font-size: 13.5px;
+}
+.notify-status {
+  margin: 0;
+}
+
+.sensitivity {
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.mic-meter-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mic-meter {
+  position: relative;
+  flex: 1;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--well);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.mic-meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--faint);
+  transition: width 60ms linear;
+}
+.mic-meter-fill[data-open="true"] {
+  background: var(--online);
+}
+.mic-meter-mark {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+}
+.mic-meter-label {
+  min-width: 132px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .callout {
   margin: 0;
   padding: 12px 14px;
   border-radius: var(--r-md);
   background: var(--panel-2);
   border-left: 3px solid var(--lamp);
+}
+
+.callout-warn {
+  border-left-color: var(--danger);
+}
+.callout strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.backup-facts {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.backup-facts li[data-warn] {
+  color: var(--danger);
 }
 
 .row-actions {
@@ -353,8 +422,13 @@ input[type="range"] {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.connection-banner {
+/* Faixas no topo (sem conexão, ativar notificações): ocupam a primeira linha da grade, que some quando vazia. */
+.banners {
   grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.connection-banner {
   padding: 6px 16px;
   background: var(--danger);
   color: var(--danger-ink);
@@ -505,6 +579,34 @@ input[type="range"] {
   border-radius: 50%;
   background: var(--text);
 }
+.mention-badge {
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+
+.notify-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 8px 16px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  font-size: 14.5px;
+}
+.notify-prompt > svg {
+  color: var(--lamp);
+  flex: none;
+}
 
 .voice-members {
   padding: 2px 0 6px 30px;
@@ -621,6 +723,54 @@ input[type="range"] {
   letter-spacing: 0.02em;
   user-select: none;
   transition: box-shadow 140ms ease-out;
+}
+.avatar-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.crop-view {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--well);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.crop-view:active {
+  cursor: grabbing;
+}
+.crop-view:focus-visible {
+  outline: 2px solid var(--lamp);
+  outline-offset: 2px;
+}
+.crop-view img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  pointer-events: none;
+}
+/* mostra o círculo que vira a foto; o resto escurece */
+.crop-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgb(10 16 20 / 0.6);
+  outline: 2px solid rgb(255 255 255 / 0.55);
+  pointer-events: none;
+}
+
+.avatar[data-photo] {
+  overflow: visible;
+}
+.avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
 }
 .avatar[data-speaking] {
   box-shadow:
@@ -785,8 +935,125 @@ input[type="range"] {
   border-radius: var(--r-sm);
 }
 .message:hover .message-actions,
-.message:focus-within .message-actions {
+.message:focus-within .message-actions,
+.message[data-menu-open] .message-actions {
   display: flex;
+}
+.emoji-quick {
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------ reações */
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.reaction:hover {
+  border-color: var(--faint);
+  color: var(--text);
+}
+.reaction[data-mine] {
+  border-color: var(--lamp);
+  background: rgb(242 169 59 / 0.14);
+  color: var(--lamp);
+}
+.reaction-emoji {
+  font-size: 16px;
+  line-height: 1;
+}
+.reaction-add {
+  visibility: hidden;
+  padding: 0 7px;
+}
+.message:hover .reaction-add,
+.message:focus-within .reaction-add,
+.message[data-menu-open] .reaction-add {
+  visibility: visible;
+}
+
+.emoji-picker {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.45);
+  overflow: hidden;
+}
+.emoji-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--well);
+  color: var(--faint);
+}
+.emoji-search:focus-within {
+  border-color: var(--lamp);
+}
+/* mesmo seletor da regra global de input (mais .emoji-search), para vencer a especificidade dela */
+.emoji-search input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+  border: 0;
+  padding: 9px 0;
+  background: transparent;
+}
+.emoji-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 10px;
+}
+.emoji-cat {
+  margin: 8px 4px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+}
+.emoji-btn {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  font-size: 22px;
+  cursor: pointer;
+}
+.emoji-btn:hover,
+.emoji-btn:focus-visible {
+  background: var(--panel-2);
+}
+.emoji-empty {
+  margin: 16px 6px;
+  color: var(--muted);
 }
 
 .md-code {

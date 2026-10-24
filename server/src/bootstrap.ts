@@ -35,7 +35,7 @@ const HOUR = 60 * 60 * 1000;
 
 /** Limpezas periódicas. Devolve uma função que cancela os timers. */
 export function startMaintenance(ctx: AppContext, log: (msg: string) => void): () => void {
-  const { store, uploads, hub } = ctx;
+  const { store, uploads, avatars, backups, hub } = ctx;
 
   const cleanup = async () => {
     try {
@@ -43,11 +43,20 @@ export function startMaintenance(ctx: AppContext, log: (msg: string) => void): (
       const orphans = store.deleteOrphanAttachments(24 * HOUR);
       await uploads.remove(orphans);
       const stray = await uploads.removeUnknown(store.allAttachmentIds(), 10 * 60 * 1000);
-      if (sessions || orphans.length || stray) {
-        log(`limpeza: ${sessions} sessões expiradas, ${orphans.length + stray} arquivos órfãos`);
+      const strayAvatars = await avatars.removeUnknown(store.allAvatarIds(), 10 * 60 * 1000);
+      if (sessions || orphans.length || stray || strayAvatars) {
+        log(`limpeza: ${sessions} sessões expiradas, ${orphans.length + stray + strayAvatars} arquivos órfãos`);
       }
     } catch (err) {
       log(`falha na limpeza: ${(err as Error).message}`);
+    }
+    try {
+      // Download interrompido há mais de 6 h já não está em andamento.
+      await backups.removeLeftovers(6 * HOUR);
+      const created = await backups.ensureDaily();
+      if (created) log(`backup diário do banco: ${created}`);
+    } catch (err) {
+      log(`falha no backup diário: ${(err as Error).message}`);
     }
   };
 

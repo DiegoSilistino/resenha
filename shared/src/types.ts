@@ -9,6 +9,8 @@ export interface PublicUser {
   role: Role;
   /** Contas desativadas continuam na lista para exibir o autor de mensagens antigas. */
   disabled: boolean;
+  /** Foto de perfil (URL relativa); null = iniciais sobre a cor do avatar. */
+  avatarUrl: string | null;
 }
 
 export type Me = PublicUser;
@@ -39,6 +41,14 @@ export interface Message {
   createdAt: number;
   editedAt: number | null;
   attachments: Attachment[];
+  /** Em ordem de chegada do primeiro de cada emoji. */
+  reactions: Reaction[];
+}
+
+export interface Reaction {
+  emoji: string;
+  /** Quem reagiu, na ordem em que reagiu. */
+  userIds: string[];
 }
 
 export interface VoiceMember {
@@ -92,4 +102,20 @@ export interface Invite {
   createdAt: number;
   createdBy: string;
   revoked: boolean;
+}
+
+export interface BackupSnapshot {
+  name: string;
+  size: number;
+  createdAt: number;
+}
+
+export interface BackupInfo {
+  /** Última vez que um administrador baixou o backup completo. */
+  lastDownloadAt: number | null;
+  /** Cópias diárias do banco guardadas no próprio servidor. */
+  snapshots: BackupSnapshot[];
+  /** Tamanho aproximado do backup completo, em bytes. */
+  totalBytes: number;
+  disk: { free: number; total: number } | null;
 }

@@ -24,7 +24,8 @@ export function formatDay(ts: number, now = Date.now()): string {
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(1).replace(".", ",")} GB`;
 }
 
 /** 75 -> "1:15"; 3725 -> "1:02:05" */

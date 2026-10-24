@@ -3,10 +3,19 @@
 #   docker compose up -d --build
 #   docker compose logs app     <- o link de convite do administrador aparece aqui
 
+# Logs com tamanho máximo: sem isso o Docker guarda tudo para sempre e, com o tempo,
+# enche o disco da VPS. Cada serviço guarda até 3 arquivos de 10 MB.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   app:
     build: .
     restart: unless-stopped
+    logging: *logging
     env_file: .env
     environment:
       NODE_ENV: production
@@ -21,6 +30,7 @@ services:
     # Versão fixa (a mesma do npm run dev). Atualize junto com scripts/livekit-dev.mjs.
     image: livekit/livekit-server:v1.13.10
     restart: unless-stopped
+    logging: *logging
     command: --config /etc/livekit.yaml
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
@@ -33,6 +43,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       DOMAIN: ${DOMAIN}
     ports:

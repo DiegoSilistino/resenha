@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 export type Db = DatabaseSync;
@@ -6,7 +8,7 @@ export type Db = DatabaseSync;
  * Migrações em ordem. Nunca edite uma migração já publicada: acrescente outra.
  * A versão aplicada fica em PRAGMA user_version.
  */
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: string[] = [
   /* 1 */ `
   CREATE TABLE users (
     id            TEXT PRIMARY KEY,
@@ -70,6 +72,23 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX attachments_message ON attachments(message_id);
   `,
+  /* 2: foto de perfil, reações e pequenos valores do sistema */ `
+  ALTER TABLE users ADD COLUMN avatar_id TEXT;
+  ALTER TABLE users ADD COLUMN avatar_mime TEXT;
+
+  CREATE TABLE reactions (
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id    TEXT NOT NULL REFERENCES users(id),
+    emoji      TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (message_id, emoji, user_id)
+  );
+
+  CREATE TABLE meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  `,
 ];
 
 export function openDatabase(file: string): Db {
@@ -80,8 +99,23 @@ export function openDatabase(file: string): Db {
     PRAGMA foreign_keys = ON;
     PRAGMA busy_timeout = 5000;
   `);
+  backupBeforeMigrating(db, file);
   migrate(db);
   return db;
+}
+
+/**
+ * Antes de mudar a estrutura de um banco que já tem dados, guarda uma cópia em
+ * DATA_DIR/backups/resenha-antes-da-vN-<data>.db. Se a atualização der errado, é só voltar.
+ */
+function backupBeforeMigrating(db: Db, file: string): void {
+  if (file === ":memory:") return;
+  const { user_version } = db.prepare("PRAGMA user_version").get() as { user_version: number };
+  if (user_version === 0 || user_version >= MIGRATIONS.length) return;
+  const dir = path.join(path.dirname(path.resolve(file)), "backups");
+  mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-");
+  db.prepare("VACUUM INTO ?").run(path.join(dir, `resenha-antes-da-v${MIGRATIONS.length}-${stamp}.db`));
 }
 
 export function migrate(db: Db): void {

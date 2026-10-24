@@ -68,7 +68,8 @@ export function registerUploadRoutes(app: FastifyInstance, ctx: AppContext) {
         // Mesmo que algo escape, o arquivo não roda script nem carrega nada.
         .header("Content-Security-Policy", "default-src 'none'; img-src 'self'; media-src 'self'; sandbox")
         .header("Cache-Control", "private, max-age=31536000, immutable");
-      return reply.sendFile(a.id, uploads.dir, { contentType: false, acceptRanges: true });
+      // cacheControl: false mantém o Cache-Control definido acima (senão vira "max-age=0")
+      return reply.sendFile(a.id, uploads.dir, { contentType: false, acceptRanges: true, cacheControl: false });
     },
   );
 }

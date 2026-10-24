@@ -2,14 +2,16 @@
  * Acesso a dados. Todo SQL do app mora aqui, com parâmetros posicionais (sem concatenação).
  */
 import { randomUUID } from "node:crypto";
-import type {
-  Attachment,
-  Channel,
-  ChannelKind,
-  Invite,
-  Message,
-  PublicUser,
-  Role,
+import {
+  LIMITS,
+  type Attachment,
+  type Channel,
+  type ChannelKind,
+  type Invite,
+  type Message,
+  type PublicUser,
+  type Reaction,
+  type Role,
 } from "@resenha/shared";
 import { transaction, type Db } from "./db.ts";
 
@@ -22,12 +24,18 @@ interface UserRow {
   avatar_color: string;
   created_at: number;
   disabled_at: number | null;
+  avatar_id: string | null;
+  avatar_mime: string | null;
 }
 
 export interface UserRecord extends PublicUser {
   passwordHash: string;
   createdAt: number;
+  avatarId: string | null;
+  avatarMime: string | null;
 }
+
+export type ReactionResult = "added" | "exists" | "limit";
 
 interface ChannelRow {
   id: string;
@@ -80,9 +88,15 @@ const toUser = (r: UserRow): UserRecord => ({
   avatarColor: r.avatar_color,
   role: r.role,
   disabled: r.disabled_at !== null,
+  avatarUrl: r.avatar_id ? avatarUrl(r.avatar_id) : null,
   passwordHash: r.password_hash,
   createdAt: r.created_at,
+  avatarId: r.avatar_id,
+  avatarMime: r.avatar_mime,
 });
+
+/** O id muda a cada foto nova, então a URL pode ficar em cache para sempre. */
+export const avatarUrl = (id: string) => `/api/avatars/${id}`;
 
 export const toPublicUser = (u: UserRecord): PublicUser => ({
   id: u.id,
@@ -91,6 +105,7 @@ export const toPublicUser = (u: UserRecord): PublicUser => ({
   avatarColor: u.avatarColor,
   role: u.role,
   disabled: u.disabled,
+  avatarUrl: u.avatarUrl,
 });
 
 const toChannel = (r: ChannelRow): Channel => ({
@@ -185,6 +200,34 @@ export class Store {
       )
       .run(p.displayName ?? null, p.avatarColor ?? null, id);
     return this.userById(id)!;
+  }
+
+  /** Troca a foto (ou remove, com null) e devolve o id da anterior, para apagar o arquivo. */
+  setAvatar(userId: string, avatar: { id: string; mime: string } | null): string | null {
+    return transaction(this.db, () => {
+      const prev = this.db.prepare("SELECT avatar_id FROM users WHERE id = ?").get(userId) as
+        | { avatar_id: string | null }
+        | undefined;
+      this.db
+        .prepare("UPDATE users SET avatar_id = ?, avatar_mime = ? WHERE id = ?")
+        .run(avatar?.id ?? null, avatar?.mime ?? null, userId);
+      return prev?.avatar_id ?? null;
+    });
+  }
+
+  avatarById(id: string): { mime: string } | null {
+    const r = this.db.prepare("SELECT avatar_mime FROM users WHERE avatar_id = ?").get(id) as
+      | { avatar_mime: string | null }
+      | undefined;
+    return r?.avatar_mime ? { mime: r.avatar_mime } : null;
+  }
+
+  allAvatarIds(): Set<string> {
+    return new Set(
+      (this.db.prepare("SELECT avatar_id FROM users WHERE avatar_id IS NOT NULL").all() as { avatar_id: string }[]).map(
+        (r) => r.avatar_id,
+      ),
+    );
   }
 
   setPasswordHash(id: string, hash: string): void {
@@ -419,6 +462,80 @@ export class Store {
     });
   }
 
+  // ---------- reações ----------
+
+  /** Idempotente: reagir de novo com o mesmo emoji não duplica. */
+  addReaction(messageId: number, userId: string, emoji: string): ReactionResult {
+    return transaction(this.db, () => {
+      const exists = this.db
+        .prepare("SELECT 1 FROM reactions WHERE message_id = ? AND emoji = ? AND user_id = ?")
+        .get(messageId, emoji, userId);
+      if (exists) return "exists";
+      const emojiInUse = this.db
+        .prepare("SELECT 1 FROM reactions WHERE message_id = ? AND emoji = ? LIMIT 1")
+        .get(messageId, emoji);
+      if (!emojiInUse) {
+        const { n } = this.db
+          .prepare("SELECT COUNT(DISTINCT emoji) AS n FROM reactions WHERE message_id = ?")
+          .get(messageId) as { n: number };
+        if (n >= LIMITS.reactionsPerMessage) return "limit";
+      }
+      this.db
+        .prepare("INSERT INTO reactions (message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?)")
+        .run(messageId, userId, emoji, Date.now());
+      return "added";
+    });
+  }
+
+  /** Devolve true se havia a reação. */
+  removeReaction(messageId: number, userId: string, emoji: string): boolean {
+    const res = this.db
+      .prepare("DELETE FROM reactions WHERE message_id = ? AND emoji = ? AND user_id = ?")
+      .run(messageId, emoji, userId);
+    return Number(res.changes) > 0;
+  }
+
+  reactionsFor(messageId: number): Reaction[] {
+    return this.reactionsByMessage([messageId]).get(messageId) ?? [];
+  }
+
+  private reactionsByMessage(ids: number[]): Map<number, Reaction[]> {
+    const out = new Map<number, Reaction[]>();
+    if (ids.length === 0) return out;
+    const rows = this.db
+      .prepare(
+        `SELECT message_id, emoji, user_id FROM reactions WHERE message_id IN (${ids.map(() => "?").join(",")})
+         ORDER BY created_at, rowid`,
+      )
+      .all(...ids) as { message_id: number; emoji: string; user_id: string }[];
+    // Map preserva a ordem de inserção: cada emoji fica na posição de quem reagiu primeiro.
+    const grouped = new Map<number, Map<string, string[]>>();
+    for (const r of rows) {
+      const byEmoji = grouped.get(r.message_id) ?? new Map<string, string[]>();
+      const users = byEmoji.get(r.emoji) ?? [];
+      users.push(r.user_id);
+      byEmoji.set(r.emoji, users);
+      grouped.set(r.message_id, byEmoji);
+    }
+    for (const [messageId, byEmoji] of grouped) {
+      out.set(messageId, [...byEmoji].map(([emoji, userIds]) => ({ emoji, userIds })));
+    }
+    return out;
+  }
+
+  // ---------- valores do sistema ----------
+
+  getMeta(key: string): string | null {
+    const r = this.db.prepare("SELECT value FROM meta WHERE key = ?").get(key) as { value: string } | undefined;
+    return r?.value ?? null;
+  }
+
+  setMeta(key: string, value: string): void {
+    this.db
+      .prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .run(key, value);
+  }
+
   private hydrate(rows: MessageRow[]): Message[] {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
@@ -432,6 +549,7 @@ export class Store {
       list.push(publicAttachment(toAttachment(a)));
       byMessage.set(a.message_id!, list);
     }
+    const reactions = this.reactionsByMessage(ids);
     return rows.map((r) => ({
       id: r.id,
       channelId: r.channel_id,
@@ -440,6 +558,7 @@ export class Store {
       createdAt: r.created_at,
       editedAt: r.edited_at,
       attachments: byMessage.get(r.id) ?? [],
+      reactions: reactions.get(r.id) ?? [],
     }));
   }
 

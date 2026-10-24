@@ -10,6 +10,7 @@ import type {
   Me,
   Message,
   PublicUser,
+  Reaction,
   VoiceMember,
   WatchState,
 } from "./types.ts";
@@ -97,6 +98,18 @@ export const editMessageBody = z.object({
   content: z.string().trim().min(1).max(LIMITS.messageMax),
 });
 
+/**
+ * Um único emoji (inclui tons de pele, bandeiras e combinações com ZWJ), nunca texto livre.
+ * RegExp criada em tempo de execução: o TypeScript recusa a flag "v" com target ES2023.
+ */
+const SINGLE_EMOJI = new RegExp("^\\p{RGI_Emoji}$", "v");
+
+export function isSingleEmoji(value: string): boolean {
+  return value.length <= 32 && SINGLE_EMOJI.test(value);
+}
+
+export const reactionEmojiSchema = z.string().max(32).refine(isSingleEmoji, "Emoji inválido");
+
 export const listMessagesQuery = z.object({
   before: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(LIMITS.messagesPageSize),
@@ -162,6 +175,7 @@ export type ServerEvent =
   | { type: "message.create"; message: Message }
   | { type: "message.update"; message: Message }
   | { type: "message.delete"; channelId: string; messageId: number }
+  | { type: "message.reactions"; channelId: string; messageId: number; reactions: Reaction[] }
   | { type: "typing"; channelId: string; userId: string }
   | { type: "voice.channel"; channelId: string; members: VoiceMember[] }
   | { type: "watch.state"; state: WatchState }

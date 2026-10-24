@@ -3,17 +3,22 @@ import { AVATAR_COLORS, LIMITS } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { api, ApiError } from "../lib/api.ts";
+import { notifyPermission, requestNotifyPermission, type NotifyPermission } from "../lib/notify.ts";
 import { logout } from "../lib/session.ts";
+import { playSound } from "../lib/sounds.ts";
 import { useApp } from "../state/app.ts";
-import { keyLabel, useSettings } from "../state/settings.ts";
+import { keyLabel, useSettings, type NotifyMode } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { listDevices } from "../voice/controller.ts";
 import { speechSupported } from "../voice/speech.ts";
+import { AvatarEditor } from "./AvatarEditor.tsx";
+import { MicSensitivity } from "./MicSensitivity.tsx";
 
 const TABS = [
   { id: "profile", label: "Perfil" },
   { id: "audio", label: "Áudio" },
+  { id: "notifications", label: "Notificações" },
   { id: "captions", label: "Legendas" },
   { id: "account", label: "Conta" },
 ] as const;
@@ -40,6 +45,7 @@ export function SettingsModal() {
       <div role="tabpanel" className="tab-panel">
         {tab === "profile" && <ProfileTab />}
         {tab === "audio" && <AudioTab />}
+        {tab === "notifications" && <NotificationsTab />}
         {tab === "captions" && <CaptionsTab />}
         {tab === "account" && <AccountTab />}
       </div>
@@ -71,18 +77,22 @@ function ProfileTab() {
   return (
     <form className="form" onSubmit={save}>
       <div className="profile-preview">
-        <Avatar user={{ displayName: name || me.displayName, avatarColor: color }} size={64} />
+        <Avatar user={{ displayName: name || me.displayName, avatarColor: color, avatarUrl: me.avatarUrl }} size={64} />
         <div>
           <strong>{name || me.displayName}</strong>
           <div className="muted">@{me.username}</div>
         </div>
       </div>
+      <fieldset className="field">
+        <legend>Foto de perfil</legend>
+        <AvatarEditor onDone={() => undefined} />
+      </fieldset>
       <label className="field">
         <span>Nome de exibição</span>
         <input value={name} maxLength={LIMITS.displayNameMax} onChange={(e) => setName(e.target.value)} required />
       </label>
       <fieldset className="field">
-        <legend>Cor do avatar</legend>
+        <legend>{me.avatarUrl ? "Cor (aparece se a foto não carregar)" : "Cor do avatar"}</legend>
         <div className="swatches">
           {AVATAR_COLORS.map((c) => (
             <button
@@ -214,6 +224,104 @@ function AudioTab() {
           </button>
         </div>
       )}
+      <MicSensitivity />
+    </div>
+  );
+}
+
+const NOTIFY_MODES: { id: NotifyMode; label: string; hint: string }[] = [
+  { id: "all", label: "Todas as mensagens", hint: "Bom para um grupo pequeno de amigos." },
+  { id: "mentions", label: "Só quando me mencionarem", hint: "Quando alguém escrever @seu-usuario." },
+  { id: "none", label: "Nunca", hint: "Sem notificação e sem som de mensagem." },
+];
+
+const PERMISSION_TEXT: Record<NotifyPermission, string> = {
+  granted: "Ativadas neste navegador.",
+  default: "Ainda não ativadas neste navegador.",
+  denied: "Bloqueadas neste navegador. Para liberar, clique no cadeado ao lado do endereço do site e permita as notificações.",
+  unsupported: "Este navegador não tem notificações. Use o Chrome ou o Edge.",
+};
+
+function NotificationsTab() {
+  const s = useSettings();
+  const [permission, setPermission] = useState(notifyPermission);
+
+  async function enable() {
+    const result = await requestNotifyPermission();
+    setPermission(result);
+    if (result === "granted") {
+      try {
+        new Notification("Notificações do Resenha ativadas", { body: "É assim que as mensagens novas vão aparecer.", icon: "/icon-192.png" });
+      } catch {
+        // navegador que só notifica via service worker: a permissão ficou salva mesmo assim
+      }
+    }
+  }
+
+  return (
+    <div className="form">
+      <div className="field">
+        <span>Notificações do Windows</span>
+        <p className="muted notify-status">{PERMISSION_TEXT[permission]}</p>
+        {permission === "default" && (
+          <div>
+            <button type="button" className="btn btn-primary btn-small" onClick={() => void enable()}>
+              Ativar notificações
+            </button>
+          </div>
+        )}
+        <small>Aparecem quando o Resenha está minimizado ou em outra janela. Com ele aberto na sua frente, nada pisca.</small>
+      </div>
+      <fieldset className="field">
+        <legend>Avisar sobre</legend>
+        {NOTIFY_MODES.map((m) => (
+          <label key={m.id} className="check">
+            <input type="radio" name="notify-mode" checked={s.notifyMode === m.id} onChange={() => s.set({ notifyMode: m.id })} />
+            <span>
+              {m.label}
+              <small>{m.hint}</small>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <fieldset className="field">
+        <legend>Sons</legend>
+        <label className="check">
+          <input type="checkbox" checked={s.notifySound} onChange={(e) => s.set({ notifySound: e.target.checked })} />
+          <span>
+            Som de mensagem nova
+            <small>Toca junto com a notificação.</small>
+          </span>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={s.callSounds} onChange={(e) => s.set({ callSounds: e.target.checked })} />
+          <span>
+            Sons da chamada
+            <small>Quando alguém entra ou sai da voz, e quando você muta ou ensurdece.</small>
+          </span>
+        </label>
+        <label className="field">
+          <span>Volume dos sons: {Math.round(s.soundVolume * 100)}%</span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={s.soundVolume}
+            onChange={(e) => s.set({ soundVolume: Number(e.target.value) })}
+            onPointerUp={() => playSound("join")}
+            onKeyUp={() => playSound("join")}
+          />
+        </label>
+        <div className="row-actions">
+          <button type="button" className="btn btn-small" onClick={() => playSound("message")}>
+            Ouvir som de mensagem
+          </button>
+          <button type="button" className="btn btn-small" onClick={() => playSound("join")}>
+            Ouvir som de entrada
+          </button>
+        </div>
+      </fieldset>
     </div>
   );
 }

@@ -13,6 +13,12 @@ export const LIMITS = {
   uploadMaxBytes: 25 * 1024 * 1024,
   messagesPageSize: 50,
   watchQueueMax: 100,
+  /** A foto é recortada e reduzida no navegador (256 px); o limite só barra abuso. */
+  avatarMaxBytes: 2 * 1024 * 1024,
+  avatarMaxSide: 1024,
+  avatarMinSide: 32,
+  /** Emojis diferentes numa mesma mensagem. */
+  reactionsPerMessage: 20,
 } as const;
 
 /** Usuário: letras minúsculas, números, ponto, hífen e underline. */

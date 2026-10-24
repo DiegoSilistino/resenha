@@ -43,7 +43,7 @@ export function VoiceView({ channel }: { channel: Channel }) {
   const here = voiceChannelId === channel.id && status !== "idle";
 
   useEffect(() => {
-    document.title = channel.name;
+    useUi.getState().setPageTitle(channel.name);
   }, [channel.name]);
 
   return (

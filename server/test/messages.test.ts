@@ -130,6 +130,7 @@ describe("anexos", () => {
     expect(file.headers["content-type"]).toBe("image/png");
     expect(file.headers["x-content-type-options"]).toBe("nosniff");
     expect(String(file.headers["content-disposition"])).toMatch(/^inline/);
+    expect(String(file.headers["cache-control"])).toContain("immutable");
     expect(file.rawPayload.equals(PNG)).toBe(true);
   });
 

@@ -35,6 +35,8 @@ export interface Config {
   publicUrl: string;
   dataDir: string;
   uploadsDir: string;
+  avatarsDir: string;
+  backupsDir: string;
   dbPath: string;
   webDist: string | null;
   cookieSecure: boolean;
@@ -80,6 +82,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     publicUrl,
     dataDir,
     uploadsDir: path.join(dataDir, "uploads"),
+    avatarsDir: path.join(dataDir, "avatars"),
+    backupsDir: path.join(dataDir, "backups"),
     dbPath: path.join(dataDir, "resenha.db"),
     webDist: e.WEB_DIST ? path.resolve(e.WEB_DIST) : null,
     cookieSecure: e.COOKIE_SECURE ?? production,

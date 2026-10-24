@@ -13,7 +13,7 @@ export function ChatView({ channel }: { channel: Channel }) {
 
   useEffect(() => {
     useApp.getState().setActiveChannel(channel.id);
-    document.title = `#${channel.name}`;
+    useUi.getState().setPageTitle(`#${channel.name}`);
     return () => useApp.getState().setActiveChannel(null);
   }, [channel.id, channel.name]);
 
