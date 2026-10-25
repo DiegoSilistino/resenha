@@ -14,7 +14,7 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
 - **Perfil com foto**, recortada no próprio navegador (arrastar e zoom).
 - **Canais de voz** com qualidade de SFU:
   - mutar e ensurdecer, com sons de entrar, sair e mutar;
-  - volume individual de 0 a 200%;
+  - volume individual de 0 a 200%, separado para a voz e para o som da tela de cada pessoa (com silenciar rápido no próprio vídeo);
   - push-to-talk;
   - sensibilidade do microfone (automática ou manual, com medidor): só transmite quando você fala;
   - compartilhamento de tela com áudio e câmera, com perfis de qualidade (de "texto nítido" a 1440p a 60 fps) e indicador de resolução, fps e Mbps;

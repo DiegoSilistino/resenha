@@ -1,10 +1,29 @@
-import { useEffect, useRef, useState } from "react";
-import { Maximize, MicOff, HeadphoneOff, SlidersHorizontal } from "lucide-react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { Maximize, MicOff, HeadphoneOff, SlidersHorizontal, Volume1, Volume2, VolumeX } from "lucide-react";
 import { Track, type Participant, type VideoTrack } from "livekit-client";
 import { Avatar } from "../components/Avatar.tsx";
 import { useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
-import { useVoice } from "./controller.ts";
+import { toggleStreamMuted, useVoice } from "./controller.ts";
+
+/** Fecha o painel ao clicar fora dele ou apertar Esc. */
+function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) close();
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [ref, open, close]);
+}
 
 function VideoView({
   track,
@@ -80,15 +99,17 @@ export function ParticipantTile({ participant, channelId }: { participant: Parti
 
 function VolumeControl({ userId, name }: { userId: string; name: string }) {
   const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useDismiss(box, open, () => setOpen(false));
   const volume = useSettings((s) => s.userVolumes[userId] ?? 1);
   return (
-    <div className="tile-volume">
+    <div className="tile-volume" ref={box}>
       <button
         type="button"
         className="icon-btn"
         aria-expanded={open}
-        aria-label={`Volume de ${name}`}
-        title={`Volume de ${name}`}
+        aria-label={`Volume da voz de ${name}`}
+        title={`Volume da voz de ${name}`}
         onClick={() => setOpen((o) => !o)}
       >
         <SlidersHorizontal size={16} />
@@ -96,7 +117,7 @@ function VolumeControl({ userId, name }: { userId: string; name: string }) {
       {open && (
         <label className="volume-pop">
           <span>
-            Volume de {name}: {Math.round(volume * 100)}%
+            Voz de {name}: {Math.round(volume * 100)}%
           </span>
           <input
             type="range"
@@ -161,6 +182,8 @@ export function ScreenTile({ participant }: { participant: Participant }) {
   const pub = participant.getTrackPublication(Track.Source.ScreenShare);
   const track = pub?.track as VideoTrack | undefined;
   const stats = useVideoStats(videoEl, track);
+  // O som da tela é uma faixa à parte: só existe se a pessoa marcou "compartilhar áudio".
+  const hasAudio = !!participant.getTrackPublication(Track.Source.ScreenShareAudio);
   if (!track) return null;
   const name = user?.displayName ?? participant.name ?? "Alguém";
 
@@ -179,15 +202,84 @@ export function ScreenTile({ participant }: { participant: Participant }) {
           {formatStats(stats)}
         </span>
       )}
+      <div className="screen-controls">
+        {!participant.isLocal && hasAudio && <StreamVolume userId={participant.identity} name={name} />}
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Tela cheia"
+          title="Tela cheia"
+          onClick={() => void ref.current?.requestFullscreen?.()}
+        >
+          <Maximize size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Volume do som da tela de uma pessoa (jogo, vídeo), separado da voz dela.
+ * Fica no próprio vídeo, inclusive em tela cheia.
+ */
+function StreamVolume({ userId, name }: { userId: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useDismiss(box, open, () => setOpen(false));
+  const volume = useSettings((s) => s.streamVolumes[userId] ?? 1);
+  const muted = useVoice((s) => !!s.streamMuted[userId]);
+  const silent = muted || volume === 0;
+  const Icon = silent ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+  const label = `Som da tela de ${name}`;
+
+  return (
+    <div className="stream-volume" ref={box} data-muted={silent || undefined}>
       <button
         type="button"
-        className="icon-btn screen-full"
-        aria-label="Tela cheia"
-        title="Tela cheia"
-        onClick={() => void ref.current?.requestFullscreen?.()}
+        className="icon-btn"
+        aria-expanded={open}
+        aria-label={`${label}${silent ? " (silenciado)" : ""}`}
+        title={label}
+        onClick={() => setOpen((o) => !o)}
       >
-        <Maximize size={18} />
+        <Icon size={18} />
       </button>
+      {open && (
+        <div className="volume-pop stream-volume-pop">
+          <label className="stream-volume-slider">
+            <span>
+              {label}: {muted ? "silenciado" : `${Math.round(volume * 100)}%`}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={200}
+              step={5}
+              value={Math.round(volume * 100)}
+              onChange={(e) => {
+                useSettings.getState().setStreamVolume(userId, Number(e.target.value) / 100);
+                if (muted) toggleStreamMuted(userId); // mexer no volume já reativa o som
+              }}
+            />
+          </label>
+          <div className="stream-volume-actions">
+            <button type="button" className="btn btn-small" onClick={() => toggleStreamMuted(userId)}>
+              {muted ? <Volume2 size={14} aria-hidden="true" /> : <VolumeX size={14} aria-hidden="true" />}
+              {muted ? "Ativar som" : "Silenciar"}
+            </button>
+            {volume !== 1 && (
+              <button
+                type="button"
+                className="btn btn-small btn-ghost"
+                onClick={() => useSettings.getState().setStreamVolume(userId, 1)}
+              >
+                Voltar a 100%
+              </button>
+            )}
+          </div>
+          <small>Só muda o que você ouve. A voz de {name} continua no volume dela.</small>
+        </div>
+      )}
     </div>
   );
 }

@@ -1480,11 +1480,52 @@ input[type="range"] {
   font-size: 14px;
 }
 
-.screen-full {
+.screen-controls {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.screen-controls > .icon-btn,
+.stream-volume > .icon-btn {
   background: rgb(14 24 32 / 0.78);
+}
+/* Os botões somem até passar o mouse; silenciado fica sempre à vista, para ninguém estranhar a falta de som. */
+.screen-controls > * {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.screen-tile:hover .screen-controls > *,
+.screen-tile:focus-within .screen-controls > *,
+.screen-tile:fullscreen .screen-controls > *,
+.stream-volume[data-muted] {
+  opacity: 1;
+}
+.stream-volume {
+  position: relative;
+}
+.stream-volume[data-muted] > .icon-btn {
+  color: var(--danger);
+}
+.stream-volume-pop {
+  width: 260px;
+  gap: 10px;
+}
+.stream-volume-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stream-volume-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.stream-volume-pop small {
+  color: var(--faint);
+  font-size: 12px;
 }
 
 .captions {

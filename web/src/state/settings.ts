@@ -11,8 +11,10 @@ export interface Settings {
   pttEnabled: boolean;
   /** KeyboardEvent.code da tecla do push-to-talk */
   pttKey: string;
-  /** volume por pessoa, 0 a 2 (200%) */
+  /** volume da voz por pessoa, 0 a 2 (200%) */
   userVolumes: Record<string, number>;
+  /** volume do som da tela (jogo, vídeo) por pessoa, 0 a 2 (200%) */
+  streamVolumes: Record<string, number>;
   captionsView: boolean;
   /** Consentimento explícito: a fala vai para o reconhecimento de voz do navegador. */
   transcribe: boolean;
@@ -39,8 +41,9 @@ export interface Settings {
   notifyPromptDismissed: boolean;
   /** Emojis usados por último nas reações (o mais recente primeiro). */
   recentEmojis: string[];
-  set(patch: Partial<Omit<Settings, "set" | "setUserVolume">>): void;
+  set(patch: Partial<Omit<Settings, "set" | "setUserVolume" | "setStreamVolume">>): void;
   setUserVolume(userId: string, volume: number): void;
+  setStreamVolume(userId: string, volume: number): void;
 }
 
 export type NotifyMode = "all" | "mentions" | "none";
@@ -63,6 +66,7 @@ export const useSettings = create<Settings>()(
       pttEnabled: false,
       pttKey: "Backquote",
       userVolumes: {},
+      streamVolumes: {},
       captionsView: false,
       transcribe: false,
       captionsLang: "pt-BR",
@@ -81,6 +85,8 @@ export const useSettings = create<Settings>()(
       set: (patch) => set(patch),
       setUserVolume: (userId, volume) =>
         set((s) => ({ userVolumes: { ...s.userVolumes, [userId]: Math.min(2, Math.max(0, volume)) } })),
+      setStreamVolume: (userId, volume) =>
+        set((s) => ({ streamVolumes: { ...s.streamVolumes, [userId]: Math.min(2, Math.max(0, volume)) } })),
     }),
     { name: "resenha-settings", version: 1 },
   ),

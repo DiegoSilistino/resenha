@@ -29,6 +29,7 @@ import { screenQuality, screenShareErrorAdvice, screenShareOptions, type ScreenQ
 import { useUi } from "../state/ui.ts";
 import type { GateConfig } from "./gate/engine.ts";
 import { GateProcessor } from "./gate/processor.ts";
+import { participantVolumes } from "./volumes.ts";
 
 export type VoiceStatus = "idle" | "connecting" | "connected" | "reconnecting";
 
@@ -53,6 +54,8 @@ interface VoiceState {
   version: number;
   speaking: Record<string, true>;
   captions: Record<string, Caption>;
+  /** Som da tela silenciado por pessoa (vale até recarregar a página). */
+  streamMuted: Record<string, true>;
 }
 
 export const useVoice = create<VoiceState>()(() => ({
@@ -67,6 +70,7 @@ export const useVoice = create<VoiceState>()(() => ({
   version: 0,
   speaking: {},
   captions: {},
+  streamMuted: {},
 }));
 
 const setV = useVoice.setState;
@@ -320,13 +324,29 @@ function clearAudioSink() {
 function applyVolumes() {
   const r = room;
   if (!r) return;
-  const { deafened } = useVoice.getState();
-  const volumes = useSettings.getState().userVolumes;
+  const { deafened, streamMuted } = useVoice.getState();
+  const { userVolumes, streamVolumes } = useSettings.getState();
   for (const p of r.remoteParticipants.values()) {
-    const v = deafened ? 0 : (volumes[p.identity] ?? 1);
-    p.setVolume(v, Track.Source.Microphone);
-    p.setVolume(v, Track.Source.ScreenShareAudio);
+    const v = participantVolumes({
+      deafened,
+      voice: userVolumes[p.identity],
+      stream: streamVolumes[p.identity],
+      streamMuted: !!streamMuted[p.identity],
+    });
+    p.setVolume(v.voice, Track.Source.Microphone);
+    p.setVolume(v.stream, Track.Source.ScreenShareAudio);
   }
+}
+
+/** Silencia ou volta o som da tela de uma pessoa, sem perder o volume escolhido. */
+export function toggleStreamMuted(userId: string) {
+  setV((s) => {
+    const streamMuted = { ...s.streamMuted };
+    if (streamMuted[userId]) delete streamMuted[userId];
+    else streamMuted[userId] = true;
+    return { streamMuted };
+  });
+  applyVolumes();
 }
 
 /** Alguns navegadores bloqueiam áudio até um clique: chamado pelo botão "Ativar som". */
@@ -602,7 +622,7 @@ function updateCaptioner() {
 
 useSettings.subscribe((s, prev) => {
   const r = room;
-  if (s.userVolumes !== prev.userVolumes) applyVolumes();
+  if (s.userVolumes !== prev.userVolumes || s.streamVolumes !== prev.streamVolumes) applyVolumes();
   if (s.pttEnabled !== prev.pttEnabled) {
     setV({ pttActive: false });
     void applyMic();
