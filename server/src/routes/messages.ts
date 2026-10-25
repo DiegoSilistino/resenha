@@ -7,10 +7,10 @@ import { AttachmentLinkError } from "../store.ts";
 export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
   const { store, hub, uploads } = ctx;
 
-  const textChannel = (id: string) => {
+  // Canais de voz também têm chat (para mandar link ou print durante a call).
+  const messageChannel = (id: string) => {
     const channel = store.channelById(id);
     if (!channel) throw notFound("Canal não encontrado");
-    if (channel.kind !== "text") throw badRequest("Esse canal não tem chat");
     return channel;
   };
 
@@ -24,7 +24,7 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
     "/api/channels/:id/messages",
     { preHandler: requireUser },
     async (req) => {
-      const channel = textChannel(req.params.id);
+      const channel = messageChannel(req.params.id);
       const q = parse(listMessagesQuery, req.query);
       const messages = store.listMessages(channel.id, q.before, q.limit);
       return { messages, hasMore: messages.length === q.limit };
@@ -35,14 +35,21 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
     "/api/channels/:id/messages",
     { preHandler: requireUser, config: rateLimited(ctx, 30, "10 seconds") },
     async (req, reply) => {
-      const channel = textChannel(req.params.id);
+      const channel = messageChannel(req.params.id);
       const body = parse(createMessageBody, req.body);
+      if (body.replyTo !== undefined) {
+        const original = store.messageById(body.replyTo);
+        if (!original || original.channelId !== channel.id) {
+          throw badRequest("A mensagem que você está respondendo não existe mais");
+        }
+      }
       try {
         const message = store.createMessage({
           channelId: channel.id,
           authorId: currentUser(req).id,
           content: body.content.trim(),
           attachmentIds: body.attachmentIds,
+          replyTo: body.replyTo ?? null,
         });
         if (!message) throw new Error("mensagem não criada");
         hub.broadcast({ type: "message.create", message });

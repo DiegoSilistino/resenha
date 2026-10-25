@@ -6,14 +6,17 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
 - **Canais de texto** em tempo real:
   - anexos (imagens e vídeos aparecem na conversa);
   - reações com emoji (barra rápida e seletor com busca em português);
-  - edição e exclusão;
+  - responder mensagens (citação clicável que leva até a original e avisa quem foi respondido);
+  - GIFs do GIPHY, emoji na caixa de texto e ||spoiler||;
+  - edição (seta ↑ edita a última) e exclusão;
   - "fulano está digitando";
   - não lidas com contador na aba ("(3) #geral") e menções (@usuario) destacadas;
   - notificações do Windows quando o app está minimizado (todas as mensagens, só menções ou nunca);
   - formatação estilo Discord.
 - **Perfil com foto**, recortada no próprio navegador (arrastar e zoom).
-- **Canais de voz** com qualidade de SFU:
+- **Canais de voz** com qualidade de SFU e chat próprio ao lado da chamada (dá para ler sem entrar):
   - mutar e ensurdecer, com sons de entrar, sair e mutar;
+  - aviso opcional "fulano entrou na voz" quando você não está em chamada;
   - volume individual de 0 a 200%, separado para a voz e para o som da tela de cada pessoa (com silenciar rápido no próprio vídeo);
   - push-to-talk;
   - redução de ruído com IA (GTCRN, roda no navegador): tira teclado, mouse e barulho de fundo até enquanto a pessoa fala;

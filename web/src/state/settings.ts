@@ -45,6 +45,10 @@ export interface Settings {
   notifyPromptDismissed: boolean;
   /** Emojis usados por último nas reações (o mais recente primeiro). */
   recentEmojis: string[];
+  /** Painel de chat aberto ao lado da chamada. */
+  voiceChatOpen: boolean;
+  /** Avisar quando alguém entrar num canal de voz (opcional; desligado por padrão). */
+  notifyVoiceJoin: boolean;
   set(patch: Partial<Omit<Settings, "set" | "setUserVolume" | "setStreamVolume">>): void;
   setUserVolume(userId: string, volume: number): void;
   setStreamVolume(userId: string, volume: number): void;
@@ -87,6 +91,8 @@ export const useSettings = create<Settings>()(
       soundVolume: 0.6,
       notifyPromptDismissed: false,
       recentEmojis: [],
+      voiceChatOpen: true,
+      notifyVoiceJoin: false,
       set: (patch) => set(patch),
       setUserVolume: (userId, volume) =>
         set((s) => ({ userVolumes: { ...s.userVolumes, [userId]: Math.min(2, Math.max(0, volume)) } })),

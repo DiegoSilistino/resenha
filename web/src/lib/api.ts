@@ -4,6 +4,7 @@ import type {
   BackupInfo,
   Channel,
   ChannelKind,
+  GifResult,
   Invite,
   Me,
   Message,
@@ -69,8 +70,12 @@ export const api = {
       "GET",
       `/api/channels/${channelId}/messages${before ? `?before=${before}` : ""}`,
     ),
-  sendMessage: (channelId: string, content: string, attachmentIds: string[]) =>
-    request<{ message: Message }>("POST", `/api/channels/${channelId}/messages`, { content, attachmentIds }),
+  sendMessage: (channelId: string, content: string, attachmentIds: string[], replyTo?: number) =>
+    request<{ message: Message }>("POST", `/api/channels/${channelId}/messages`, {
+      content,
+      attachmentIds,
+      ...(replyTo ? { replyTo } : {}),
+    }),
   editMessage: (id: number, content: string) => request<{ message: Message }>("PATCH", `/api/messages/${id}`, { content }),
   deleteMessage: (id: number) => request<void>("DELETE", `/api/messages/${id}`),
   react: (id: number, emoji: string, on: boolean) =>
@@ -91,6 +96,8 @@ export const api = {
     request<{ user: PublicUser }>("POST", `/api/admin/users/${id}/${disabled ? "disable" : "enable"}`),
   setUserRole: (id: string, role: Role) => request<{ user: PublicUser }>("PATCH", `/api/admin/users/${id}/role`, { role }),
   backupInfo: () => request<BackupInfo>("GET", "/api/admin/backup/info"),
+  gifs: (q: string, offset = 0) =>
+    request<{ gifs: GifResult[] }>("GET", `/api/gifs?${new URLSearchParams({ q, offset: String(offset) })}`),
 };
 
 /** O download do backup é uma navegação normal (o navegador mostra o progresso). */

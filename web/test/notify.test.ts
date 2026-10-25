@@ -38,3 +38,19 @@ describe("texto da notificação", () => {
     expect(notificationBody({ content: "", attachments: [att("application/octet-stream")] })).toBe("Enviou um arquivo");
   });
 });
+
+describe("quem entrou na voz", () => {
+  const m = (...ids: string[]) => ids.map((userId) => ({ userId }));
+  it("só quem chegou agora, sem você", async () => {
+    const { joinedMembers } = await import("../src/lib/notify.ts");
+    expect(joinedMembers(m("ana"), m("ana", "bia", "eu"), "eu", 1_000_000, new Map())).toEqual(["bia"]);
+  });
+
+  it("quem caiu e voltou em menos de 1 minuto não conta", async () => {
+    const { joinedMembers } = await import("../src/lib/notify.ts");
+    const left = new Map<string, number>();
+    expect(joinedMembers(m("ana", "bia"), m("ana"), "eu", 1_000_000, left)).toEqual([]);
+    expect(joinedMembers(m("ana"), m("ana", "bia"), "eu", 1_030_000, left)).toEqual([]);
+    expect(joinedMembers(m("ana"), m("ana", "bia"), "eu", 1_090_000, left)).toEqual(["bia"]);
+  });
+});

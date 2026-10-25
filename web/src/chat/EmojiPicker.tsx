@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 import { useSettings } from "../state/settings.ts";
 import { EMOJI_CATEGORIES, emojiName, QUICK_REACTIONS, searchEmojis } from "./emojis.ts";
+import { placePopover, usePopoverDismiss } from "./popover.ts";
 
 interface Props {
   /** Botão que abriu o seletor: a janela aparece colada nele. */
@@ -13,16 +14,7 @@ interface Props {
 
 const WIDTH = 332;
 const HEIGHT = 380;
-const GAP = 6;
-
-/** Posição fixa na tela: abaixo do botão, ou acima se não couber; nunca para fora da janela. */
-function place(anchor: HTMLElement): { top: number; left: number } {
-  const r = anchor.getBoundingClientRect();
-  const below = r.bottom + GAP + HEIGHT <= window.innerHeight;
-  const top = below ? r.bottom + GAP : Math.max(8, r.top - GAP - HEIGHT);
-  const left = Math.min(Math.max(8, r.right - WIDTH), window.innerWidth - WIDTH - 8);
-  return { top, left: Math.max(8, left) };
-}
+const place = (anchor: HTMLElement) => placePopover(anchor, WIDTH, HEIGHT);
 
 export function EmojiPicker({ anchor, onPick, onClose }: Props) {
   const [query, setQuery] = useState("");
@@ -32,24 +24,7 @@ export function EmojiPicker({ anchor, onPick, onClose }: Props) {
 
   useLayoutEffect(() => setPos(place(anchor)), [anchor]);
 
-  // Fecha ao clicar fora, ao rolar a conversa (o botão sairia do lugar) ou ao redimensionar.
-  useEffect(() => {
-    const outside = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (!panel.current?.contains(t) && !anchor.contains(t)) onClose();
-    };
-    const scroll = (e: Event) => {
-      if (!panel.current?.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("pointerdown", outside, true);
-    window.addEventListener("scroll", scroll, true);
-    window.addEventListener("resize", onClose);
-    return () => {
-      document.removeEventListener("pointerdown", outside, true);
-      window.removeEventListener("scroll", scroll, true);
-      window.removeEventListener("resize", onClose);
-    };
-  }, [anchor, onClose]);
+  usePopoverDismiss(panel, anchor, onClose);
 
   const results = query.trim() ? searchEmojis(query) : null;
   // Recentes primeiro, completando com os clássicos para a primeira linha nunca ficar vazia.

@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   Captions as CaptionsIcon,
   Headphones,
   HeadphoneOff,
   Menu,
+  MessageSquare,
   Mic,
   MicOff,
   Monitor,
@@ -15,8 +16,10 @@ import {
   Volume2,
 } from "lucide-react";
 import { Track } from "livekit-client";
+import { useLocation } from "react-router";
 import type { Channel } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
+import { ChatPanel } from "../chat/ChatPanel.tsx";
 import { useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { useUi } from "../state/ui.ts";
@@ -42,6 +45,16 @@ export function VoiceView({ channel }: { channel: Channel }) {
   const voiceChannelId = useVoice((s) => s.channelId);
   const here = voiceChannelId === channel.id && status !== "idle";
 
+  // Em tela larga o chat fica ao lado (e a escolha é lembrada); em tela estreita ele cobre a
+  // chamada, então começa fechado e vale só nesta visita.
+  const narrow = useMediaQuery("(max-width: 1100px)");
+  const savedOpen = useSettings((s) => s.voiceChatOpen);
+  const location = useLocation();
+  const [narrowOpen, setNarrowOpen] = useState(() => !!(location.state as { openChat?: boolean } | null)?.openChat);
+  const chatOpen = narrow ? narrowOpen : savedOpen;
+  const toggleChat = () => (narrow ? setNarrowOpen(!chatOpen) : useSettings.getState().set({ voiceChatOpen: !chatOpen }));
+  const unread = useApp((s) => (s.unread[channel.id] ?? 0) > 0);
+
   useEffect(() => {
     useUi.getState().setPageTitle(channel.name);
   }, [channel.name]);
@@ -59,8 +72,26 @@ export function VoiceView({ channel }: { channel: Channel }) {
         </button>
         <Volume2 size={20} aria-hidden="true" className="header-icon" />
         <h1 className="main-title">{channel.name}</h1>
+        <button
+          type="button"
+          className="icon-btn header-action"
+          data-badge={!chatOpen && unread ? true : undefined}
+          aria-pressed={chatOpen}
+          aria-label={chatOpen ? "Fechar o chat da chamada" : "Abrir o chat da chamada"}
+          title={chatOpen ? "Fechar o chat" : "Abrir o chat"}
+          onClick={toggleChat}
+        >
+          <MessageSquare size={20} />
+        </button>
       </header>
-      {here ? <Stage channel={channel} /> : <JoinCard channel={channel} />}
+      <div className="voice-body" data-chat-open={chatOpen || undefined}>
+        {here ? <Stage channel={channel} /> : <JoinCard channel={channel} />}
+        {chatOpen && (
+          <aside className="voice-chat" aria-label={`Chat de ${channel.name}`}>
+            <ChatPanel channel={channel} />
+          </aside>
+        )}
+      </div>
     </main>
   );
 }
@@ -289,5 +320,16 @@ function ControlButton({
     >
       {children}
     </button>
+  );
+}
+
+function useMediaQuery(query: string): boolean {
+  return useSyncExternalStore(
+    (notify) => {
+      const mq = window.matchMedia(query);
+      mq.addEventListener("change", notify);
+      return () => mq.removeEventListener("change", notify);
+    },
+    () => window.matchMedia(query).matches,
   );
 }

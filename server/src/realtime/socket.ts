@@ -72,6 +72,7 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
       voice: voice.snapshot(),
       watch: watch.snapshot(),
       serverTime: Date.now(),
+      features: { gifs: !!ctx.gifs },
     });
   });
 
@@ -84,7 +85,7 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
       case "typing": {
         const now = Date.now();
         if (now - conn.lastTypingAt < TYPING_INTERVAL_MS) return;
-        if (store.channelById(msg.channelId)?.kind !== "text") return;
+        if (!store.channelById(msg.channelId)) return; // texto ou chat do canal de voz
         conn.lastTypingAt = now;
         hub.broadcast({ type: "typing", channelId: msg.channelId, userId: conn.userId }, conn.id);
         return;

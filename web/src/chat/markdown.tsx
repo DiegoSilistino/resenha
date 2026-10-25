@@ -1,13 +1,36 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { splitMention } from "./mentions.ts";
 
 /**
  * Formatação leve estilo Discord, gerando elementos React (nunca HTML cru, então
  * não há como injetar script): **negrito**, *itálico* ou _itálico_, ~~riscado~~,
- * `código`, blocos ```código```, links automáticos e @menções.
+ * `código`, blocos ```código```, ||spoiler||, links automáticos e @menções.
  */
 const INLINE =
-  /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(~~[^~\n]+~~)|(\*[^*\n]+\*)|((?<![\p{L}\p{N}_])_(?![\s_])[^_\n]+?(?<![\s_])_(?![\p{L}\p{N}_]))|(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])|(@[a-z0-9._-]+)/giu;
+  /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(~~[^~\n]+~~)|(\*[^*\n]+\*)|((?<![\p{L}\p{N}_])_(?![\s_])[^_\n]+?(?<![\s_])_(?![\p{L}\p{N}_]))|(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])|(@[a-z0-9._-]+)|(\|\|[^|\n]+?\|\|)/giu;
+
+/** Texto escondido até alguém clicar (para não estragar o final do filme). */
+function Spoiler({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <span
+      className="spoiler"
+      data-shown={shown || undefined}
+      role={shown ? undefined : "button"}
+      tabIndex={shown ? undefined : 0}
+      aria-label={shown ? undefined : "Spoiler escondido. Clique para ver."}
+      onClick={() => setShown(true)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setShown(true);
+        }
+      }}
+    >
+      <span aria-hidden={!shown}>{children}</span>
+    </span>
+  );
+}
 
 export function renderMessage(text: string, isKnownUser: (username: string) => boolean): ReactNode[] {
   const out: ReactNode[] = [];
@@ -45,6 +68,8 @@ function renderInline(text: string, isKnownUser: (u: string) => boolean, keyPref
           {token}
         </a>,
       );
+    } else if (m[8]) {
+      nodes.push(<Spoiler key={key}>{renderInline(token.slice(2, -2), isKnownUser, `${key}s`)}</Spoiler>);
     } else if (m[7]) {
       const split = splitMention(token, isKnownUser);
       if (split) {

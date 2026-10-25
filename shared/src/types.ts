@@ -43,6 +43,30 @@ export interface Message {
   attachments: Attachment[];
   /** Em ordem de chegada do primeiro de cada emoji. */
   reactions: Reaction[];
+  /** Mensagem que esta responde (com um resumo para a citação). */
+  replyTo: MessageReference | null;
+}
+
+export interface MessageReference {
+  id: number;
+  /** true se a original foi apagada (aí não há autor nem texto). */
+  deleted: boolean;
+  authorId: string | null;
+  /** Começo do texto original (até 200 caracteres). */
+  content: string;
+  attachmentCount: number;
+}
+
+/** Um GIF para escolher e mandar. */
+export interface GifResult {
+  id: string;
+  title: string;
+  /** Prévia pequena e leve para a grade do seletor. */
+  previewUrl: string;
+  /** Vídeo MP4 em loop, que é o que vai na mensagem (bem menor que o .gif). */
+  mp4Url: string;
+  width: number;
+  height: number;
 }
 
 export interface Reaction {

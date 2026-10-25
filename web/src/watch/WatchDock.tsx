@@ -165,7 +165,7 @@ function Dock({ state, sessionId }: { state: WatchState; sessionId: string }) {
 
   const current = state.current!;
   const position = Math.min(watchPositionAt(state, clock.serverNow()), duration || Infinity);
-  const mini = !slot;
+  const mini = !style;
 
   return (
     <section className="watch-dock" data-mini={mini || undefined} style={style} aria-label="Assistir juntos">
@@ -304,7 +304,8 @@ function useSlotStyle(slot: HTMLElement | null): CSSProperties | undefined {
       const key = `${r.top}|${r.left}|${r.width}|${r.height}`;
       if (key !== last) {
         last = key;
-        setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+        // vaga escondida (ex.: o chat cobre a chamada em tela estreita): vira mini player
+        setRect(r.width > 0 && r.height > 0 ? { top: r.top, left: r.left, width: r.width, height: r.height } : null);
       }
       frame = requestAnimationFrame(tick);
     };

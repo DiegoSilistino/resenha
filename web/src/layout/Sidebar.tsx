@@ -1,10 +1,11 @@
 import { NavLink, useNavigate } from "react-router";
-import { Hash, MicOff, HeadphoneOff, Settings2, Video, Volume2 } from "lucide-react";
+import { Hash, MessageSquare, MicOff, HeadphoneOff, Settings2, Video, Volume2 } from "lucide-react";
 import { APP_NAME, type Channel, type VoiceMember } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { useApp } from "../state/app.ts";
+import { useSettings } from "../state/settings.ts";
 import { useUi } from "../state/ui.ts";
-import { joinVoice, useVoice } from "../voice/controller.ts";
+import { joinVoice, preloadVoice, useVoice } from "../voice/controller.ts";
 import { UserPanel } from "./UserPanel.tsx";
 import { VoiceBar } from "./VoiceBar.tsx";
 
@@ -80,13 +81,17 @@ function VoiceChannelItem({ channel }: { channel: Channel }) {
   const members = useApp((s) => s.voice[channel.id]) ?? [];
   const navigate = useNavigate();
   const connectedHere = useVoice((s) => s.channelId === channel.id && s.status !== "idle");
+  const unread = useApp((s) => !!s.unread[channel.id]);
+  const mentions = useApp((s) => s.mentions[channel.id] ?? 0);
 
   return (
-    <li>
+    <li className="voice-channel">
       <NavLink
         to={`/c/${channel.id}`}
         className="channel-link"
         data-connected={connectedHere || undefined}
+        data-unread={unread || undefined}
+        onPointerEnter={preloadVoice}
         onClick={(e) => {
           e.preventDefault();
           navigate(`/c/${channel.id}`);
@@ -95,7 +100,28 @@ function VoiceChannelItem({ channel }: { channel: Channel }) {
       >
         <Volume2 size={18} aria-hidden="true" />
         <span className="channel-name">{channel.name}</span>
+        {mentions > 0 ? (
+          <span className="mention-badge" aria-label={`${mentions} ${mentions === 1 ? "menção" : "menções"} a você no chat`}>
+            {mentions > 99 ? "99+" : mentions}
+          </span>
+        ) : (
+          unread && <span className="unread-dot" aria-label="mensagens novas no chat" />
+        )}
       </NavLink>
+      {/* Ler o chat do canal sem entrar na chamada */}
+      <button
+        type="button"
+        className="icon-btn voice-chat-link"
+        aria-label={`Abrir o chat de ${channel.name} sem entrar na chamada`}
+        title="Abrir o chat sem entrar"
+        onPointerEnter={preloadVoice}
+        onClick={() => {
+          useSettings.getState().set({ voiceChatOpen: true });
+          navigate(`/c/${channel.id}`, { state: { openChat: true } });
+        }}
+      >
+        <MessageSquare size={15} />
+      </button>
       {members.length > 0 && (
         <ul className="voice-members" aria-label={`Pessoas em ${channel.name}`}>
           {members.map((m) => (

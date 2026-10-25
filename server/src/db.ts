@@ -89,6 +89,10 @@ export const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+  /* 3: respostas. Sem chave estrangeira de propósito: se a original for apagada, a
+     resposta continua apontando para ela e mostra "mensagem apagada". */ `
+  ALTER TABLE messages ADD COLUMN reply_to INTEGER;
+  `,
 ];
 
 export function openDatabase(file: string): Db {

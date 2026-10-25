@@ -38,14 +38,19 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export async function createTestApp(): Promise<TestApp> {
+export async function createTestApp(opts: { gifFetch?: typeof fetch } = {}): Promise<TestApp> {
   const dataDir = mkdtempSync(path.join(tmpdir(), "resenha-test-"));
-  const config = loadConfig({ NODE_ENV: "test", DATA_DIR: dataDir, PUBLIC_URL: "http://localhost:5173" });
+  const config = loadConfig({
+    NODE_ENV: "test",
+    DATA_DIR: dataDir,
+    PUBLIC_URL: "http://localhost:5173",
+    ...(opts.gifFetch ? { GIPHY_API_KEY: "chave-de-teste" } : {}),
+  });
   const db = openDatabase(":memory:");
   const gateway = new FakeGateway();
   const titles = new Map<string, TitleLookup>();
   const fetchTitle: TitleFetcher = async (id) => titles.get(id) ?? { ok: true, title: `Título ${id}` };
-  const { app, ctx } = await buildApp({ config, db, voiceGateway: gateway, fetchTitle });
+  const { app, ctx } = await buildApp({ config, db, voiceGateway: gateway, fetchTitle, ...(opts.gifFetch ? { gifFetch: opts.gifFetch } : {}) });
   const { adminInviteUrl } = bootstrap(ctx);
   return {
     app,

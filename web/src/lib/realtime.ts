@@ -7,7 +7,7 @@ import {
 } from "@resenha/shared";
 import { useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
-import { onNewMessage } from "./notify.ts";
+import { onNewMessage, onVoiceMembers } from "./notify.ts";
 
 /** Relógio do servidor estimado, usado para sincronizar o "Assistir juntos". */
 export const clock = new ClockSync();
@@ -107,9 +107,12 @@ class RealtimeClient {
         if (event.level === "error") toast.error(event.text);
         else toast.info(event.text);
         return;
-      default:
+      default: {
+        const prevVoice = event.type === "voice.channel" ? (useApp.getState().voice[event.channelId] ?? []) : null;
         useApp.getState().applyEvent(event);
         if (event.type === "message.create") onNewMessage(event.message);
+        if (event.type === "voice.channel" && prevVoice) onVoiceMembers(event.channelId, prevVoice, event.members);
+      }
     }
   }
 

@@ -99,6 +99,18 @@ No fim, mostra o **link de convite do administrador**. Na primeira vez leva uns 
 
 O primeiro acesso pode demorar até 1 minuto enquanto o certificado HTTPS é emitido.
 
+## Ativar os GIFs (opcional)
+
+Desde 30/06/2026 o Google desligou a API do Tenor, então os GIFs vêm do GIPHY.
+
+1. Crie uma conta em [developers.giphy.com](https://developers.giphy.com) e clique em **Create an API Key** (tipo **API**).
+2. Copie a chave e, na VPS:
+   ```bash
+   cd /opt/resenha && echo "GIPHY_API_KEY=COLE_A_CHAVE_AQUI" >> .env && bash deploy/setup-vps.sh
+   ```
+
+A chave grátis permite 100 buscas por hora para o grupo todo. O servidor guarda as buscas repetidas e os "em alta" em cache, então isso costuma sobrar. A chave fica só no servidor; os navegadores nunca a veem.
+
 ## Atualizar depois de mudanças no código
 
 ```bash
@@ -106,7 +118,7 @@ ssh root@SEU_IP
 cd /opt/resenha && git pull && bash deploy/setup-vps.sh
 ```
 
-Contas, mensagens e arquivos ficam guardados: a atualização só troca o programa. Se ela mudar a estrutura do banco, o servidor guarda antes uma cópia em `backups/resenha-antes-da-vN-….db`.
+Contas, mensagens e arquivos ficam guardados: a atualização só troca o programa. Quem estiver com o Resenha aberto durante a atualização não precisa fazer nada: a página recarrega sozinha na versão nova quando precisar. Se ela mudar a estrutura do banco, o servidor guarda antes uma cópia em `backups/resenha-antes-da-vN-….db`.
 
 ## Backup e restauração
 

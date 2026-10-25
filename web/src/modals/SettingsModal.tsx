@@ -295,6 +295,13 @@ function NotificationsTab() {
           </label>
         ))}
       </fieldset>
+      <label className="check">
+        <input type="checkbox" checked={s.notifyVoiceJoin} onChange={(e) => s.set({ notifyVoiceJoin: e.target.checked })} />
+        <span>
+          Avisar quando alguém entrar num canal de voz
+          <small>Só quando você não está numa chamada. Bom para saber quando a turma começou a jogar.</small>
+        </span>
+      </label>
       <fieldset className="field">
         <legend>Sons</legend>
         <label className="check">

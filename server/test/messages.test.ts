@@ -66,10 +66,16 @@ describe("mensagens", () => {
     expect(page2.json().messages.map((m: { content: string }) => m.content)).toEqual(["msg 1", "msg 2"]);
   });
 
-  it("recusa mensagem vazia, longa demais ou em canal de voz", async () => {
+  it("recusa mensagem vazia ou longa demais", async () => {
     expect((await post(alice, "   ")).statusCode).toBe(400);
     expect((await post(alice, "x".repeat(LIMITS.messageMax + 1))).statusCode).toBe(400);
-    expect((await post(alice, "oi", [], voiceChannelId(t))).statusCode).toBe(400);
+  });
+
+  it("canal de voz também tem chat", async () => {
+    const voice = voiceChannelId(t);
+    expect((await post(alice, "link do jogo: https://exemplo.com", [], voice)).statusCode).toBe(201);
+    const list = await t.app.inject({ method: "GET", url: `/api/channels/${voice}/messages`, headers: { cookie: bob.cookie } });
+    expect(list.json().messages.map((m: { content: string }) => m.content)).toEqual(["link do jogo: https://exemplo.com"]);
   });
 
   it("exige login", async () => {
@@ -111,6 +117,54 @@ describe("mensagens", () => {
   it("id de mensagem inválido dá 404, não 500", async () => {
     const res = await t.app.inject({ method: "DELETE", url: "/api/messages/abc", headers: { cookie: alice.cookie } });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("respostas", () => {
+  const reply = (user: TestUser, content: string, replyTo: number, ch = channel) =>
+    t.app.inject({
+      method: "POST",
+      url: `/api/channels/${ch}/messages`,
+      headers: { cookie: user.cookie },
+      payload: { content, replyTo },
+    });
+
+  it("guarda a citação com autor e começo do texto", async () => {
+    const original = (await post(alice, "bora jogar hoje às 21h?")).json().message;
+    const res = await reply(bob, "fechado!", original.id);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().message.replyTo).toEqual({
+      id: original.id,
+      deleted: false,
+      authorId: alice.id,
+      content: "bora jogar hoje às 21h?",
+      attachmentCount: 0,
+    });
+  });
+
+  it("citação de texto longo vem cortada; de foto, conta o anexo", async () => {
+    const long = (await post(alice, "a".repeat(1000))).json().message;
+    expect((await reply(bob, "ok", long.id)).json().message.replyTo.content).toHaveLength(200);
+
+    const up = multipart("f.png", PNG);
+    const att = (await t.app.inject({ method: "POST", url: "/api/uploads", headers: { ...up.headers, cookie: alice.cookie }, payload: up.payload })).json().attachment;
+    const photo = (await post(alice, "", [att.id])).json().message;
+    expect((await reply(bob, "que foto!", photo.id)).json().message.replyTo).toMatchObject({ content: "", attachmentCount: 1 });
+  });
+
+  it("se a original for apagada, a resposta mostra que ela sumiu", async () => {
+    const original = (await post(alice, "vou apagar")).json().message;
+    const answer = (await reply(bob, "respondi", original.id)).json().message;
+    await t.app.inject({ method: "DELETE", url: `/api/messages/${original.id}`, headers: { cookie: alice.cookie } });
+    const list = await t.app.inject({ method: "GET", url: `/api/channels/${channel}/messages`, headers: { cookie: bob.cookie } });
+    const kept = list.json().messages.find((m: { id: number }) => m.id === answer.id);
+    expect(kept.replyTo).toEqual({ id: original.id, deleted: true, authorId: null, content: "", attachmentCount: 0 });
+  });
+
+  it("não deixa responder mensagem de outro canal ou inexistente", async () => {
+    const original = (await post(alice, "no geral")).json().message;
+    expect((await reply(bob, "aqui", original.id, voiceChannelId(t))).statusCode).toBe(400);
+    expect((await reply(bob, "fantasma", 999_999)).statusCode).toBe(400);
   });
 });
 

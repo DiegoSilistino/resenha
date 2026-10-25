@@ -1,17 +1,20 @@
-import { memo, useCallback, useState, type KeyboardEvent } from "react";
-import { Download, FileText, Pencil, SmilePlus, Trash2, Tv } from "lucide-react";
-import type { Attachment, Message } from "@resenha/shared";
+import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { CornerUpLeft, Download, FileText, Image as ImageIcon, Pencil, Reply, SmilePlus, Trash2, Tv } from "lucide-react";
+import type { Attachment, Message, MessageReference } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { api } from "../lib/api.ts";
 import { formatBytes, formatFull, formatTime } from "../lib/format.ts";
 import { realtime } from "../lib/realtime.ts";
-import { useApp } from "../state/app.ts";
+import { displayNameOf, useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
+import { useUi } from "../state/ui.ts";
 import { useVoice } from "../voice/controller.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
 import { emojiName, QUICK_REACTIONS } from "./emojis.ts";
 import { renderMessage, youTubeLinks } from "./markdown.tsx";
+import { mentionsUser as mentionsUserIn } from "./mentions.ts";
+import { parseGifMessage, plainText } from "./plain.ts";
 import { ReactionBar, toggleReaction } from "./Reactions.tsx";
 
 export const MessageItem = memo(function MessageItem({ message, grouped }: { message: Message; grouped: boolean }) {
@@ -19,16 +22,19 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
   const me = useApp((s) => s.me);
   const users = useApp((s) => s.users);
   const voiceChannelId = useVoice((s) => (s.status === "connected" ? s.channelId : null));
-  const [editing, setEditing] = useState(false);
+  const editing = useUi((s) => s.editingId === message.id);
+  const setEditing = (on: boolean) => useUi.getState().setEditing(on ? message.id : null);
   const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
   const closePicker = useCallback(() => setPickerAnchor(null), []);
   const recent = useSettings((s) => s.recentEmojis);
   const quick = [...new Set([...recent, ...QUICK_REACTIONS])].slice(0, 3);
 
   const mine = !!me && me.id === message.authorId;
+  const mentionsMeHere = !!me && !mine && (message.replyTo?.authorId === me.id || mentionsUserIn(message.content, me.username));
   const canDelete = mine || (!!me && me.role === "admin");
   const knownUser = (username: string) => Object.values(users).some((u) => u.username === username);
   const ytLinks = voiceChannelId ? youTubeLinks(message.content) : [];
+  const gif = parseGifMessage(message.content);
 
   async function remove() {
     if (!confirm("Apagar esta mensagem? Não dá para desfazer.")) return;
@@ -40,7 +46,14 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
   }
 
   return (
-    <article className="message" data-grouped={grouped || undefined} data-menu-open={pickerAnchor ? true : undefined}>
+    <article
+      id={`msg-${message.id}`}
+      className="message"
+      data-grouped={grouped || undefined}
+      data-menu-open={pickerAnchor ? true : undefined}
+      data-mentions-me={mentionsMeHere || undefined}
+    >
+      {message.replyTo && <ReplyReference channelId={message.channelId} reference={message.replyTo} />}
       <div className="message-gutter">
         {grouped ? (
           <time className="message-hover-time" dateTime={new Date(message.createdAt).toISOString()}>
@@ -61,6 +74,8 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
         )}
         {editing ? (
           <EditBox message={message} onDone={() => setEditing(false)} />
+        ) : gif ? (
+          <GifView src={gif.src} width={gif.width} height={gif.height} />
         ) : (
           message.content && (
             <div className="message-content">
@@ -116,6 +131,18 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
           >
             <SmilePlus size={16} />
           </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => {
+              useUi.getState().setReplying(message.channelId, message.id);
+              focusComposer();
+            }}
+            aria-label="Responder"
+            title="Responder"
+          >
+            <Reply size={16} />
+          </button>
           {mine && (
             <button type="button" className="icon-btn" onClick={() => setEditing(true)} aria-label="Editar mensagem">
               <Pencil size={16} />
@@ -142,25 +169,100 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
   );
 });
 
+/** Volta o cursor para a caixa de mensagem do canal aberto. */
+export function focusComposer() {
+  requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".composer-input")?.focus());
+}
+
+/** "↱ Ana: bora jogar hoje?" acima da resposta; clicar leva até a original. */
+function ReplyReference({ channelId, reference: r }: { channelId: string; reference: MessageReference }) {
+  const author = useApp((s) => (r.authorId ? s.users[r.authorId] : undefined));
+  const users = useApp((s) => s.users);
+  if (r.deleted) {
+    return (
+      <div className="reply-ref" data-deleted>
+        <CornerUpLeft size={14} aria-hidden="true" className="reply-ref-icon" />
+        <span className="reply-ref-text">A mensagem original foi apagada</span>
+      </div>
+    );
+  }
+  const text = plainText(r.content);
+  return (
+    <button
+      type="button"
+      className="reply-ref"
+      onClick={() => useUi.getState().jumpTo(channelId, r.id)}
+      title="Ir para a mensagem respondida"
+    >
+      <CornerUpLeft size={14} aria-hidden="true" className="reply-ref-icon" />
+      <Avatar user={author} size={16} />
+      <span className="reply-ref-author">{author?.displayName ?? displayNameOf(users, r.authorId ?? "")}</span>
+      <span className="reply-ref-text">
+        {text || (
+          <>
+            <ImageIcon size={13} aria-hidden="true" /> {r.attachmentCount > 1 ? `${r.attachmentCount} anexos` : "anexo"}
+          </>
+        )}
+      </span>
+    </button>
+  );
+}
+
+/** GIF do GIPHY: um MP4 em loop (bem mais leve que .gif), que pausa quando sai da tela. */
+function GifView({ src, width, height }: { src: string; width: number; height: number }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) void el.play().catch(() => undefined);
+      else el.pause();
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const scale = Math.min(1, 360 / width, 280 / height);
+  return (
+    <video
+      ref={ref}
+      className="gif"
+      src={src}
+      width={Math.round(width * scale)}
+      height={Math.round(height * scale)}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
+      aria-label="GIF"
+    />
+  );
+}
+
 function EditBox({ message, onDone }: { message: Message; onDone(): void }) {
   const [text, setText] = useState(message.content);
   const [busy, setBusy] = useState(false);
 
   async function save() {
     const content = text.trim();
-    if (!content || content === message.content) return onDone();
+    if (!content || content === message.content) return finish();
     setBusy(true);
     try {
       await api.editMessage(message.id, content);
-      onDone();
+      finish();
     } catch (err) {
       toast.fromError(err);
       setBusy(false);
     }
   }
 
+  function finish() {
+    onDone();
+    focusComposer();
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Escape") onDone();
+    if (e.key === "Escape") finish();
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void save();
@@ -171,6 +273,7 @@ function EditBox({ message, onDone }: { message: Message; onDone(): void }) {
     <div className="edit-box">
       <textarea
         autoFocus
+        onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}

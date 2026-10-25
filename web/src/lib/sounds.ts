@@ -4,7 +4,7 @@
  */
 import { useSettings } from "../state/settings.ts";
 
-export type SoundName = "join" | "leave" | "mute" | "unmute" | "deafen" | "undeafen" | "message";
+export type SoundName = "join" | "leave" | "mute" | "unmute" | "deafen" | "undeafen" | "message" | "friendJoined";
 
 export interface Tone {
   /** Início, em segundos a partir do disparo. */
@@ -41,6 +41,11 @@ export const SOUNDS: Record<SoundName, Tone[]> = {
     { at: 0, dur: 0.08, from: 300, to: 420, type: "triangle", gain: 1.2 },
     { at: 0.08, dur: 0.12, from: 420, to: 560, type: "triangle", gain: 1.2 },
   ],
+  // alguém entrou na voz (aviso opcional): o "entrar" da chamada, uma oitava acima
+  friendJoined: [
+    { at: 0, dur: 0.12, from: E5 * 2, gain: 0.7 },
+    { at: 0.1, dur: 0.22, from: B5 * 2, gain: 0.7 },
+  ],
   // "plim" de mensagem: nota aguda com um harmônico leve, como um sininho
   message: [
     { at: 0, dur: 0.28, from: E6, gain: 0.8 },
@@ -50,7 +55,7 @@ export const SOUNDS: Record<SoundName, Tone[]> = {
 
 const CALL_SOUNDS = new Set<SoundName>(["join", "leave", "mute", "unmute", "deafen", "undeafen"]);
 /** Intervalo mínimo entre repetições do mesmo som (evita metralhadora de "plim"). */
-const MIN_GAP_MS: Partial<Record<SoundName, number>> = { message: 1_500 };
+const MIN_GAP_MS: Partial<Record<SoundName, number>> = { message: 1_500, friendJoined: 3_000 };
 const DEFAULT_GAP_MS = 120;
 
 let ctx: AudioContext | null = null;

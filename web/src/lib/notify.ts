@@ -8,11 +8,13 @@
  * - com a janela minimizada ou em segundo plano, avisa conforme a preferência
  *   (todas as mensagens, só menções ou nada).
  */
-import type { Message } from "@resenha/shared";
-import { mentionsUser } from "../chat/mentions.ts";
-import { displayNameOf, useApp, windowFocused } from "../state/app.ts";
+import type { Message, VoiceMember } from "@resenha/shared";
+import { plainText } from "../chat/plain.ts";
+import { displayNameOf, mentionsMe, useApp, windowFocused } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
+import { toast } from "../state/toasts.ts";
 import { playSound } from "./sounds.ts";
+import { useVoice } from "../voice/state.ts";
 
 export type NotifyPermission = NotificationPermission | "unsupported";
 
@@ -57,11 +59,8 @@ export function decideNotify(input: {
 
 /** Texto curto para a notificação: sem marcação, e anexos viram uma descrição. */
 export function notificationBody(m: Pick<Message, "content" | "attachments">): string {
-  const text = m.content
-    .replace(/```[a-z0-9]*\n?([\s\S]*?)```/gi, "$1")
-    .replace(/(\*\*|~~|`)/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = plainText(m.content);
+  if (text === "GIF") return "Enviou um GIF";
   if (text) return text.length > 140 ? `${text.slice(0, 139)}…` : text;
   const n = m.attachments.length;
   if (n === 0) return "";
@@ -74,11 +73,15 @@ export function onNewMessage(m: Message): void {
   const s = useApp.getState();
   if (!s.me) return;
   const settings = useSettings.getState();
+  const mentioned = mentionsMe(m, s.me);
+  // Chat de canal de voz é conversa de quem está na call: fora dela, só avisa se te mencionarem.
+  const voiceChat = s.channels.find((c) => c.id === m.channelId)?.kind === "voice";
+  if (voiceChat && !mentioned && useVoice.getState().channelId !== m.channelId) return;
   const decision = decideNotify({
     mine: m.authorId === s.me.id,
     focused: windowFocused(),
     inActiveChannel: m.channelId === s.activeChannelId,
-    mentioned: mentionsUser(m.content, s.me.username),
+    mentioned,
     mode: settings.notifyMode,
   });
   if (decision === "none") return;
@@ -88,7 +91,8 @@ export function onNewMessage(m: Message): void {
   const channel = s.channels.find((c) => c.id === m.channelId);
   const author = s.users[m.authorId];
   try {
-    const n = new Notification(`${displayNameOf(s.users, m.authorId)}${channel ? ` em #${channel.name}` : ""}`, {
+    const where = channel ? (channel.kind === "voice" ? ` no chat de ${channel.name}` : ` em #${channel.name}`) : "";
+    const n = new Notification(`${displayNameOf(s.users, m.authorId)}${where}`, {
       body: notificationBody(m),
       icon: author?.avatarUrl ?? "/icon-192.png",
       // Uma notificação por canal: a nova substitui a anterior em vez de empilhar.
@@ -119,4 +123,62 @@ function onBack() {
 if (typeof window !== "undefined") {
   window.addEventListener("focus", onBack);
   document.addEventListener("visibilitychange", onBack);
+}
+
+// ---------------------------------------------------------------- alguém entrou na voz (opcional)
+
+/** Quem caiu e voltou em menos disso não gera aviso (oscilação de rede). */
+const REJOIN_QUIET_MS = 60_000;
+const lastLeft = new Map<string, number>();
+
+/** Quem entrou na lista de um canal de voz (sem você, sem quem só reconectou). */
+export function joinedMembers(
+  prev: Pick<VoiceMember, "userId">[],
+  next: Pick<VoiceMember, "userId">[],
+  meId: string,
+  now: number,
+  recentlyLeft: Map<string, number>,
+): string[] {
+  const before = new Set(prev.map((m) => m.userId));
+  const after = new Set(next.map((m) => m.userId));
+  for (const id of before) if (!after.has(id)) recentlyLeft.set(id, now);
+  return [...after].filter((id) => !before.has(id) && id !== meId && now - (recentlyLeft.get(id) ?? -Infinity) > REJOIN_QUIET_MS);
+}
+
+/** Chamado a cada atualização de canal de voz vinda do servidor (nunca no "hello" inicial). */
+export function onVoiceMembers(channelId: string, prev: VoiceMember[], next: VoiceMember[]): void {
+  const s = useApp.getState();
+  if (!s.me) return;
+  const joined = joinedMembers(prev, next, s.me.id, Date.now(), lastLeft);
+  // Só com o aviso ligado e com você fora de chamadas (dentro de uma, o som da call já avisa).
+  if (joined.length === 0 || !useSettings.getState().notifyVoiceJoin) return;
+  if (useVoice.getState().status !== "idle") return;
+
+  const channel = s.channels.find((c) => c.id === channelId);
+  const who = joined.map((id) => displayNameOf(s.users, id)).join(" e ");
+  const title = `${who} ${joined.length > 1 ? "entraram" : "entrou"} em ${channel?.name ?? "um canal de voz"}`;
+  playSound("friendJoined");
+  if (windowFocused()) {
+    toast.info(title);
+    return;
+  }
+  if (notifyPermission() !== "granted") return;
+  const names = next.map((m) => displayNameOf(s.users, m.userId));
+  try {
+    const n = new Notification(title, {
+      body: names.length > 1 ? `Na chamada agora: ${names.join(", ")}` : "Clique para ver o canal.",
+      icon: s.users[joined[0]!]?.avatarUrl ?? "/icon-192.png",
+      tag: `voz-${channelId}`,
+      silent: true,
+    });
+    open.add(n);
+    n.onclose = () => open.delete(n);
+    n.onclick = () => {
+      window.focus();
+      navigate?.(`/c/${channelId}`);
+      n.close();
+    };
+  } catch {
+    // sem notificação via página neste navegador: o som já avisou
+  }
 }

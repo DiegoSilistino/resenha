@@ -1,11 +1,16 @@
-import { useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from "react";
-import { Paperclip, SendHorizontal, X } from "lucide-react";
-import { LIMITS, type Attachment, type Channel } from "@resenha/shared";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { Paperclip, SendHorizontal, Smile, X } from "lucide-react";
+import { LIMITS, type Attachment, type Channel, type GifResult } from "@resenha/shared";
 import { api, uploadFile } from "../lib/api.ts";
 import { formatBytes } from "../lib/format.ts";
 import { realtime } from "../lib/realtime.ts";
-import { useApp } from "../state/app.ts";
+import { displayNameOf, useApp } from "../state/app.ts";
+import { rememberEmoji } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
+import { useUi } from "../state/ui.ts";
+import { EmojiPicker } from "./EmojiPicker.tsx";
+import { GifPicker } from "./GifPicker.tsx";
+import { parseGifMessage } from "./plain.ts";
 
 export interface ComposerHandle {
   addFiles(files: File[]): void;
@@ -33,6 +38,21 @@ export function Composer({ channel, ref }: { channel: Channel; ref: Ref<Composer
   const lastTyping = useRef(0);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
+  const [picker, setPicker] = useState<{ kind: "emoji" | "gif"; anchor: HTMLElement } | null>(null);
+  const closePicker = useCallback(() => setPicker(null), []);
+  const gifsEnabled = useApp((s) => s.features.gifs);
+  const users = useApp((s) => s.users);
+
+  // Resposta em andamento neste canal (some sozinha se a original for apagada).
+  const replyingId = useUi((s) => s.replying[channel.id]);
+  const replyTarget = useApp((s) =>
+    replyingId ? s.messages[channel.id]?.items.find((m) => m.id === replyingId) : undefined,
+  );
+  const loaded = useApp((s) => !!s.messages[channel.id]?.loaded);
+  useEffect(() => {
+    if (replyingId && loaded && !replyTarget) useUi.getState().setReplying(channel.id, null);
+  }, [replyingId, replyTarget, loaded, channel.id]);
+  const cancelReply = () => useUi.getState().setReplying(channel.id, null);
 
   useImperativeHandle(ref, () => ({ addFiles }));
 
@@ -93,11 +113,13 @@ export function Composer({ channel, ref }: { channel: Channel; ref: Ref<Composer
         channel.id,
         content,
         pending.map((p) => p.attachment!.id),
+        replyingId,
       );
       useApp.getState().upsertMessage(message);
       lastTyping.current = 0; // a próxima digitação já avisa os outros
       setText("");
       setPending([]);
+      cancelReply();
     } catch (err) {
       toast.fromError(err, "Não foi possível enviar");
     } finally {
@@ -106,10 +128,52 @@ export function Composer({ channel, ref }: { channel: Channel; ref: Ref<Composer
     }
   }
 
+  /** GIF vai na hora, como no Discord (o texto e os anexos da caixa continuam lá). */
+  async function sendGif(gif: GifResult) {
+    closePicker();
+    try {
+      const { message } = await api.sendMessage(channel.id, `${gif.mp4Url}#${gif.width}x${gif.height}`, [], replyingId);
+      useApp.getState().upsertMessage(message);
+      cancelReply();
+    } catch (err) {
+      toast.fromError(err, "Não foi possível enviar o GIF");
+    } finally {
+      textarea.current?.focus();
+    }
+  }
+
+  function insertAtCursor(value: string) {
+    const el = textarea.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    onChange(text.slice(0, start) + value + text.slice(end));
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + value.length, start + value.length);
+    });
+  }
+
+  /** Seta ↑ com a caixa vazia edita sua última mensagem (hábito do Discord). */
+  function editLastOwn(): boolean {
+    const s = useApp.getState();
+    const meId = s.me ? s.me.id : null;
+    const items = s.messages[channel.id]?.items ?? [];
+    const last = items.findLast((m) => m.authorId === meId && m.content && !parseGifMessage(m.content));
+    if (!last) return false;
+    useUi.getState().setEditing(last.id);
+    document.getElementById(`msg-${last.id}`)?.scrollIntoView({ block: "nearest" });
+    return true;
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void send();
+    } else if (e.key === "ArrowUp" && !text && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      if (editLastOwn()) e.preventDefault();
+    } else if (e.key === "Escape" && replyingId) {
+      e.preventDefault();
+      cancelReply();
     }
   }
 
@@ -122,8 +186,20 @@ export function Composer({ channel, ref }: { channel: Channel; ref: Ref<Composer
     }
   }
 
+  const replyAuthor = replyTarget ? displayNameOf(users, replyTarget.authorId) : "a mensagem";
+
   return (
-    <div className="composer">
+    <div className="composer" data-replying={replyingId ? true : undefined}>
+      {replyingId && (
+        <div className="reply-bar">
+          <span>
+            Respondendo a <strong>{replyAuthor}</strong>
+          </span>
+          <button type="button" className="icon-btn" onClick={cancelReply} aria-label="Cancelar resposta" title="Cancelar resposta (Esc)">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {pending.length > 0 && (
         <ul className="pending-files">
           {pending.map((p) => (
@@ -171,8 +247,8 @@ export function Composer({ channel, ref }: { channel: Channel; ref: Ref<Composer
           className="composer-input"
           rows={1}
           value={text}
-          placeholder={`Mensagem em #${channel.name}`}
-          aria-label={`Mensagem em #${channel.name}`}
+          placeholder={channel.kind === "voice" ? "Mensagem no chat" : `Mensagem em #${channel.name}`}
+          aria-label={channel.kind === "voice" ? `Mensagem no chat de ${channel.name}` : `Mensagem em #${channel.name}`}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           onPaste={(e) => {
@@ -183,6 +259,28 @@ export function Composer({ channel, ref }: { channel: Channel; ref: Ref<Composer
             }
           }}
         />
+        {gifsEnabled && (
+          <button
+            type="button"
+            className="icon-btn gif-btn"
+            aria-label="Enviar GIF"
+            title="Enviar GIF"
+            aria-expanded={picker?.kind === "gif"}
+            onClick={(e) => setPicker(picker?.kind === "gif" ? null : { kind: "gif", anchor: e.currentTarget })}
+          >
+            GIF
+          </button>
+        )}
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Inserir emoji"
+          title="Inserir emoji"
+          aria-expanded={picker?.kind === "emoji"}
+          onClick={(e) => setPicker(picker?.kind === "emoji" ? null : { kind: "emoji", anchor: e.currentTarget })}
+        >
+          <Smile size={20} />
+        </button>
         <button
           type="button"
           className="icon-btn send-btn"
@@ -194,6 +292,18 @@ export function Composer({ channel, ref }: { channel: Channel; ref: Ref<Composer
           <SendHorizontal size={20} />
         </button>
       </div>
+      {picker?.kind === "emoji" && (
+        <EmojiPicker
+          anchor={picker.anchor}
+          onClose={closePicker}
+          onPick={(emoji) => {
+            closePicker();
+            rememberEmoji(emoji);
+            insertAtCursor(emoji);
+          }}
+        />
+      )}
+      {picker?.kind === "gif" && <GifPicker anchor={picker.anchor} onClose={closePicker} onPick={(g) => void sendGif(g)} />}
     </div>
   );
 }

@@ -18,6 +18,8 @@ import { BackupService } from "./backup/service.ts";
 import { registerAdminRoutes } from "./routes/admin.ts";
 import { registerAvatarRoutes } from "./routes/avatars.ts";
 import { registerBackupRoutes } from "./routes/backup.ts";
+import { registerGifRoutes } from "./routes/gifs.ts";
+import { createGiphy, type GifProvider } from "./gifs/giphy.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
 import { registerChannelRoutes } from "./routes/channels.ts";
 import { registerMeRoutes } from "./routes/me.ts";
@@ -37,6 +39,8 @@ export interface AppDeps {
   /** Substituíveis em testes. */
   voiceGateway?: VoiceGateway;
   fetchTitle?: TitleFetcher;
+  /** fetch usado para falar com o GIPHY (substituível em testes). */
+  gifFetch?: typeof fetch;
 }
 
 export interface AppContext {
@@ -49,6 +53,8 @@ export interface AppContext {
   uploads: UploadStorage;
   avatars: UploadStorage;
   backups: BackupService;
+  /** null quando o servidor não tem chave do GIPHY. */
+  gifs: GifProvider | null;
 }
 
 export const requireUser = async (req: FastifyRequest) => {
@@ -87,6 +93,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
       uploads: config.uploadsDir,
       avatars: config.avatarsDir,
     }),
+    gifs: config.giphy ? createGiphy({ ...config.giphy, ...(deps.gifFetch ? { fetch: deps.gifFetch } : {}) }) : null,
   };
   await ctx.uploads.init();
   await ctx.avatars.init();
@@ -158,6 +165,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   registerUploadRoutes(app, ctx);
   registerAvatarRoutes(app, ctx);
   registerBackupRoutes(app, ctx);
+  registerGifRoutes(app, ctx);
   registerVoiceRoutes(app, ctx);
   registerSocket(app, ctx);
 
@@ -198,7 +206,14 @@ async function registerFrontend(app: FastifyInstance, config: Config) {
   });
   // SPA: qualquer rota GET que não seja API/arquivo cai no index.html.
   app.setNotFoundHandler((req, reply) => {
-    if ((req.method !== "GET" && req.method !== "HEAD") || req.url.startsWith("/api/") || req.url.startsWith("/ws")) {
+    // Arquivo de /assets que não existe (ex.: de uma versão anterior) é 404 de verdade, nunca a
+    // página inicial: assim o navegador entende o erro e o app recarrega na versão nova.
+    if (
+      (req.method !== "GET" && req.method !== "HEAD") ||
+      req.url.startsWith("/api/") ||
+      req.url.startsWith("/ws") ||
+      req.url.startsWith("/assets/")
+    ) {
       return sendError(reply, new HttpError(404, "Não encontrado"));
     }
     reply.header("Cache-Control", "no-cache");
@@ -214,8 +229,9 @@ function cspDirectives(config: Config): Record<string, string[]> {
     // 'wasm-unsafe-eval' libera só compilar WebAssembly (a IA de redução de ruído), não eval de JavaScript.
     "script-src": ["'self'", "'wasm-unsafe-eval'", "https://www.youtube.com", "https://s.ytimg.com"],
     "frame-src": ["https://www.youtube.com", "https://www.youtube-nocookie.com"],
-    "img-src": ["'self'", "data:", "blob:", "https://i.ytimg.com"],
-    "media-src": ["'self'", "blob:"],
+    // GIFs vêm direto dos servidores do GIPHY (media0..4.giphy.com, i.giphy.com).
+    "img-src": ["'self'", "data:", "blob:", "https://i.ytimg.com", "https://*.giphy.com"],
+    "media-src": ["'self'", "blob:", "https://*.giphy.com"],
     "connect-src": connect,
     "style-src": ["'self'", "'unsafe-inline'"],
     "font-src": ["'self'", "data:"],

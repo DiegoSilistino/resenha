@@ -1,17 +1,40 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { BellRing, X } from "lucide-react";
+import { lazyChunk } from "../lib/chunks.ts";
 import { notifyPermission, requestNotifyPermission, setNotifyNavigator } from "../lib/notify.ts";
 import { unreadTotal, useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { ChatView } from "../chat/ChatView.tsx";
-import { VoiceView } from "../voice/VoiceView.tsx";
+import { preloadVoice } from "../voice/controller.ts";
 import { WatchDock } from "../watch/WatchDock.tsx";
-import { AdminModal } from "../modals/AdminModal.tsx";
-import { SettingsModal } from "../modals/SettingsModal.tsx";
-import { ShareDialog } from "../modals/ShareDialog.tsx";
+
+// Partes que nem todo mundo abre ficam fora do pacote inicial (a tela de voz traz o LiveKit).
+const loadVoiceView = () => import("../voice/VoiceView.tsx");
+const loadSettings = () => import("../modals/SettingsModal.tsx");
+const loadAdmin = () => import("../modals/AdminModal.tsx");
+const VoiceView = lazyChunk(() => loadVoiceView().then((m) => m.VoiceView));
+const SettingsModal = lazyChunk(() => loadSettings().then((m) => m.SettingsModal));
+const AdminModal = lazyChunk(() => loadAdmin().then((m) => m.AdminModal));
+const ShareDialog = lazyChunk(() => import("../modals/ShareDialog.tsx").then((m) => m.ShareDialog));
+
+/** Depois que a página abriu e ficou ociosa, baixa a voz em segundo plano: entrar na chamada fica instantâneo. */
+function useIdlePreload(ready: boolean) {
+  useEffect(() => {
+    if (!ready) return;
+    const run = () => {
+      preloadVoice();
+      for (const load of [loadVoiceView, loadSettings, loadAdmin]) void load().catch(() => undefined);
+    };
+    const timer = setTimeout(() => {
+      if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 5_000 });
+      else run();
+    }, 2_000);
+    return () => clearTimeout(timer);
+  }, [ready]);
+}
 import { MemberList } from "./MemberList.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 
@@ -25,6 +48,7 @@ export function Shell() {
   const location = useLocation();
   const navigate = useNavigate();
   useDocumentTitle();
+  useIdlePreload(ready);
 
   // No celular, a gaveta de canais fecha ao navegar.
   useEffect(() => {
@@ -68,9 +92,11 @@ export function Shell() {
         <Route path="*" element={<DefaultChannel />} />
       </Routes>
       <WatchDock />
-      {settingsOpen && <SettingsModal />}
-      {adminOpen && <AdminModal />}
-      {shareDialogOpen && <ShareDialog />}
+      <Suspense fallback={null}>
+        {settingsOpen && <SettingsModal />}
+        {adminOpen && <AdminModal />}
+        {shareDialogOpen && <ShareDialog />}
+      </Suspense>
     </div>
   );
 }
@@ -85,7 +111,13 @@ function ChannelRoute() {
   const { channelId = "" } = useParams();
   const channel = useApp((s) => s.channels.find((c) => c.id === channelId));
   if (!channel) return <DefaultChannel />;
-  if (channel.kind === "voice") return <VoiceView key={channel.id} channel={channel} />;
+  if (channel.kind === "voice") {
+    return (
+      <Suspense fallback={<main className="main empty-state">Carregando…</main>}>
+        <VoiceView key={channel.id} channel={channel} />
+      </Suspense>
+    );
+  }
   return (
     <>
       <ChatView key={channel.id} channel={channel} />

@@ -4,6 +4,7 @@ import type {
   HelloEvent,
   Me,
   Message,
+  MessageReference,
   PublicUser,
   Reaction,
   ServerEvent,
@@ -43,6 +44,8 @@ interface AppState {
   awayUnread: number;
   /** canal de texto aberto agora (para não marcar como não lido) */
   activeChannelId: string | null;
+  /** Recursos que dependem da configuração do servidor (ex.: chave do GIPHY). */
+  features: { gifs: boolean };
 
   setMe(me: Me | false): void;
   setConnection(status: ConnectionStatus): void;
@@ -76,6 +79,7 @@ const initial = {
   mentions: {},
   awayUnread: 0,
   activeChannelId: null,
+  features: { gifs: false },
 };
 
 /** A pessoa está olhando para o app agora? */
@@ -173,13 +177,21 @@ export const useApp = create<AppState>()((set, get) => ({
           return set({ typing, awayUnread: windowFocused() ? 0 : s.awayUnread + 1 });
         }
         const patch: Partial<AppState> = { typing, unread: { ...s.unread, [m.channelId]: (s.unread[m.channelId] ?? 0) + 1 } };
-        if (mentionsUser(m.content, s.me.username)) {
+        if (mentionsMe(m, s.me)) {
           patch.mentions = { ...s.mentions, [m.channelId]: (s.mentions[m.channelId] ?? 0) + 1 };
         }
         return set(patch);
       }
       case "message.update":
-        return get().upsertMessage(event.message);
+        get().upsertMessage(event.message);
+        // citações dessa mensagem em respostas mostram o texto novo
+        return set({
+          messages: patchReplies(get().messages, event.message.channelId, event.message.id, (r) => ({
+            ...r,
+            content: event.message.content.slice(0, 200),
+            attachmentCount: event.message.attachments.length,
+          })),
+        });
       case "message.reactions": {
         const cur = s.messages[event.channelId];
         if (!cur?.loaded) return;
@@ -196,11 +208,18 @@ export const useApp = create<AppState>()((set, get) => ({
       case "message.delete": {
         const cur = s.messages[event.channelId];
         if (!cur) return;
+        const messages = {
+          ...s.messages,
+          [event.channelId]: { ...cur, items: cur.items.filter((m) => m.id !== event.messageId) },
+        };
         return set({
-          messages: {
-            ...s.messages,
-            [event.channelId]: { ...cur, items: cur.items.filter((m) => m.id !== event.messageId) },
-          },
+          messages: patchReplies(messages, event.channelId, event.messageId, (r) => ({
+            ...r,
+            deleted: true,
+            authorId: null,
+            content: "",
+            attachmentCount: 0,
+          })),
         });
       }
       case "typing": {
@@ -227,10 +246,33 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
     channels: sortChannels(e.channels),
     voice: e.voice,
     watch: e.watch,
+    features: e.features ?? { gifs: false },
   };
   // Numa reconexão, mensagens podem ter chegado enquanto estávamos fora: recarrega sob demanda.
   if (wasReady) patch.messages = {};
   return patch;
+}
+
+/** Menção a você: @seu-usuario no texto, ou resposta a uma mensagem sua (como no Discord). */
+export function mentionsMe(m: Pick<Message, "content" | "replyTo">, me: Pick<Me, "id" | "username">): boolean {
+  return mentionsUser(m.content, me.username) || m.replyTo?.authorId === me.id;
+}
+
+function patchReplies(
+  messages: AppState["messages"],
+  channelId: string,
+  originalId: number,
+  patch: (r: MessageReference) => MessageReference,
+): AppState["messages"] {
+  const cur = messages[channelId];
+  if (!cur?.items.some((m) => m.replyTo?.id === originalId)) return messages;
+  return {
+    ...messages,
+    [channelId]: {
+      ...cur,
+      items: cur.items.map((m) => (m.replyTo?.id === originalId ? { ...m, replyTo: patch(m.replyTo) } : m)),
+    },
+  };
 }
 
 /** Lista de reações com `userId` ligado ou desligado em `emoji` (sem mudar a ordem dos outros). */
@@ -265,6 +307,12 @@ export function displayNameOf(users: Record<string, PublicUser>, id: string): st
   return users[id]?.displayName ?? "Alguém";
 }
 
-/** Total para o título da aba: "(3) #geral". */
-export const unreadTotal = (s: Pick<AppState, "unread" | "awayUnread">) =>
-  Object.values(s.unread).reduce((a, b) => a + b, 0) + s.awayUnread;
+/**
+ * Total para o título da aba: "(3) #geral". Chat de canal de voz só entra quando te
+ * mencionam (é conversa de quem está na call).
+ */
+export const unreadTotal = (s: Pick<AppState, "unread" | "mentions" | "awayUnread" | "channels">) => {
+  let total = s.awayUnread;
+  for (const c of s.channels) total += c.kind === "text" ? (s.unread[c.id] ?? 0) : (s.mentions[c.id] ?? 0);
+  return total;
+};

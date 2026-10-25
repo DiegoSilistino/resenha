@@ -9,6 +9,7 @@ import {
   type ChannelKind,
   type Invite,
   type Message,
+  type MessageReference,
   type PublicUser,
   type Reaction,
   type Role,
@@ -51,7 +52,11 @@ interface MessageRow {
   content: string;
   created_at: number;
   edited_at: number | null;
+  reply_to: number | null;
 }
+
+/** Tamanho do trecho da mensagem original mostrado na citação. */
+const REPLY_PREVIEW_CHARS = 200;
 
 interface AttachmentRow {
   id: string;
@@ -428,11 +433,17 @@ export class Store {
    * Cria a mensagem e vincula os anexos numa transação.
    * Só vincula anexos enviados pelo próprio autor e ainda livres; devolve null se algum não puder.
    */
-  createMessage(m: { channelId: string; authorId: string; content: string; attachmentIds: string[] }): Message | null {
+  createMessage(m: {
+    channelId: string;
+    authorId: string;
+    content: string;
+    attachmentIds: string[];
+    replyTo?: number | null;
+  }): Message | null {
     return transaction(this.db, () => {
       const res = this.db
-        .prepare("INSERT INTO messages (channel_id, author_id, content, created_at) VALUES (?, ?, ?, ?)")
-        .run(m.channelId, m.authorId, m.content, Date.now());
+        .prepare("INSERT INTO messages (channel_id, author_id, content, created_at, reply_to) VALUES (?, ?, ?, ?, ?)")
+        .run(m.channelId, m.authorId, m.content, Date.now(), m.replyTo ?? null);
       const messageId = Number(res.lastInsertRowid);
       const link = this.db.prepare(
         "UPDATE attachments SET message_id = ? WHERE id = ? AND uploader_id = ? AND message_id IS NULL",
@@ -550,6 +561,7 @@ export class Store {
       byMessage.set(a.message_id!, list);
     }
     const reactions = this.reactionsByMessage(ids);
+    const replies = this.references(rows.map((r) => r.reply_to).filter((id): id is number => id !== null));
     return rows.map((r) => ({
       id: r.id,
       channelId: r.channel_id,
@@ -559,7 +571,27 @@ export class Store {
       editedAt: r.edited_at,
       attachments: byMessage.get(r.id) ?? [],
       reactions: reactions.get(r.id) ?? [],
+      replyTo: r.reply_to === null ? null : (replies.get(r.reply_to) ?? deletedReference(r.reply_to)),
     }));
+  }
+
+  /** Resumos das mensagens citadas em respostas (uma consulta para a página inteira). */
+  private references(ids: number[]): Map<number, MessageReference> {
+    const out = new Map<number, MessageReference>();
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return out;
+    const placeholders = unique.map(() => "?").join(",");
+    const rows = this.db
+      .prepare(
+        `SELECT m.id, m.author_id, substr(m.content, 1, ${REPLY_PREVIEW_CHARS}) AS content,
+                (SELECT COUNT(*) FROM attachments a WHERE a.message_id = m.id) AS attachments
+         FROM messages m WHERE m.id IN (${placeholders})`,
+      )
+      .all(...unique) as { id: number; author_id: string; content: string; attachments: number }[];
+    for (const r of rows) {
+      out.set(r.id, { id: r.id, deleted: false, authorId: r.author_id, content: r.content, attachmentCount: r.attachments });
+    }
+    return out;
   }
 
   // ---------- anexos ----------
@@ -604,6 +636,14 @@ export class Store {
     return new Set((this.db.prepare("SELECT id FROM attachments").all() as { id: string }[]).map((r) => r.id));
   }
 }
+
+const deletedReference = (id: number): MessageReference => ({
+  id,
+  deleted: true,
+  authorId: null,
+  content: "",
+  attachmentCount: 0,
+});
 
 export class AttachmentLinkError extends Error {
   constructor(readonly attachmentId: string) {

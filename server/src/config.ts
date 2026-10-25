@@ -26,6 +26,9 @@ const envSchema = z.object({
   LIVEKIT_PUBLIC_URL: z.string().optional(),
   LIVEKIT_API_KEY: z.string().optional(),
   LIVEKIT_API_SECRET: z.string().optional(),
+  /** Chave da API do GIPHY (grátis em developers.giphy.com). Sem ela, o botão de GIF não aparece. */
+  GIPHY_API_KEY: z.string().optional(),
+  GIPHY_API_URL: z.url().default("https://api.giphy.com"),
 });
 
 export interface Config {
@@ -48,6 +51,7 @@ export interface Config {
     apiKey: string;
     apiSecret: string;
   };
+  giphy: { apiKey: string; baseUrl: string } | null;
 }
 
 export class ConfigError extends Error {}
@@ -96,6 +100,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       apiKey,
       apiSecret,
     },
+    giphy: e.GIPHY_API_KEY ? { apiKey: e.GIPHY_API_KEY.trim(), baseUrl: e.GIPHY_API_URL } : null,
   };
 }
 

@@ -91,6 +91,7 @@ export const createMessageBody = z
   .object({
     content: z.string().max(LIMITS.messageMax).default(""),
     attachmentIds: z.array(id).max(LIMITS.attachmentsPerMessage).default([]),
+    replyTo: z.number().int().positive().optional(),
   })
   .refine((b) => b.content.trim().length > 0 || b.attachmentIds.length > 0, "Mensagem vazia");
 
@@ -163,7 +164,14 @@ export interface HelloEvent {
   voice: Record<string, VoiceMember[]>;
   watch: Record<string, WatchState>;
   serverTime: number;
+  /** Recursos que dependem de configuração no servidor. */
+  features: { gifs: boolean };
 }
+
+export const gifSearchQuery = z.object({
+  q: z.string().trim().max(50).default(""),
+  offset: z.coerce.number().int().min(0).max(4_999).default(0),
+});
 
 export type ServerEvent =
   | HelloEvent
