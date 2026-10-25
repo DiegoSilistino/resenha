@@ -28,7 +28,7 @@ import { SpeechCaptioner, type CaptionChunk } from "./speech.ts";
 import { screenQuality, screenShareErrorAdvice, screenShareOptions, type ScreenQualityId } from "./screenQuality.ts";
 import { useUi } from "../state/ui.ts";
 import type { GateConfig } from "./gate/engine.ts";
-import { GateProcessor } from "./gate/processor.ts";
+import { MicProcessor, type MicChainConfig } from "./gate/processor.ts";
 import { participantVolumes } from "./volumes.ts";
 
 export type VoiceStatus = "idle" | "connecting" | "connected" | "reconnecting";
@@ -78,8 +78,8 @@ const bump = () => setV((s) => ({ version: s.version + 1 }));
 
 let room: Room | null = null;
 let joinSeq = 0;
-/** Portão (sensibilidade) do microfone da chamada atual. */
-let gate: GateProcessor | null = null;
+/** Cadeia do microfone (IA + sensibilidade) da chamada atual. */
+let gate: MicProcessor | null = null;
 /** Até quando ignorar entradas/saídas dos outros (a reconexão da sala gera eventos em rajada). */
 let quietUntil = 0;
 /** Salas que chegaram a conectar (antes disso, falhas são tratadas pelo joinVoice). */
@@ -362,7 +362,8 @@ export function micOptions() {
   return {
     ...(s.micDeviceId ? { deviceId: s.micDeviceId } : {}),
     echoCancellation: s.echoCancellation,
-    noiseSuppression: s.noiseSuppression,
+    // Com a IA, a redução do navegador fica desligada: as duas juntas pioram a voz.
+    noiseSuppression: s.noiseMode === "browser",
     autoGainControl: true,
   };
 }
@@ -373,15 +374,29 @@ export function gateConfig(): GateConfig {
   return { enabled: s.micGate && !s.pttEnabled, auto: s.micGateAuto, thresholdDb: s.micGateDb };
 }
 
+export function micChainConfig(): MicChainConfig {
+  return { ai: useSettings.getState().noiseMode === "ai", gate: gateConfig() };
+}
+
+let warnedAi = false;
+function aiUnavailable() {
+  if (warnedAi) return;
+  warnedAi = true;
+  toast.error(
+    "A redução de ruído com IA não funcionou neste navegador. Em Configurações → Áudio, escolha a básica do navegador.",
+  );
+}
+
 async function attachGate(track: LocalAudioTrack) {
   if (track.getProcessor()) return;
-  const g = new GateProcessor(gateConfig);
+  const g = new MicProcessor(micChainConfig, aiUnavailable);
   try {
     await track.setProcessor(g);
     gate = g;
   } catch (err) {
-    // sem o portão a chamada funciona igual, só sem cortar o ruído entre as falas
-    console.warn("[voz] não foi possível ligar a sensibilidade do microfone", err);
+    // sem a cadeia a chamada funciona igual, só sem IA e sem cortar o ruído entre as falas
+    console.warn("[voz] não foi possível ligar a redução de ruído e a sensibilidade", err);
+    if (useSettings.getState().noiseMode === "ai") aiUnavailable();
   }
 }
 
@@ -645,7 +660,8 @@ useSettings.subscribe((s, prev) => {
       toast.error("Não foi possível trocar a saída de áudio neste navegador."),
     );
   }
-  if (s.noiseSuppression !== prev.noiseSuppression || s.echoCancellation !== prev.echoCancellation) {
+  // Reiniciar o microfone também reconstrói a cadeia (o LiveKit chama restart no processador).
+  if (s.noiseMode !== prev.noiseMode || s.echoCancellation !== prev.echoCancellation) {
     const track = r.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
     void track?.restartTrack(micOptions()).catch((e) => toast.error(deviceErrorMessage(e)));
   }

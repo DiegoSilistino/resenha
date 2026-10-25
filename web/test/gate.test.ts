@@ -77,6 +77,10 @@ describe("portão do microfone", () => {
     expect(g.floorDb).toBe(before);
   });
 
+  it("o atraso cobre a confirmação: o começo da palavra que abre o portão não some", () => {
+    expect(GATE.lookaheadMs).toBeGreaterThan(GATE.confirmMs + BLOCK_MS);
+  });
+
   it("calcula o volume em dBFS", () => {
     expect(blockDb(new Float32Array(128))).toBe(-120);
     expect(blockDb(new Float32Array(128).fill(1))).toBeCloseTo(0);

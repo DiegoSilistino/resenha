@@ -6,7 +6,11 @@ import { DEFAULT_SCREEN_QUALITY, type ScreenQualityId } from "../voice/screenQua
 export interface Settings {
   micDeviceId: string | null;
   speakerDeviceId: string | null;
-  noiseSuppression: boolean;
+  /**
+   * Redução de ruído: "ai" = GTCRN (tira teclado até durante a fala), "browser" = a do
+   * navegador (só ruído constante), "off" = som puro.
+   */
+  noiseMode: NoiseMode;
   echoCancellation: boolean;
   pttEnabled: boolean;
   /** KeyboardEvent.code da tecla do push-to-talk */
@@ -47,6 +51,7 @@ export interface Settings {
 }
 
 export type NotifyMode = "all" | "mentions" | "none";
+export type NoiseMode = "ai" | "browser" | "off";
 
 const RECENT_EMOJIS_MAX = 8;
 
@@ -61,7 +66,7 @@ export const useSettings = create<Settings>()(
     (set) => ({
       micDeviceId: null,
       speakerDeviceId: null,
-      noiseSuppression: true,
+      noiseMode: "ai",
       echoCancellation: true,
       pttEnabled: false,
       pttKey: "Backquote",

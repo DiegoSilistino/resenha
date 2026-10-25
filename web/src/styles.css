@@ -270,6 +270,7 @@ textarea:focus {
   cursor: pointer;
 }
 .check input {
+  flex: none; /* não encolhe quando a explicação quebra em duas linhas */
   margin-top: 4px;
   width: 18px;
   height: 18px;

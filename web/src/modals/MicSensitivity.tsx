@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
-import { gateConfig, micOptions, useVoice } from "../voice/controller.ts";
+import { gateConfig, micChainConfig, micOptions, useVoice } from "../voice/controller.ts";
 import { currentMicLevel, startMicTest } from "../voice/gate/processor.ts";
 
 /** Faixa do medidor, em dBFS. */
@@ -49,17 +49,21 @@ export function MicSensitivity() {
   const s = useSettings();
   const inCall = useVoice((v) => v.status === "connected");
   const [testing, setTesting] = useState(false);
+  const [monitor, setMonitor] = useState(false);
   const test = useRef<Awaited<ReturnType<typeof startMicTest>> | null>(null);
 
   // Encerra o teste ao fechar as configurações ou ao entrar numa chamada (aí o medidor usa a chamada).
+  // Trocar microfone ou redução de ruído recomeça o teste com a cadeia nova.
   useEffect(() => {
     if (!testing || inCall) return;
     let cancelled = false;
     const { deviceId, echoCancellation, noiseSuppression, autoGainControl } = micOptions() as MediaTrackConstraints;
-    startMicTest({ deviceId, echoCancellation, noiseSuppression, autoGainControl }, gateConfig())
+    startMicTest({ deviceId, echoCancellation, noiseSuppression, autoGainControl }, micChainConfig())
       .then((t) => {
-        if (cancelled) t.stop();
-        else test.current = t;
+        if (cancelled) return t.stop();
+        test.current = t;
+        t.setMonitor(monitorRef.current);
+        if (!t.aiActive) toast.error("A redução de ruído com IA não carregou neste navegador.");
       })
       .catch(() => {
         setTesting(false);
@@ -70,68 +74,97 @@ export function MicSensitivity() {
       test.current?.stop();
       test.current = null;
     };
-  }, [testing, inCall, s.micDeviceId, s.noiseSuppression, s.echoCancellation]);
+  }, [testing, inCall, s.micDeviceId, s.noiseMode, s.echoCancellation]);
+
+  const monitorRef = useRef(monitor);
+  useEffect(() => {
+    monitorRef.current = monitor;
+    test.current?.setMonitor(monitor);
+  }, [monitor]);
 
   useEffect(() => {
     test.current?.reconfigure(gateConfig());
   }, [s.micGate, s.micGateAuto, s.micGateDb, s.pttEnabled]);
 
-  const showMeter = inCall || testing;
-
   return (
-    <fieldset className="field sensitivity">
-      <legend>Sensibilidade do microfone</legend>
-      <label className="check">
-        <input type="checkbox" checked={s.micGate} onChange={(e) => s.set({ micGate: e.target.checked })} />
-        <span>
-          Só transmitir quando eu estiver falando
-          <small>Corta teclado, mouse e barulho de fundo nos intervalos entre as falas.</small>
-        </span>
-      </label>
-      {s.micGate && s.pttEnabled && (
-        <p className="muted small-note">Com o push-to-talk ligado, a tecla decide quando o microfone abre.</p>
-      )}
-      {s.micGate && !s.pttEnabled && (
-        <>
-          <label className="check">
-            <input type="checkbox" checked={s.micGateAuto} onChange={(e) => s.set({ micGateAuto: e.target.checked })} />
-            <span>
-              Ajustar automaticamente
-              <small>Acompanha o ruído do seu ambiente. Desmarque para escolher o nível na mão.</small>
-            </span>
-          </label>
-          {!s.micGateAuto && (
-            <label className="field">
-              <span>Nível mínimo para transmitir: {s.micGateDb} dB</span>
-              <input
-                type="range"
-                min={-80}
-                max={-10}
-                step={1}
-                value={s.micGateDb}
-                onChange={(e) => s.set({ micGateDb: Number(e.target.value) })}
-              />
-              <small>Fale normalmente: a barra deve passar da marca branca. Se o teclado também passa, suba o nível.</small>
+    <>
+      <fieldset className="field sensitivity">
+        <legend>Sensibilidade do microfone</legend>
+        <label className="check">
+          <input type="checkbox" checked={s.micGate} onChange={(e) => s.set({ micGate: e.target.checked })} />
+          <span>
+            Só transmitir quando eu estiver falando
+            <small>Nos intervalos entre as falas, não sai nada do seu microfone.</small>
+          </span>
+        </label>
+        {s.micGate && s.pttEnabled && (
+          <p className="muted small-note">Com o push-to-talk ligado, a tecla decide quando o microfone abre.</p>
+        )}
+        {s.micGate && !s.pttEnabled && (
+          <>
+            <label className="check">
+              <input type="checkbox" checked={s.micGateAuto} onChange={(e) => s.set({ micGateAuto: e.target.checked })} />
+              <span>
+                Ajustar automaticamente
+                <small>Acompanha o ruído do seu ambiente. Desmarque para escolher o nível na mão.</small>
+              </span>
             </label>
-          )}
-          {showMeter ? (
+            {!s.micGateAuto && (
+              <label className="field">
+                <span>Nível mínimo para transmitir: {s.micGateDb} dB</span>
+                <input
+                  type="range"
+                  min={-80}
+                  max={-10}
+                  step={1}
+                  value={s.micGateDb}
+                  onChange={(e) => s.set({ micGateDb: Number(e.target.value) })}
+                />
+                <small>Fale normalmente: a barra deve passar da marca branca. Se o teclado também passa, suba o nível.</small>
+              </label>
+            )}
+          </>
+        )}
+      </fieldset>
+
+      <fieldset className="field sensitivity">
+        <legend>Testar o microfone</legend>
+        {inCall ? (
+          <>
             <Meter />
-          ) : (
+            <small>Na chamada, o medidor mostra o que está indo para os amigos.</small>
+          </>
+        ) : testing ? (
+          <>
+            <Meter />
+            <label className="check">
+              <input type="checkbox" checked={monitor} onChange={(e) => setMonitor(e.target.checked)} />
+              <span>
+                Me ouvir como os amigos me ouvem
+                <small>Use fone, senão o som volta para o microfone. Digite enquanto fala para ver a redução de ruído agindo.</small>
+              </span>
+            </label>
             <div>
-              <button type="button" className="btn btn-small" onClick={() => setTesting(true)}>
-                Testar microfone
-              </button>
-            </div>
-          )}
-          {testing && !inCall && (
-            <div>
-              <button type="button" className="btn btn-small btn-ghost" onClick={() => setTesting(false)}>
+              <button
+                type="button"
+                className="btn btn-small btn-ghost"
+                onClick={() => {
+                  setTesting(false);
+                  setMonitor(false);
+                }}
+              >
                 Parar teste
               </button>
             </div>
-          )}
-        </>
-      )}
-    </fieldset>
+          </>
+        ) : (
+          <div>
+            <button type="button" className="btn btn-small" onClick={() => setTesting(true)}>
+              Testar microfone
+            </button>
+          </div>
+        )}
+      </fieldset>
+    </>
   );
 }

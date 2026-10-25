@@ -211,7 +211,8 @@ function cspDirectives(config: Config): Record<string, string[]> {
   if (config.livekit.publicUrl) connect.push(new URL(config.livekit.publicUrl).origin);
   return {
     "default-src": ["'self'"],
-    "script-src": ["'self'", "https://www.youtube.com", "https://s.ytimg.com"],
+    // 'wasm-unsafe-eval' libera só compilar WebAssembly (a IA de redução de ruído), não eval de JavaScript.
+    "script-src": ["'self'", "'wasm-unsafe-eval'", "https://www.youtube.com", "https://s.ytimg.com"],
     "frame-src": ["https://www.youtube.com", "https://www.youtube-nocookie.com"],
     "img-src": ["'self'", "data:", "blob:", "https://i.ytimg.com"],
     "media-src": ["'self'", "blob:"],

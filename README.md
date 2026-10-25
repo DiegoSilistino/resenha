@@ -16,7 +16,8 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
   - mutar e ensurdecer, com sons de entrar, sair e mutar;
   - volume individual de 0 a 200%, separado para a voz e para o som da tela de cada pessoa (com silenciar rápido no próprio vídeo);
   - push-to-talk;
-  - sensibilidade do microfone (automática ou manual, com medidor): só transmite quando você fala;
+  - redução de ruído com IA (GTCRN, roda no navegador): tira teclado, mouse e barulho de fundo até enquanto a pessoa fala;
+  - sensibilidade do microfone (automática ou manual, com medidor e "me ouvir"): só transmite quando você fala;
   - compartilhamento de tela com áudio e câmera, com perfis de qualidade (de "texto nítido" a 1440p a 60 fps) e indicador de resolução, fps e Mbps;
   - quem fala "acende".
 - **Assistir juntos.** Uma fila do YouTube sincronizada no mesmo segundo para todos, que serve para música e para cinema. Quem está no canal pausa, pula e adianta. O player continua tocando enquanto você navega pelo chat.
@@ -88,6 +89,8 @@ O app diz exatamente onde está o problema:
 | "Conectou ao servidor de voz, mas o áudio não passou" | No PC: permita o `livekit-server` no Firewall do Windows. Na VPS: libere `7881/tcp` e `7882/udp`. |
 | "Seu navegador não alcançou o servidor de voz em …" | Na VPS: confira `LIVEKIT_PUBLIC_URL` (vazio = mesmo domínio) e o encaminhamento de `/rtc` no Caddy. |
 | "…recusou as credenciais…" | `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` do app diferentes das do LiveKit. |
+| Os amigos ainda ouvem seu teclado | Confira se a redução de ruído está em "Com IA" (Configurações → Áudio) e se todo mundo atualizou a página (Ctrl+F5). Use "Testar microfone" com "Me ouvir" e digite falando para conferir. |
+| Sua voz soa abafada ou "robótica" | A IA reconstrói a voz até 8 kHz (qualidade de uma boa ligação). Em lugar silencioso, troque para "Básica do navegador". |
 | Os amigos dizem que suas primeiras sílabas somem ou a voz picota | Em Configurações → Áudio → Sensibilidade, desmarque "Ajustar automaticamente" e baixe o nível até a barra passar da marca quando você fala baixo. Ou desligue a opção. |
 | As notificações não aparecem | Configurações → Notificações mostra o estado. Se estiverem bloqueadas, libere no cadeado ao lado do endereço do site. No Windows, confira também se o "Não incomodar" (Assistente de foco) está desligado. |
 | "O Windows não liberou o som do computador" (ao transmitir a tela) | Em Configurações → Sistema → Som → seu fone, desative **Aprimoramentos de áudio** e **Áudio espacial**; no software do headset, desligue surround/7.1. Ou transmita sem som. |
@@ -169,8 +172,13 @@ Os logs do Docker têm tamanho máximo (3 arquivos de 10 MB por serviço), entã
 2. **Clipes:** gravar os últimos 30 s da tela com um atalho (LiveKit Egress).
 3. **Detecção de jogo** pela Steam Web API, com ícone do jogo ao lado do nome.
 4. **Notificações push** (Web Push/VAPID), que chegam mesmo com o navegador fechado, e não lidas guardadas no servidor.
-5. **Supressão de ruído com IA** (RNNoise em WASM, sem custo).
+5. **Voz com IA em banda cheia:** hoje a IA reconstrói até 8 kHz; manter os agudos acima disso exige dividir as bandas.
 6. **Twitch e Kick no cinema;** persistir a fila no banco.
+
+## Créditos
+
+- Redução de ruído: [GTCRN](https://github.com/Xiaobin-Rong/gtcrn) (MIT), pelo pacote [@sapphi-red/web-noise-suppressor](https://github.com/sapphi-red/web-noise-suppressor) (MIT).
+- Calibração do filtro de sensibilidade: gravações de teclado do [ESC-50](https://github.com/karolpiczak/ESC-50) e de voz do LibriSpeech (só usadas nos testes, fora do repositório).
 
 ## Desenvolvimento
 

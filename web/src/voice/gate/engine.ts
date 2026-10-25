@@ -18,15 +18,21 @@ export interface GateConfig {
   thresholdDb: number;
 }
 
+/**
+ * Valores calibrados com gravações reais de teclado mecânico (ESC-50) e voz (LibriSpeech)
+ * passando pela IA: com mínimo de -50 dB e 12 ms de confirmação, o portão fica fechado em
+ * ~90% do tempo só de digitação e mantém ~98% da fala (antes: -60 dB e 8 ms, aberto em 53%).
+ */
 export const GATE = {
   holdMs: 320,
-  confirmMs: 8,
-  lookaheadMs: 12,
+  confirmMs: 12,
+  /** Atraso do áudio para o começo da palavra que abriu o portão não sumir (> confirmação + 1 bloco). */
+  lookaheadMs: 16,
   attackMs: 3,
   releaseMs: 60,
   /** Automático: limiar = ruído de fundo + margem, dentro da faixa abaixo. */
   autoMarginDb: 15,
-  autoMinDb: -60,
+  autoMinDb: -50,
   autoMaxDb: -40,
   floorStartDb: -60,
   /** Constantes de tempo do ruído de fundo (ms). */

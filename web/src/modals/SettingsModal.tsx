@@ -7,7 +7,7 @@ import { notifyPermission, requestNotifyPermission, type NotifyPermission } from
 import { logout } from "../lib/session.ts";
 import { playSound } from "../lib/sounds.ts";
 import { useApp } from "../state/app.ts";
-import { keyLabel, useSettings, type NotifyMode } from "../state/settings.ts";
+import { keyLabel, useSettings, type NoiseMode, type NotifyMode } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { listDevices } from "../voice/controller.ts";
@@ -114,6 +114,16 @@ function ProfileTab() {
   );
 }
 
+const NOISE_MODES: { id: NoiseMode; label: string; hint: string }[] = [
+  {
+    id: "ai",
+    label: "Com IA (recomendado)",
+    hint: "Tira teclado, mouse, ventilador e barulho de fundo, até enquanto você fala. A voz fica um pouco menos aguda, como numa boa ligação.",
+  },
+  { id: "browser", label: "Básica do navegador", hint: "Só tira ruído constante, como ventilador e chiado. Teclado passa." },
+  { id: "off", label: "Desligada", hint: "Som puro do microfone. Para quem tem um microfone bom num lugar silencioso." },
+];
+
 function AudioTab() {
   const s = useSettings();
   const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
@@ -187,17 +197,18 @@ function AudioTab() {
           </select>
         </label>
       )}
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={s.noiseSuppression}
-          onChange={(e) => s.set({ noiseSuppression: e.target.checked })}
-        />
-        <span>
-          Redução de ruído
-          <small>Filtra teclado, ventilador e barulho de fundo.</small>
-        </span>
-      </label>
+      <fieldset className="field">
+        <legend>Redução de ruído</legend>
+        {NOISE_MODES.map((m) => (
+          <label key={m.id} className="check">
+            <input type="radio" name="noise-mode" checked={s.noiseMode === m.id} onChange={() => s.set({ noiseMode: m.id })} />
+            <span>
+              {m.label}
+              <small>{m.hint}</small>
+            </span>
+          </label>
+        ))}
+      </fieldset>
       <label className="check">
         <input
           type="checkbox"
