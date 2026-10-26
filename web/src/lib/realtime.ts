@@ -6,6 +6,7 @@ import {
   type ServerEvent,
 } from "@resenha/shared";
 import { useApp } from "../state/app.ts";
+import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { onNewMessage, onVoiceMembers } from "./notify.ts";
 
@@ -25,6 +26,7 @@ class RealtimeClient {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private stopped = true;
   private readonly helloListeners = new Set<Listener>();
+  private readonly eventListeners = new Set<(event: ServerEvent) => void>();
 
   start(): void {
     if (!this.stopped) return;
@@ -43,6 +45,12 @@ class RealtimeClient {
   onHello(fn: Listener): () => void {
     this.helloListeners.add(fn);
     return () => this.helloListeners.delete(fn);
+  }
+
+  /** Eventos depois de aplicados ao estado (módulos que reagem a algo, como a mesa de sons). */
+  onEvent(fn: (event: ServerEvent) => void): () => void {
+    this.eventListeners.add(fn);
+    return () => this.eventListeners.delete(fn);
   }
 
   /** Se estiver esperando para reconectar, tenta agora (rede voltou, aba voltou ao foco). */
@@ -93,13 +101,19 @@ class RealtimeClient {
 
   private handle(event: ServerEvent): void {
     switch (event.type) {
-      case "hello":
+      case "hello": {
         this.attempt = 0;
         useApp.getState().applyEvent(event);
+        // Painel de erros zerado ou banco restaurado: o "último visto" volta junto.
+        const seen = useSettings.getState().errorsSeenId;
+        if (event.latestErrorId !== undefined && event.latestErrorId < seen) {
+          useSettings.getState().set({ errorsSeenId: event.latestErrorId });
+        }
         useApp.getState().setConnection("online");
         this.startPinging();
         for (const fn of this.helloListeners) fn();
         return;
+      }
       case "pong":
         clock.addSample(event.t0, event.serverTime, Date.now());
         return;
@@ -112,6 +126,7 @@ class RealtimeClient {
         useApp.getState().applyEvent(event);
         if (event.type === "message.create") onNewMessage(event.message);
         if (event.type === "voice.channel" && prevVoice) onVoiceMembers(event.channelId, prevVoice, event.members);
+        for (const fn of this.eventListeners) fn(event);
       }
     }
   }

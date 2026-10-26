@@ -56,7 +56,7 @@ SAVE_CURRENT='
   cd /data
   mkdir -p backups
   items=""
-  for f in resenha.db resenha.db-wal resenha.db-shm uploads avatars; do [ -e "$f" ] && items="$items $f"; done
+  for f in resenha.db resenha.db-wal resenha.db-shm uploads avatars sounds; do [ -e "$f" ] && items="$items $f"; done
   if [ -n "$items" ]; then
     tar -cf "backups/antes-da-restauracao-$(date -u +%Y%m%dT%H%M%SZ).tar" $items
   fi'
@@ -64,7 +64,7 @@ SAVE_CURRENT='
 if [[ "$SRC" == *.tar ]]; then
   say "Restaurando $(basename "$SRC")"
   in_data -v "$ABS:/restore.tar:ro" "$SAVE_CURRENT
-    rm -rf resenha.db resenha.db-wal resenha.db-shm uploads avatars
+    rm -rf resenha.db resenha.db-wal resenha.db-shm uploads avatars sounds
     tar -xf /restore.tar -C /data
     test -f resenha.db
     chown -R node:node /data"

@@ -7,10 +7,12 @@ import { z } from "zod";
 import { AVATAR_COLORS, LIMITS, USERNAME_PATTERN } from "./constants.ts";
 import type {
   Channel,
+  ClientErrorEntry,
   Me,
   Message,
   PublicUser,
   Reaction,
+  SoundboardSound,
   VoiceMember,
   WatchState,
 } from "./types.ts";
@@ -113,6 +115,8 @@ export const reactionEmojiSchema = z.string().max(32).refine(isSingleEmoji, "Emo
 
 export const listMessagesQuery = z.object({
   before: z.coerce.number().int().positive().optional(),
+  /** Pular para uma mensagem antiga: traz tudo de `before` até esta (inclusive), mais um pouco de contexto. */
+  since: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(LIMITS.messagesPageSize),
 });
 
@@ -150,6 +154,7 @@ export const clientMessage = z.discriminatedUnion("type", [
     video: z.boolean(),
   }),
   z.object({ type: z.literal("watch"), channelId: id, action: watchClientAction }),
+  z.object({ type: z.literal("soundboard.play"), channelId: id, soundId: id }),
 ]);
 export type ClientMessage = z.infer<typeof clientMessage>;
 
@@ -166,7 +171,36 @@ export interface HelloEvent {
   serverTime: number;
   /** Recursos que dependem de configuração no servidor. */
   features: { gifs: boolean };
+  sounds: SoundboardSound[];
+  /** Só para admins: id do erro mais recente no painel (0 = nenhum). Acende o aviso na engrenagem. */
+  latestErrorId?: number;
 }
+
+export const clientErrorBody = z.object({
+  kind: z.enum(["voz", "microfone", "tela", "ruido", "inesperado"]),
+  message: z.string().trim().min(1).max(500),
+  detail: z.string().max(2_000).default(""),
+  context: z
+    .record(z.string().max(40), z.union([z.string().max(200), z.number(), z.boolean()]))
+    .refine((c) => Object.keys(c).length <= 20, "Contexto grande demais")
+    .default({}),
+});
+
+export const searchQuery = z.object({
+  q: z.string().trim().min(2, "Digite pelo menos 2 letras").max(100),
+  channelId: id.optional(),
+  /** Paginação: só resultados mais antigos que esta mensagem. */
+  before: z.coerce.number().int().positive().optional(),
+});
+
+export const soundMeta = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Dê um nome ao som")
+    .max(LIMITS.soundNameMax, `Máximo de ${LIMITS.soundNameMax} caracteres`),
+  emoji: z.string().max(32).refine(isSingleEmoji, "Escolha um emoji").default("🔊"),
+});
 
 export const gifSearchQuery = z.object({
   q: z.string().trim().max(50).default(""),
@@ -187,7 +221,13 @@ export type ServerEvent =
   | { type: "typing"; channelId: string; userId: string }
   | { type: "voice.channel"; channelId: string; members: VoiceMember[] }
   | { type: "watch.state"; state: WatchState }
-  | { type: "notice"; level: "info" | "error"; text: string };
+  | { type: "notice"; level: "info" | "error"; text: string }
+  | { type: "sound.upsert"; sound: SoundboardSound }
+  | { type: "sound.remove"; soundId: string }
+  /** Só para quem está naquela chamada. */
+  | { type: "soundboard.played"; channelId: string; soundId: string; userId: string }
+  /** Só para administradores: um navegador reportou uma falha. */
+  | { type: "admin.error"; entry: ClientErrorEntry };
 
 export interface ApiErrorBody {
   error: string;

@@ -35,7 +35,7 @@ const HOUR = 60 * 60 * 1000;
 
 /** Limpezas periódicas. Devolve uma função que cancela os timers. */
 export function startMaintenance(ctx: AppContext, log: (msg: string) => void): () => void {
-  const { store, uploads, avatars, backups, hub } = ctx;
+  const { store, uploads, avatars, sounds, backups, hub } = ctx;
 
   const cleanup = async () => {
     try {
@@ -44,9 +44,9 @@ export function startMaintenance(ctx: AppContext, log: (msg: string) => void): (
       await uploads.remove(orphans);
       const stray = await uploads.removeUnknown(store.allAttachmentIds(), 10 * 60 * 1000);
       const strayAvatars = await avatars.removeUnknown(store.allAvatarIds(), 10 * 60 * 1000);
-      if (sessions || orphans.length || stray || strayAvatars) {
-        log(`limpeza: ${sessions} sessões expiradas, ${orphans.length + stray + strayAvatars} arquivos órfãos`);
-      }
+      const straySounds = await sounds.removeUnknown(store.allSoundIds(), 10 * 60 * 1000);
+      const files = orphans.length + stray + strayAvatars + straySounds;
+      if (sessions || files) log(`limpeza: ${sessions} sessões expiradas, ${files} arquivos órfãos`);
     } catch (err) {
       log(`falha na limpeza: ${(err as Error).message}`);
     }

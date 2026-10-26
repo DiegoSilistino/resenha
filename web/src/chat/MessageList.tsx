@@ -38,7 +38,8 @@ export function MessageList({ channel }: { channel: Channel }) {
       });
   }, [channel.id, state?.loaded]);
 
-  const loadOlder = useCallback((): Promise<void> => {
+  /** Carrega a página anterior; com `since`, tudo até essa mensagem de uma vez (pulo para antiga). */
+  const loadOlder = useCallback((since?: number): Promise<void> => {
     const s = useApp.getState().messages[channel.id];
     const el = scroller.current;
     if (!s?.loaded || s.loading || !s.hasMore || !el) return Promise.resolve();
@@ -47,7 +48,7 @@ export function MessageList({ channel }: { channel: Channel }) {
     useApp.getState().setMessages(channel.id, { loading: true });
     prependAnchor.current = { height: el.scrollHeight, top: el.scrollTop };
     return api
-      .messages(channel.id, oldest)
+      .messages(channel.id, oldest, since)
       .then((r) => useApp.getState().prependMessages(channel.id, r.messages, r.hasMore))
       .catch((err) => {
         prependAnchor.current = null;
@@ -56,29 +57,40 @@ export function MessageList({ channel }: { channel: Channel }) {
       });
   }, [channel.id]);
 
-  // Clique numa citação: rola até a original, buscando páginas antigas se preciso, e a destaca.
+  // Clique numa citação ou num resultado da busca: rola até a mensagem (carregando as antigas
+  // de uma vez, se preciso) e a destaca. O pedido é consumido: voltar ao canal depois não pula de novo.
   const jump = useUi((s) => (s.jump?.channelId === channel.id ? s.jump : null));
   useEffect(() => {
     if (!jump) return;
     let cancelled = false;
+    const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
     void (async () => {
-      for (let page = 0; page < 20 && !cancelled; page++) {
+      let fetchedRange = false;
+      for (let tries = 0; tries < 80 && !cancelled; tries++) {
         const el = document.getElementById(`msg-${jump.messageId}`);
         if (el) {
-          el.scrollIntoView({ block: "center", behavior: "smooth" });
+          // Perto: rola suave (dá para acompanhar). Longe: vai direto, sem animação de vários segundos.
+          const box = scroller.current;
+          const far = !box || Math.abs(el.getBoundingClientRect().top - box.getBoundingClientRect().top) > 2 * box.clientHeight;
+          el.scrollIntoView({ block: "center", behavior: far ? "instant" : "smooth" });
           el.dataset.flash = "true";
           setTimeout(() => delete el.dataset.flash, 1_800);
-          return;
+          break;
         }
         const s = useApp.getState().messages[channel.id];
-        if (!s?.loaded) await new Promise((r) => setTimeout(r, 150)); // primeira página ainda chegando
-        else if (!s.hasMore) break;
-        else {
-          await loadOlder();
-          await new Promise((r) => requestAnimationFrame(() => r(null)));
+        const oldest = s?.items[0]?.id;
+        if (!s?.loaded || s.loading) await new Promise((r) => setTimeout(r, 100)); // página ainda chegando
+        else if (!s.hasMore || fetchedRange || (oldest !== undefined && oldest <= jump.messageId)) {
+          toast.info("Não achei essa mensagem nesta conversa (pode ter sido apagada).");
+          break;
+        } else {
+          fetchedRange = true;
+          await loadOlder(jump.messageId);
+          await nextFrame(); // o React desenha a faixa nova antes de procurar de novo
+          await nextFrame();
         }
       }
-      if (!cancelled) toast.info("Não achei a mensagem original nesta conversa.");
+      if (!cancelled && useUi.getState().jump?.nonce === jump.nonce) useUi.setState({ jump: null });
     })();
     return () => {
       cancelled = true;

@@ -8,6 +8,7 @@ import type {
   PublicUser,
   Reaction,
   ServerEvent,
+  SoundboardSound,
   VoiceMember,
   WatchState,
 } from "@resenha/shared";
@@ -46,6 +47,10 @@ interface AppState {
   activeChannelId: string | null;
   /** Recursos que dependem da configuração do servidor (ex.: chave do GIPHY). */
   features: { gifs: boolean };
+  /** Sons da mesa de sons (de todo mundo), do mais antigo para o mais novo. */
+  sounds: SoundboardSound[];
+  /** Admins: id do erro mais recente no painel de erros (compara com o último visto neste aparelho). */
+  latestErrorId: number;
 
   setMe(me: Me | false): void;
   setConnection(status: ConnectionStatus): void;
@@ -80,6 +85,8 @@ const initial = {
   awayUnread: 0,
   activeChannelId: null,
   features: { gifs: false },
+  sounds: [] as SoundboardSound[],
+  latestErrorId: 0,
 };
 
 /** A pessoa está olhando para o app agora? */
@@ -230,6 +237,14 @@ export const useApp = create<AppState>()((set, get) => ({
         return set({ voice: { ...s.voice, [event.channelId]: event.members } });
       case "watch.state":
         return set({ watch: { ...s.watch, [event.state.channelId]: event.state } });
+      case "sound.upsert":
+        return set({ sounds: [...s.sounds.filter((x) => x.id !== event.sound.id), event.sound] });
+      case "sound.remove":
+        return set({ sounds: s.sounds.filter((x) => x.id !== event.soundId) });
+      case "admin.error":
+        return set({ latestErrorId: Math.max(s.latestErrorId, event.entry.id) });
+      case "soundboard.played":
+        return; // tocado pelo módulo da mesa de sons
       case "pong":
       case "notice":
         return; // tratados pelo cliente de tempo real
@@ -247,6 +262,8 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
     voice: e.voice,
     watch: e.watch,
     features: e.features ?? { gifs: false },
+    sounds: e.sounds ?? [],
+    latestErrorId: e.latestErrorId ?? 0,
   };
   // Numa reconexão, mensagens podem ter chegado enquanto estávamos fora: recarrega sob demanda.
   if (wasReady) patch.messages = {};

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
-import { clientMessage, WS_CLOSE_UNAUTHORIZED, type ClientMessage } from "@resenha/shared";
+import { clientMessage, LIMITS, WS_CLOSE_UNAUTHORIZED, type ClientMessage } from "@resenha/shared";
 import type { AppContext } from "../app.ts";
 import { isSameOrigin } from "../app.ts";
 import { toPublicUser } from "../store.ts";
@@ -12,9 +12,12 @@ import type { Connection } from "./hub.ts";
 const TYPING_INTERVAL_MS = 250;
 /** Proteção simples contra flood: no máximo N mensagens por janela de 1 s. */
 const MAX_MESSAGES_PER_SECOND = 20;
+/** Mesa de sons: um som a cada 1,5 s por pessoa (dá para brincar sem virar metralhadora). */
+const SOUNDBOARD_INTERVAL_MS = LIMITS.soundboardCooldownMs;
 
 export function registerSocket(app: FastifyInstance, ctx: AppContext) {
   const { hub, store, voice, watch } = ctx;
+  const lastSound = new Map<string, number>();
 
   app.get("/ws", { websocket: true }, (socket: WebSocket, req) => {
     if (!req.auth) return socket.close(WS_CLOSE_UNAUTHORIZED, "sem sessão");
@@ -73,6 +76,8 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
       watch: watch.snapshot(),
       serverTime: Date.now(),
       features: { gifs: !!ctx.gifs },
+      sounds: store.listSounds(),
+      ...(req.auth.user.role === "admin" ? { latestErrorId: store.latestClientErrorId() } : {}),
     });
   });
 
@@ -103,6 +108,20 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
       case "voice.flags":
         voice.setFlags(conn.userId, conn.id, msg);
         return;
+
+      case "soundboard.play": {
+        if (!voice.isIn(conn.userId, msg.channelId)) {
+          hub.send(conn, { type: "notice", level: "error", text: "Entre no canal de voz para tocar sons." });
+          return;
+        }
+        const now = Date.now();
+        if (now - (lastSound.get(conn.userId) ?? 0) < SOUNDBOARD_INTERVAL_MS) return;
+        if (!store.soundById(msg.soundId)) return;
+        lastSound.set(conn.userId, now);
+        const event = { type: "soundboard.played", channelId: msg.channelId, soundId: msg.soundId, userId: conn.userId } as const;
+        for (const connId of voice.connectionsIn(msg.channelId)) hub.sendToConnection(connId, event);
+        return;
+      }
 
       case "watch": {
         if (!voice.isIn(conn.userId, msg.channelId)) {

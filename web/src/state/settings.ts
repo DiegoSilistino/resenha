@@ -49,6 +49,12 @@ export interface Settings {
   voiceChatOpen: boolean;
   /** Avisar quando alguém entrar num canal de voz (opcional; desligado por padrão). */
   notifyVoiceJoin: boolean;
+  /** Ouvir os sons da mesa de sons que os amigos tocam na chamada. */
+  soundboardEnabled: boolean;
+  /** Volume da mesa de sons, de 0 a 1. */
+  soundboardVolume: number;
+  /** Admins: último erro do painel já visto neste aparelho. */
+  errorsSeenId: number;
   set(patch: Partial<Omit<Settings, "set" | "setUserVolume" | "setStreamVolume">>): void;
   setUserVolume(userId: string, volume: number): void;
   setStreamVolume(userId: string, volume: number): void;
@@ -93,6 +99,9 @@ export const useSettings = create<Settings>()(
       recentEmojis: [],
       voiceChatOpen: true,
       notifyVoiceJoin: false,
+      soundboardEnabled: true,
+      soundboardVolume: 0.7,
+      errorsSeenId: 0,
       set: (patch) => set(patch),
       setUserVolume: (userId, volume) =>
         set((s) => ({ userVolumes: { ...s.userVolumes, [userId]: Math.min(2, Math.max(0, volume)) } })),

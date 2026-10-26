@@ -93,7 +93,62 @@ export const MIGRATIONS: string[] = [
      resposta continua apontando para ela e mostra "mensagem apagada". */ `
   ALTER TABLE messages ADD COLUMN reply_to INTEGER;
   `,
+  /* 4: painel de erros e soundboard */ `
+  CREATE TABLE client_errors (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    detail     TEXT NOT NULL,
+    user_agent TEXT NOT NULL,
+    context    TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE sounds (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    emoji       TEXT NOT NULL,
+    uploader_id TEXT NOT NULL REFERENCES users(id),
+    mime        TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    created_at  INTEGER NOT NULL
+  );
+  `,
 ];
+
+/**
+ * Índice de busca (FTS5, sem diferenciar acentos e maiúsculas). Fica fora das migrações
+ * numeradas de propósito: se um dia o SQLite vier sem FTS5, o app sobe do mesmo jeito e a
+ * busca usa LIKE. Devolve se o índice está disponível.
+ */
+export function ensureSearchIndex(db: Db): boolean {
+  try {
+    const exists = db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'messages_fts'").get();
+    if (exists) return true;
+    transaction(db, () => {
+      db.exec(`
+        CREATE VIRTUAL TABLE messages_fts USING fts5(
+          content, content='messages', content_rowid='id', tokenize='unicode61 remove_diacritics 2'
+        );
+        CREATE TRIGGER messages_fts_ai AFTER INSERT ON messages BEGIN
+          INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+        END;
+        CREATE TRIGGER messages_fts_ad AFTER DELETE ON messages BEGIN
+          INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, old.content);
+        END;
+        CREATE TRIGGER messages_fts_au AFTER UPDATE OF content ON messages BEGIN
+          INSERT INTO messages_fts(messages_fts, rowid, content) VALUES ('delete', old.id, old.content);
+          INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+        END;
+        INSERT INTO messages_fts(messages_fts) VALUES ('rebuild');
+      `);
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function openDatabase(file: string): Db {
   const db = new DatabaseSync(file);
@@ -105,6 +160,7 @@ export function openDatabase(file: string): Db {
   `);
   backupBeforeMigrating(db, file);
   migrate(db);
+  ensureSearchIndex(db);
   return db;
 }
 

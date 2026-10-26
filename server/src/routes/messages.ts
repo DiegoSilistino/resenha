@@ -26,6 +26,7 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
     async (req) => {
       const channel = messageChannel(req.params.id);
       const q = parse(listMessagesQuery, req.query);
+      if (q.since) return store.listMessagesSince(channel.id, q.before, q.since);
       const messages = store.listMessages(channel.id, q.before, q.limit);
       return { messages, hasMore: messages.length === q.limit };
     },

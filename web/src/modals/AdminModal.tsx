@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ArrowDown, ArrowUp, Copy, Download, Hash, Trash2, Volume2 } from "lucide-react";
-import type { BackupInfo, ChannelKind, Role } from "@resenha/shared";
+import type { BackupInfo, Channel, ChannelKind, ClientErrorEntry, ClientErrorKind, Role } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { api, BACKUP_DOWNLOAD_URL, type InviteWithUrl } from "../lib/api.ts";
-import { formatBytes, formatDay, formatFull } from "../lib/format.ts";
-import { useApp } from "../state/app.ts";
+import { formatBytes, formatDay, formatFull, formatTime } from "../lib/format.ts";
+import { describeUserAgent } from "../lib/userAgent.ts";
+import { displayNameOf, useApp } from "../state/app.ts";
+import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 
@@ -14,11 +16,14 @@ const TABS = [
   { id: "channels", label: "Canais" },
   { id: "members", label: "Membros" },
   { id: "backup", label: "Backup" },
+  { id: "errors", label: "Erros" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
 export function AdminModal() {
-  const [tab, setTab] = useState<TabId>("invites");
+  const hasNewErrors = useHasNewErrors();
+  // Chegou aqui pelo aviso de erro novo: abre direto na aba de erros.
+  const [tab, setTab] = useState<TabId>(() => (hasNewErrors ? "errors" : "invites"));
   return (
     <Modal title="Administrar o grupo" onClose={() => useUi.getState().setAdminOpen(false)} wide>
       <div className="tabs" role="tablist">
@@ -32,6 +37,7 @@ export function AdminModal() {
             onClick={() => setTab(t.id)}
           >
             {t.label}
+            {t.id === "errors" && hasNewErrors && tab !== "errors" && <span className="unread-dot" aria-label="erros novos" />}
           </button>
         ))}
       </div>
@@ -40,6 +46,7 @@ export function AdminModal() {
         {tab === "channels" && <ChannelsTab />}
         {tab === "members" && <MembersTab />}
         {tab === "backup" && <BackupTab />}
+        {tab === "errors" && <ErrorsTab />}
       </div>
     </Modal>
   );
@@ -369,7 +376,7 @@ function BackupTab() {
               : `Último backup baixado há ${ageDays} ${ageDays === 1 ? "dia" : "dias"} (${formatFull(info.lastDownloadAt!)}).`}
         </strong>
         <span>
-          O backup completo tem as contas, as mensagens, os anexos e as fotos. Guarde no seu PC ou no Google Drive: se a
+          O backup completo tem as contas, as mensagens, os anexos, as fotos e os sons da mesa. Guarde no PC ou no Google Drive: se a
           VPS se perder, é com ele que o Resenha volta.{stale ? " Vale baixar um agora e repetir toda semana." : ""}
         </span>
       </div>
@@ -404,6 +411,154 @@ function BackupTab() {
       <p className="muted small-note">
         Para restaurar, use o comando <code>bash deploy/restore.sh</code> na VPS (o passo a passo está no DEPLOY.md).
       </p>
+    </div>
+  );
+}
+
+/** Tem erro no painel que ainda não foi visto neste aparelho? */
+export function useHasNewErrors(): boolean {
+  const latest = useApp((s) => s.latestErrorId);
+  const seen = useSettings((s) => s.errorsSeenId);
+  return latest > seen;
+}
+
+const KIND_LABEL: Record<ClientErrorKind, string> = {
+  voz: "Chamada",
+  microfone: "Microfone ou câmera",
+  tela: "Tela",
+  ruido: "Redução de ruído",
+  inesperado: "Erro do app",
+};
+
+const CONTEXT_LABEL: Record<string, string> = {
+  pagina: "Página",
+  voz: "Voz",
+  ruido: "Redução de ruído",
+  pushToTalk: "Push-to-talk",
+  url: "Servidor de voz",
+  motivo: "Motivo",
+  perfil: "Qualidade da tela",
+  comSom: "Tela com som",
+  arquivo: "Arquivo",
+};
+
+const VOICE_STATUS: Record<string, string> = {
+  idle: "fora da chamada",
+  connecting: "entrando",
+  connected: "na chamada",
+  reconnecting: "reconectando",
+};
+const NOISE_MODE: Record<string, string> = { ai: "IA", browser: "do navegador", off: "desligada" };
+
+/** Valor legível: nome do canal em vez do endereço, estados em português, sim/não. */
+function contextValue(key: string, v: string | number | boolean, channels: Channel[]): string {
+  if (typeof v === "boolean") return v ? "sim" : "não";
+  const text = String(v);
+  if (key === "voz") return VOICE_STATUS[text] ?? text;
+  if (key === "ruido") return NOISE_MODE[text] ?? text;
+  if (key === "pagina") {
+    const id = /^\/c\/([^/]+)/.exec(text)?.[1];
+    const channel = id ? channels.find((c) => c.id === id) : undefined;
+    if (channel) return channel.kind === "voice" ? `canal de voz ${channel.name}` : `#${channel.name}`;
+  }
+  return text;
+}
+
+/** Detalhe técnico que só repete a mensagem ("Error: <mensagem>") não acrescenta nada. */
+const usefulDetail = (e: ClientErrorEntry) => (e.detail && !e.detail.endsWith(e.message) ? e.detail : "");
+
+function ErrorsTab() {
+  const [errors, setErrors] = useState<ClientErrorEntry[] | null>(null);
+  const latest = useApp((s) => s.latestErrorId);
+  const users = useApp((s) => s.users);
+  const channels = useApp((s) => s.channels);
+
+  // Recarrega quando chega um erro novo com a aba aberta; e marca tudo como visto.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .adminErrors()
+      .then((r) => {
+        if (cancelled) return;
+        setErrors(r.errors);
+        const newest = Math.max(latest, r.errors[0]?.id ?? 0);
+        useSettings.getState().set({ errorsSeenId: newest });
+      })
+      .catch((err) => toast.fromError(err));
+    return () => {
+      cancelled = true;
+    };
+  }, [latest]);
+
+  async function clear() {
+    if (!confirm("Apagar todos os erros registrados?")) return;
+    try {
+      await api.clearAdminErrors();
+      setErrors([]);
+    } catch (err) {
+      toast.fromError(err);
+    }
+  }
+
+  if (!errors) return <p className="muted">Carregando…</p>;
+
+  if (errors.length === 0) {
+    return (
+      <div className="callout">
+        <strong>Nenhum erro registrado.</strong>
+        <span>
+          Quando algo falhar no navegador de alguém (entrar na chamada, microfone, tela, redução de ruído), aparece aqui
+          com o que a pessoa viu e os detalhes técnicos. Assim você não depende de print.
+        </span>
+      </div>
+    );
+  }
+
+  const now = Date.now();
+  return (
+    <div className="form errors-tab">
+      <div className="errors-head">
+        <span className="muted">
+          {errors.length === 1 ? "1 erro" : `${errors.length} erros`} (os mais recentes primeiro; ficam os últimos 500)
+        </span>
+        <button type="button" className="btn btn-small btn-ghost" onClick={() => void clear()}>
+          <Trash2 size={14} aria-hidden="true" /> Limpar
+        </button>
+      </div>
+      <ul className="error-list">
+        {errors.map((e) => {
+          const detail = usefulDetail(e);
+          const context = Object.entries(e.context).filter(([, v]) => v !== "");
+          return (
+            <li key={e.id} className="error-item" data-kind={e.kind}>
+              <div className="error-top">
+                <span className="error-kind">{KIND_LABEL[e.kind] ?? e.kind}</span>
+                <Avatar user={users[e.userId]} size={20} />
+                <strong>{displayNameOf(users, e.userId)}</strong>
+                <time className="muted" dateTime={new Date(e.createdAt).toISOString()} title={formatFull(e.createdAt)}>
+                  {formatDay(e.createdAt, now)} às {formatTime(e.createdAt)}
+                </time>
+              </div>
+              <p className="error-message">{e.message}</p>
+              <p className="error-meta muted">{describeUserAgent(e.userAgent)}</p>
+              {(detail || context.length > 0) && (
+                <details>
+                  <summary>Detalhes técnicos</summary>
+                  <dl className="error-context">
+                    {context.map(([k, v]) => (
+                      <div key={k}>
+                        <dt>{CONTEXT_LABEL[k] ?? k}</dt>
+                        <dd>{contextValue(k, v, channels)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {detail && <pre className="error-detail">{detail}</pre>}
+                </details>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { Avatar } from "../components/Avatar.tsx";
 import { useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { toggleStreamMuted, useVoice } from "./controller.ts";
+import { SignalIcon } from "./SignalIcon.tsx";
+import { PLAY_MARK_MS } from "./soundboard.ts";
 
 /** Fecha o painel ao clicar fora dele ou apertar Esc. */
 function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void) {
@@ -91,9 +93,31 @@ export function ParticipantTile({ participant, channelId }: { participant: Parti
         ) : micOff ? (
           <MicOff size={14} aria-label="microfone desligado" />
         ) : null}
+        <SignalIcon quality={participant.connectionQuality} />
       </div>
+      <SoundMark userId={userId} />
       {!participant.isLocal && <VolumeControl userId={userId} name={name} />}
     </div>
+  );
+}
+
+/** Figurinha do som que a pessoa acabou de tocar na mesa de sons (some sozinha). */
+function SoundMark({ userId }: { userId: string }) {
+  const play = useVoice((s) => s.soundPlays[userId]);
+  const sound = useApp((s) => (play ? s.sounds.find((x) => x.id === play.soundId) : undefined));
+  const [, expire] = useState(0);
+  const left = play ? play.at + PLAY_MARK_MS - Date.now() : 0;
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = setTimeout(() => expire((n) => n + 1), left);
+    return () => clearTimeout(t);
+  }, [left, play?.at]);
+  if (!sound || left <= 0) return null;
+  return (
+    <span key={play!.at} className="sound-mark" role="status" title={`Tocou "${sound.name}"`}>
+      <span aria-hidden="true">{sound.emoji}</span>
+      <span className="sr-only">tocou o som {sound.name}</span>
+    </span>
   );
 }
 

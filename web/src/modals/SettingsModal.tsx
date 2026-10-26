@@ -340,6 +340,33 @@ function NotificationsTab() {
           </button>
         </div>
       </fieldset>
+      <fieldset className="field">
+        <legend>Mesa de sons</legend>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={s.soundboardEnabled}
+            onChange={(e) => s.set({ soundboardEnabled: e.target.checked })}
+          />
+          <span>
+            Ouvir os sons que a turma toca na chamada
+            <small>Desligado, você continua podendo tocar sons para os outros; só não ouve nenhum.</small>
+          </span>
+        </label>
+        {s.soundboardEnabled && (
+          <label className="field">
+            <span>Volume da mesa de sons: {Math.round(s.soundboardVolume * 100)}%</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={s.soundboardVolume}
+              onChange={(e) => s.set({ soundboardVolume: Number(e.target.value) })}
+            />
+          </label>
+        )}
+      </fieldset>
     </div>
   );
 }

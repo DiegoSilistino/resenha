@@ -70,6 +70,19 @@ export class Hub {
     for (const c of this.conns.values()) if (c.userId === userId) this.send(c, event);
   }
 
+  sendToConnection(connId: string, event: ServerEvent): void {
+    const c = this.conns.get(connId);
+    if (c) this.send(c, event);
+  }
+
+  /** Só para quem passar no filtro (ex.: administradores). */
+  sendWhere(predicate: (userId: string) => boolean, event: ServerEvent): void {
+    const data = JSON.stringify(event);
+    for (const c of this.conns.values()) {
+      if (predicate(c.userId) && c.socket.readyState === c.socket.OPEN) c.socket.send(data);
+    }
+  }
+
   /** Fecha conexões que satisfazem o filtro (ex.: sessão revogada, conta desativada). */
   closeWhere(predicate: (c: Connection) => boolean, code: number, reason: string): void {
     for (const c of [...this.conns.values()]) {

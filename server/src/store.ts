@@ -7,14 +7,41 @@ import {
   type Attachment,
   type Channel,
   type ChannelKind,
+  type ClientErrorEntry,
+  type ClientErrorKind,
   type Invite,
   type Message,
   type MessageReference,
   type PublicUser,
   type Reaction,
   type Role,
+  type SearchResult,
+  type SoundboardSound,
 } from "@resenha/shared";
 import { transaction, type Db } from "./db.ts";
+import { ftsQuery, makeSnippet, MARK_END, MARK_START } from "./search.ts";
+
+/** Erros guardados para o painel do admin (os mais antigos saem). */
+const CLIENT_ERRORS_KEEP = 500;
+
+interface SoundRow {
+  id: string;
+  name: string;
+  emoji: string;
+  uploader_id: string;
+  mime: string;
+  size: number;
+  created_at: number;
+}
+
+const toSound = (r: SoundRow): SoundboardSound => ({
+  id: r.id,
+  name: r.name,
+  emoji: r.emoji,
+  uploaderId: r.uploader_id,
+  url: `/api/sounds/${r.id}`,
+  createdAt: r.created_at,
+});
 
 interface UserRow {
   id: string;
@@ -424,6 +451,34 @@ export class Store {
     return this.hydrate(rows);
   }
 
+  /**
+   * Faixa contínua para pular até uma mensagem antiga: tudo de `before` (exclusive) até `since`
+   * (inclusive), mais `context` mensagens anteriores. Se a faixa passar de `max`, devolve só as
+   * `max` mais novas (a mensagem procurada não vem; quem chamou avisa).
+   */
+  listMessagesSince(
+    channelId: string,
+    before: number | undefined,
+    since: number,
+    max: number = LIMITS.jumpMaxMessages,
+    context: number = 20,
+  ): { messages: Message[]; hasMore: boolean } {
+    const top = before ?? Number.MAX_SAFE_INTEGER;
+    const range = this.db
+      .prepare(`SELECT * FROM messages WHERE channel_id = ? AND id < ? AND id >= ? ORDER BY id DESC LIMIT ?`)
+      .all(channelId, top, since, max) as unknown as MessageRow[];
+    if (range.length === max) {
+      range.reverse();
+      return { messages: this.hydrate(range), hasMore: true };
+    }
+    const floor = range.at(-1)?.id ?? top;
+    const older = this.db
+      .prepare(`SELECT * FROM messages WHERE channel_id = ? AND id < ? ORDER BY id DESC LIMIT ?`)
+      .all(channelId, floor, context) as unknown as MessageRow[];
+    const rows = [...range, ...older].reverse();
+    return { messages: this.hydrate(rows), hasMore: older.length === context };
+  }
+
   messageById(id: number): Message | null {
     const r = this.db.prepare("SELECT * FROM messages WHERE id = ?").get(id) as MessageRow | undefined;
     return r ? this.hydrate([r])[0]! : null;
@@ -534,6 +589,138 @@ export class Store {
     return out;
   }
 
+  // ---------- busca ----------
+
+  private ftsAvailable: boolean | null = null;
+
+  /** Mensagens que contêm todas as palavras (mais novas primeiro). GIFs ficam de fora. */
+  search(opts: { terms: string[]; channelId?: string; before?: number; limit: number }): SearchResult[] {
+    const { terms, channelId, before, limit } = opts;
+    this.ftsAvailable ??= !!this.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'messages_fts'").get();
+    const filters = ["m.content NOT LIKE 'https://%giphy.com/%'"];
+    const params: (string | number)[] = [];
+    if (channelId) {
+      filters.push("m.channel_id = ?");
+      params.push(channelId);
+    }
+    if (before) {
+      filters.push("m.id < ?");
+      params.push(before);
+    }
+
+    let rows: (MessageRow & { snip: string })[];
+    if (this.ftsAvailable) {
+      const match = ftsQuery(terms);
+      if (!match) return [];
+      rows = this.db
+        .prepare(
+          `SELECT m.*, snippet(messages_fts, 0, ?, ?, '…', 14) AS snip
+           FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid
+           WHERE messages_fts MATCH ? AND ${filters.join(" AND ")}
+           ORDER BY m.id DESC LIMIT ?`,
+        )
+        .all(MARK_START, MARK_END, match, ...params, limit) as unknown as (MessageRow & { snip: string })[];
+    } else {
+      const likes = terms.map(() => "m.content LIKE ? ESCAPE '\\'");
+      const likeParams = terms.map((t) => `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      rows = (
+        this.db
+          .prepare(
+            `SELECT m.* FROM messages m WHERE ${[...likes, ...filters].join(" AND ")} ORDER BY m.id DESC LIMIT ?`,
+          )
+          .all(...likeParams, ...params, limit) as unknown as MessageRow[]
+      ).map((r) => ({ ...r, snip: makeSnippet(r.content, terms) }));
+    }
+    const messages = this.hydrate(rows);
+    return messages.map((message, i) => ({ message, snippet: rows[i]!.snip }));
+  }
+
+  // ---------- erros reportados pelos navegadores ----------
+
+  insertClientError(e: {
+    userId: string;
+    kind: ClientErrorKind;
+    message: string;
+    detail: string;
+    userAgent: string;
+    context: Record<string, string | number | boolean>;
+  }): ClientErrorEntry {
+    return transaction(this.db, () => {
+      const res = this.db
+        .prepare(
+          `INSERT INTO client_errors (user_id, kind, message, detail, user_agent, context, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(e.userId, e.kind, e.message, e.detail, e.userAgent, JSON.stringify(e.context), Date.now());
+      this.db
+        .prepare("DELETE FROM client_errors WHERE id <= (SELECT MAX(id) FROM client_errors) - ?")
+        .run(CLIENT_ERRORS_KEEP);
+      return this.listClientErrors(1).find((x) => x.id === Number(res.lastInsertRowid))!;
+    });
+  }
+
+  latestClientErrorId(): number {
+    const row = this.db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM client_errors").get() as { id: number };
+    return Number(row.id);
+  }
+
+  listClientErrors(limit = 200): ClientErrorEntry[] {
+    const rows = this.db.prepare("SELECT * FROM client_errors ORDER BY id DESC LIMIT ?").all(limit) as {
+      id: number;
+      user_id: string;
+      kind: ClientErrorKind;
+      message: string;
+      detail: string;
+      user_agent: string;
+      context: string;
+      created_at: number;
+    }[];
+    return rows.map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      kind: r.kind,
+      message: r.message,
+      detail: r.detail,
+      userAgent: r.user_agent,
+      context: safeJson(r.context),
+      createdAt: r.created_at,
+    }));
+  }
+
+  clearClientErrors(): void {
+    this.db.prepare("DELETE FROM client_errors").run();
+  }
+
+  // ---------- soundboard ----------
+
+  listSounds(): SoundboardSound[] {
+    return (this.db.prepare("SELECT * FROM sounds ORDER BY created_at").all() as unknown as SoundRow[]).map(toSound);
+  }
+
+  soundById(id: string): (SoundboardSound & { mime: string }) | null {
+    const r = this.db.prepare("SELECT * FROM sounds WHERE id = ?").get(id) as SoundRow | undefined;
+    return r ? { ...toSound(r), mime: r.mime } : null;
+  }
+
+  countSounds(): number {
+    return (this.db.prepare("SELECT COUNT(*) AS n FROM sounds").get() as { n: number }).n;
+  }
+
+  insertSound(s: { id: string; name: string; emoji: string; uploaderId: string; mime: string; size: number }): SoundboardSound {
+    this.db
+      .prepare("INSERT INTO sounds (id, name, emoji, uploader_id, mime, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(s.id, s.name, s.emoji, s.uploaderId, s.mime, s.size, Date.now());
+    return this.soundById(s.id)!;
+  }
+
+  deleteSound(id: string): boolean {
+    return Number(this.db.prepare("DELETE FROM sounds WHERE id = ?").run(id).changes) > 0;
+  }
+
+  allSoundIds(): Set<string> {
+    return new Set((this.db.prepare("SELECT id FROM sounds").all() as { id: string }[]).map((r) => r.id));
+  }
+
   // ---------- valores do sistema ----------
 
   getMeta(key: string): string | null {
@@ -634,6 +821,15 @@ export class Store {
 
   allAttachmentIds(): Set<string> {
     return new Set((this.db.prepare("SELECT id FROM attachments").all() as { id: string }[]).map((r) => r.id));
+  }
+}
+
+function safeJson(text: string): Record<string, string | number | boolean> {
+  try {
+    const v = JSON.parse(text) as unknown;
+    return v && typeof v === "object" ? (v as Record<string, string | number | boolean>) : {};
+  } catch {
+    return {};
   }
 }
 

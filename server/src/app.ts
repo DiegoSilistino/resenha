@@ -19,6 +19,9 @@ import { registerAdminRoutes } from "./routes/admin.ts";
 import { registerAvatarRoutes } from "./routes/avatars.ts";
 import { registerBackupRoutes } from "./routes/backup.ts";
 import { registerGifRoutes } from "./routes/gifs.ts";
+import { registerDiagnosticsRoutes } from "./routes/diagnostics.ts";
+import { registerSearchRoutes } from "./routes/search.ts";
+import { registerSoundRoutes } from "./routes/sounds.ts";
 import { createGiphy, type GifProvider } from "./gifs/giphy.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
 import { registerChannelRoutes } from "./routes/channels.ts";
@@ -52,6 +55,7 @@ export interface AppContext {
   gateway: VoiceGateway;
   uploads: UploadStorage;
   avatars: UploadStorage;
+  sounds: UploadStorage;
   backups: BackupService;
   /** null quando o servidor não tem chave do GIPHY. */
   gifs: GifProvider | null;
@@ -87,16 +91,19 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
     gateway: deps.voiceGateway ?? new LiveKitGateway(config.livekit),
     uploads: new UploadStorage(config.uploadsDir),
     avatars: new UploadStorage(config.avatarsDir),
+    sounds: new UploadStorage(config.soundsDir),
     backups: new BackupService(deps.db, store, {
       data: config.dataDir,
       backups: config.backupsDir,
       uploads: config.uploadsDir,
       avatars: config.avatarsDir,
+      sounds: config.soundsDir,
     }),
     gifs: config.giphy ? createGiphy({ ...config.giphy, ...(deps.gifFetch ? { fetch: deps.gifFetch } : {}) }) : null,
   };
   await ctx.uploads.init();
   await ctx.avatars.init();
+  await ctx.sounds.init();
   await ctx.backups.init();
   voice.onChannelEmpty((channelId) => ctx.watch.endSession(channelId));
 
@@ -166,6 +173,9 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   registerAvatarRoutes(app, ctx);
   registerBackupRoutes(app, ctx);
   registerGifRoutes(app, ctx);
+  registerDiagnosticsRoutes(app, ctx);
+  registerSearchRoutes(app, ctx);
+  registerSoundRoutes(app, ctx);
   registerVoiceRoutes(app, ctx);
   registerSocket(app, ctx);
 

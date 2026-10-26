@@ -19,6 +19,17 @@ export const LIMITS = {
   avatarMinSide: 32,
   /** Emojis diferentes numa mesma mensagem. */
   reactionsPerMessage: 20,
+  /** Soundboard: sons curtos, poucos e leves. */
+  soundMaxBytes: 1024 * 1024,
+  soundMaxSeconds: 5,
+  soundNameMax: 24,
+  soundsMax: 60,
+  /** Busca: resultados por página. */
+  searchPageSize: 25,
+  /** Ao pular para uma mensagem antiga (busca, citação), carrega de uma vez até este tanto. */
+  jumpMaxMessages: 1_500,
+  /** Intervalo mínimo entre dois sons da mesma pessoa na mesa de sons. */
+  soundboardCooldownMs: 1_500,
 } as const;
 
 /** Usuário: letras minúsculas, números, ponto, hífen e underline. */

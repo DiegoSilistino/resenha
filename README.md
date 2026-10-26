@@ -10,6 +10,7 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
   - GIFs do GIPHY, emoji na caixa de texto e ||spoiler||;
   - edição (seta ↑ edita a última) e exclusão;
   - "fulano está digitando";
+  - busca de mensagens (em todos os canais ou só no aberto), sem ligar para acento e aceitando palavra pela metade; clicar no resultado leva até a mensagem, mesmo se for antiga;
   - não lidas com contador na aba ("(3) #geral") e menções (@usuario) destacadas;
   - notificações do Windows quando o app está minimizado (todas as mensagens, só menções ou nunca);
   - formatação estilo Discord.
@@ -22,9 +23,12 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
   - redução de ruído com IA (GTCRN, roda no navegador): tira teclado, mouse e barulho de fundo até enquanto a pessoa fala;
   - sensibilidade do microfone (automática ou manual, com medidor e "me ouvir"): só transmite quando você fala;
   - compartilhamento de tela com áudio e câmera, com perfis de qualidade (de "texto nítido" a 1440p a 60 fps) e indicador de resolução, fps e Mbps;
+  - mesa de sons: qualquer um envia trechos de até 5 s (escolhe o pedaço do áudio, o volume é igualado sozinho) e toca para a chamada; cada um tem o próprio volume e pode desligar;
+  - indicador de conexão (barrinhas) de cada pessoa, para saber de quem é a internet ruim;
   - quem fala "acende".
 - **Assistir juntos.** Uma fila do YouTube sincronizada no mesmo segundo para todos, que serve para música e para cinema. Quem está no canal pausa, pula e adianta. O player continua tocando enquanto você navega pelo chat.
 - **Legendas ao vivo.** Cada pessoa transcreve a própria fala no navegador e o texto vai para a sala, sem custo de servidor.
+- **Painel de erros para o admin.** Quando algo falha no navegador de alguém (entrar na chamada, microfone, tela, redução de ruído), o erro aparece em ⚙ Administrar → Erros com quem, quando, navegador e detalhes técnicos. A engrenagem ganha um pontinho vermelho quando chega erro novo.
 - **Funciona no navegador e no celular**, e pode ser instalado como app (PWA).
 
 ## Como funciona
@@ -127,7 +131,7 @@ Em desenvolvimento, os mesmos comandos rodam com `npm run cli -- invite --admin`
 
 ### Backup
 
-Os dados (banco, anexos e fotos) ficam no volume `app-data`. Há três camadas, todas automáticas menos a última:
+Os dados (banco, anexos, fotos e sons da mesa) ficam no volume `app-data`. Há três camadas, todas automáticas menos a última:
 
 1. **Cópia diária do banco** em `backups/` dentro do volume, guardando as últimas 7. Serve para voltar atrás se algo for apagado sem querer.
 2. **Cópia antes de cada atualização** que mude a estrutura do banco (`backups/resenha-antes-da-vN-….db`).
@@ -150,7 +154,7 @@ Os logs do Docker têm tamanho máximo (3 arquivos de 10 MB por serviço), entã
 - **Senhas.** Guardadas com scrypt. O login leva o mesmo tempo exista ou não o usuário, para não revelar quem tem conta. Há limite de tentativas.
 - **Sessões.** Cookie `HttpOnly` + `SameSite=Lax`. O banco guarda só o hash do token. Trocar a senha ou desativar uma conta derruba as outras sessões na hora, inclusive a voz.
 - **CSRF e WebSocket.** Mutações e conexões WebSocket vindas de outros sites são recusadas, com checagem de `Origin`.
-- **Anexos.** O tipo é detectado pelos bytes do arquivo, e não pela extensão. Só imagens e vídeos reais aparecem na conversa; o resto vira download com `nosniff` e `CSP sandbox`, então um HTML disfarçado de foto não executa.
+- **Anexos e sons.** O tipo é detectado pelos bytes do arquivo, e não pela extensão. Só imagens e vídeos reais aparecem na conversa; o resto vira download com `nosniff` e `CSP sandbox`, então um HTML disfarçado de foto não executa.
 - **Mensagens.** A formatação gera elementos React, nunca HTML cru, então não há injeção de script.
 - **Política de segurança (CSP).** Restrita, liberando só o player do YouTube.
 

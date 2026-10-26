@@ -20,6 +20,7 @@ import {
 import { CAPTIONS_TOPIC } from "@resenha/shared";
 import { api, ApiError } from "../lib/api.ts";
 import { realtime } from "../lib/realtime.ts";
+import { reportError } from "../lib/errors.ts";
 import { playSound } from "../lib/sounds.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
@@ -106,7 +107,9 @@ export async function joinVoice(channelId: string): Promise<void> {
     if (room === r) room = null;
     resetCallState();
     console.error("[voz] falha ao conectar em", url || "(sem URL)", err);
-    toast.error(joinErrorMessage(err, url));
+    const message = joinErrorMessage(err, url);
+    toast.error(message);
+    reportError("voz", message, err, { url, ...(err instanceof ConnectionError ? { motivo: String(err.reason) } : {}) });
   }
 }
 
@@ -189,6 +192,7 @@ function wire(r: Room) {
         return { captions, version: s.version + 1 };
       });
     })
+    .on(RoomEvent.ConnectionQualityChanged, bump)
     .on(RoomEvent.TrackMuted, bump)
     .on(RoomEvent.TrackUnmuted, bump)
     .on(RoomEvent.TrackPublished, bump)
@@ -222,7 +226,9 @@ function wire(r: Room) {
     })
     .on(RoomEvent.MediaDevicesError, (err: Error) => {
       // Falhas da captura de tela têm aviso próprio (em startScreenShare); este é de microfone/câmera.
-      if (!capturingScreen) toast.error(deviceErrorMessage(err));
+      if (capturingScreen) return;
+      toast.error(deviceErrorMessage(err));
+      reportError("microfone", deviceErrorMessage(err), err);
     })
     .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
       // saída iniciada por nós, ou falha ao conectar (o joinVoice avisa com a mensagem certa)
@@ -234,7 +240,12 @@ function wire(r: Room) {
       clearAudioSink();
       resetCallState();
       realtime.send({ type: "voice.leave" });
+      // O próprio LiveKit desconecta ao fechar ou recarregar a página: não é queda.
+      if (reason === DisconnectReason.CLIENT_INITIATED) return;
       toast.error(disconnectMessage(reason));
+      if (isUnexpectedDisconnect(reason)) {
+        reportError("voz", disconnectMessage(reason), undefined, { motivo: DisconnectReason[reason ?? 0] ?? String(reason) });
+      }
     });
 }
 
@@ -243,6 +254,15 @@ function onLocalTracksChanged(r: Room) {
   setV({ screenSharing: lp.isScreenShareEnabled, cameraOn: lp.isCameraEnabled });
   syncFlags();
   bump();
+}
+
+/** Saídas com motivo conhecido (outra aba, removido, sala encerrada) não são erro para o painel. */
+function isUnexpectedDisconnect(reason?: DisconnectReason): boolean {
+  return (
+    reason !== DisconnectReason.DUPLICATE_IDENTITY &&
+    reason !== DisconnectReason.PARTICIPANT_REMOVED &&
+    reason !== DisconnectReason.ROOM_DELETED
+  );
 }
 
 function disconnectMessage(reason?: DisconnectReason): string {
@@ -308,6 +328,7 @@ let warnedAi = false;
 function aiUnavailable() {
   if (warnedAi) return;
   warnedAi = true;
+  reportError("ruido", "A redução de ruído com IA não carregou");
   toast.error(
     "A redução de ruído com IA não funcionou neste navegador. Em Configurações → Áudio, escolha a básica do navegador.",
   );
@@ -322,6 +343,7 @@ async function attachGate(track: LocalAudioTrack) {
   } catch (err) {
     // sem a cadeia a chamada funciona igual, só sem IA e sem cortar o ruído entre as falas
     console.warn("[voz] não foi possível ligar a redução de ruído e a sensibilidade", err);
+    reportError("ruido", "Não foi possível ligar a redução de ruído e a sensibilidade", err);
     if (useSettings.getState().noiseMode === "ai") aiUnavailable();
   }
 }
@@ -350,6 +372,7 @@ async function doApplyMic() {
     setV({ muted: true });
     syncFlags();
     toast.error(deviceErrorMessage(err));
+    reportError("microfone", deviceErrorMessage(err), err);
   }
   updateCaptioner();
   bump();
@@ -438,6 +461,7 @@ export async function startScreenShare(qualityId: ScreenQualityId, withAudio: bo
       const e = err as { name?: string; message?: string };
       console.error(`[voz] falha ao transmitir a tela (perfil ${qualityId}): ${e?.name}: ${e?.message}`, err);
       toast.error(advice.message);
+      reportError("tela", advice.message, err, { perfil: qualityId, comSom: withAudio });
     }
     if (advice.retryWith) {
       // Reabre a escolha já no perfil sugerido: tentar de novo é um clique.
@@ -462,6 +486,7 @@ export async function toggleCamera(): Promise<void> {
     });
   } catch (err) {
     toast.error(deviceErrorMessage(err));
+    reportError("microfone", `Câmera: ${deviceErrorMessage(err)}`, err);
   } finally {
     onLocalTracksChanged(r);
   }

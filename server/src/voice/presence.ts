@@ -74,6 +74,11 @@ export class VoicePresence {
     return this.byUser.get(userId)?.channelId === channelId;
   }
 
+  /** Conexões (abas) que estão de fato naquela chamada. */
+  connectionsIn(channelId: string): string[] {
+    return [...this.byUser.values()].filter((e) => e.channelId === channelId).map((e) => e.connId);
+  }
+
   members(channelId: string): VoiceMember[] {
     return [...this.byUser.values()]
       .filter((e) => e.channelId === channelId)

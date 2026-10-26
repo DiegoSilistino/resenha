@@ -22,6 +22,7 @@ import { Avatar } from "../components/Avatar.tsx";
 import { ChatPanel } from "../chat/ChatPanel.tsx";
 import { useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
+import { SearchButton } from "../search/SearchButton.tsx";
 import { useUi } from "../state/ui.ts";
 import { WatchPanel } from "../watch/WatchPanel.tsx";
 import { useWatchSlot } from "../watch/slot.ts";
@@ -38,6 +39,7 @@ import {
   unlockAudio,
   useVoice,
 } from "./controller.ts";
+import { SoundboardControl } from "./SoundboardPanel.tsx";
 import { ParticipantTile, ScreenTile } from "./Tiles.tsx";
 
 export function VoiceView({ channel }: { channel: Channel }) {
@@ -59,6 +61,15 @@ export function VoiceView({ channel }: { channel: Channel }) {
     useUi.getState().setPageTitle(channel.name);
   }, [channel.name]);
 
+  // Pulo para uma mensagem deste chat (busca, citação): abre o painel do chat para ela aparecer.
+  const jumpNonce = useUi((s) => (s.jump?.channelId === channel.id ? s.jump.nonce : 0));
+  useEffect(() => {
+    if (!jumpNonce) return;
+    if (narrow) setNarrowOpen(true);
+    else useSettings.getState().set({ voiceChatOpen: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpNonce]);
+
   return (
     <main className="main voice-view">
       <header className="main-header">
@@ -72,17 +83,20 @@ export function VoiceView({ channel }: { channel: Channel }) {
         </button>
         <Volume2 size={20} aria-hidden="true" className="header-icon" />
         <h1 className="main-title">{channel.name}</h1>
-        <button
-          type="button"
-          className="icon-btn header-action"
-          data-badge={!chatOpen && unread ? true : undefined}
-          aria-pressed={chatOpen}
-          aria-label={chatOpen ? "Fechar o chat da chamada" : "Abrir o chat da chamada"}
-          title={chatOpen ? "Fechar o chat" : "Abrir o chat"}
-          onClick={toggleChat}
-        >
-          <MessageSquare size={20} />
-        </button>
+        <div className="header-actions">
+          <SearchButton />
+          <button
+            type="button"
+            className="icon-btn header-action"
+            data-badge={!chatOpen && unread ? true : undefined}
+            aria-pressed={chatOpen}
+            aria-label={chatOpen ? "Fechar o chat da chamada" : "Abrir o chat da chamada"}
+            title={chatOpen ? "Fechar o chat" : "Abrir o chat"}
+            onClick={toggleChat}
+          >
+            <MessageSquare size={20} />
+          </button>
+        </div>
       </header>
       <div className="voice-body" data-chat-open={chatOpen || undefined}>
         {here ? <Stage channel={channel} /> : <JoinCard channel={channel} />}
@@ -262,6 +276,7 @@ function ControlBar({ channelId, watch }: { channelId: string; watch: WatchVisib
       >
         {camera ? <Video /> : <VideoOff />}
       </ControlButton>
+      <SoundboardControl />
       <ControlButton
         label={captionsView ? "Esconder legendas" : "Mostrar legendas"}
         active={captionsView}

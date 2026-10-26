@@ -39,6 +39,7 @@ export interface Config {
   dataDir: string;
   uploadsDir: string;
   avatarsDir: string;
+  soundsDir: string;
   backupsDir: string;
   dbPath: string;
   webDist: string | null;
@@ -87,6 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dataDir,
     uploadsDir: path.join(dataDir, "uploads"),
     avatarsDir: path.join(dataDir, "avatars"),
+    soundsDir: path.join(dataDir, "sounds"),
     backupsDir: path.join(dataDir, "backups"),
     dbPath: path.join(dataDir, "resenha.db"),
     webDist: e.WEB_DIST ? path.resolve(e.WEB_DIST) : null,

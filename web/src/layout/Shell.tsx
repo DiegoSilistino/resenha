@@ -19,6 +19,8 @@ const VoiceView = lazyChunk(() => loadVoiceView().then((m) => m.VoiceView));
 const SettingsModal = lazyChunk(() => loadSettings().then((m) => m.SettingsModal));
 const AdminModal = lazyChunk(() => loadAdmin().then((m) => m.AdminModal));
 const ShareDialog = lazyChunk(() => import("../modals/ShareDialog.tsx").then((m) => m.ShareDialog));
+const loadSearch = () => import("../search/SearchPanel.tsx");
+const SearchPanel = lazyChunk(() => loadSearch().then((m) => m.SearchPanel));
 
 /** Depois que a página abriu e ficou ociosa, baixa a voz em segundo plano: entrar na chamada fica instantâneo. */
 function useIdlePreload(ready: boolean) {
@@ -26,7 +28,7 @@ function useIdlePreload(ready: boolean) {
     if (!ready) return;
     const run = () => {
       preloadVoice();
-      for (const load of [loadVoiceView, loadSettings, loadAdmin]) void load().catch(() => undefined);
+      for (const load of [loadVoiceView, loadSettings, loadAdmin, loadSearch]) void load().catch(() => undefined);
     };
     const timer = setTimeout(() => {
       if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 5_000 });
@@ -45,6 +47,7 @@ export function Shell() {
   const settingsOpen = useUi((s) => s.settingsOpen);
   const adminOpen = useUi((s) => s.adminOpen);
   const shareDialogOpen = useUi((s) => s.shareDialogOpen);
+  const searchOpen = useUi((s) => s.searchOpen);
   const location = useLocation();
   const navigate = useNavigate();
   useDocumentTitle();
@@ -96,6 +99,7 @@ export function Shell() {
         {settingsOpen && <SettingsModal />}
         {adminOpen && <AdminModal />}
         {shareDialogOpen && <ShareDialog />}
+        {searchOpen && <SearchPanel />}
       </Suspense>
     </div>
   );

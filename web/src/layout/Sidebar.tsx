@@ -12,6 +12,7 @@ import { VoiceBar } from "./VoiceBar.tsx";
 export function Sidebar() {
   const channels = useApp((s) => s.channels);
   const isAdmin = useApp((s) => s.me && s.me.role === "admin");
+  const newErrors = useApp((s) => s.latestErrorId) > useSettings((s) => s.errorsSeenId);
   const text = channels.filter((c) => c.kind === "text");
   const voice = channels.filter((c) => c.kind === "voice");
 
@@ -22,10 +23,11 @@ export function Sidebar() {
         {isAdmin && (
           <button
             type="button"
-            className="icon-btn"
+            className="icon-btn admin-btn"
+            data-badge={newErrors || undefined}
             onClick={() => useUi.getState().setAdminOpen(true)}
-            aria-label="Administrar grupo"
-            title="Administrar grupo"
+            aria-label={newErrors ? "Administrar grupo (tem erro novo no painel)" : "Administrar grupo"}
+            title={newErrors ? "Administrar grupo: tem erro novo no painel" : "Administrar grupo"}
           >
             <Settings2 size={18} />
           </button>

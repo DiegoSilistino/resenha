@@ -3,6 +3,7 @@ import type {
   Attachment,
   BackupInfo,
   Channel,
+  ClientErrorEntry,
   ChannelKind,
   GifResult,
   Invite,
@@ -10,6 +11,8 @@ import type {
   Message,
   PublicUser,
   Role,
+  SearchResult,
+  SoundboardSound,
   VoiceTokenResponse,
 } from "@resenha/shared";
 
@@ -65,11 +68,14 @@ export const api = {
   },
   removeAvatar: () => request<{ me: Me }>("DELETE", "/api/me/avatar"),
 
-  messages: (channelId: string, before?: number) =>
-    request<{ messages: Message[]; hasMore: boolean }>(
-      "GET",
-      `/api/channels/${channelId}/messages${before ? `?before=${before}` : ""}`,
-    ),
+  /** `since`: pular para uma mensagem antiga (traz tudo de `before` até ela, de uma vez). */
+  messages: (channelId: string, before?: number, since?: number) => {
+    const params = new URLSearchParams();
+    if (before) params.set("before", String(before));
+    if (since) params.set("since", String(since));
+    const qs = params.size ? `?${params}` : "";
+    return request<{ messages: Message[]; hasMore: boolean }>("GET", `/api/channels/${channelId}/messages${qs}`);
+  },
   sendMessage: (channelId: string, content: string, attachmentIds: string[], replyTo?: number) =>
     request<{ message: Message }>("POST", `/api/channels/${channelId}/messages`, {
       content,
@@ -96,6 +102,22 @@ export const api = {
     request<{ user: PublicUser }>("POST", `/api/admin/users/${id}/${disabled ? "disable" : "enable"}`),
   setUserRole: (id: string, role: Role) => request<{ user: PublicUser }>("PATCH", `/api/admin/users/${id}/role`, { role }),
   backupInfo: () => request<BackupInfo>("GET", "/api/admin/backup/info"),
+  adminErrors: () => request<{ errors: ClientErrorEntry[] }>("GET", "/api/admin/errors"),
+  clearAdminErrors: () => request<void>("DELETE", "/api/admin/errors"),
+
+  search: (q: string, opts: { channelId?: string; before?: number } = {}) => {
+    const params = new URLSearchParams({ q });
+    if (opts.channelId) params.set("channelId", opts.channelId);
+    if (opts.before) params.set("before", String(opts.before));
+    return request<{ results: SearchResult[]; hasMore: boolean }>("GET", `/api/search?${params}`);
+  },
+
+  uploadSound: (file: Blob, name: string, emoji: string) => {
+    const form = new FormData();
+    form.append("file", file, "som");
+    return request<{ sound: SoundboardSound }>("POST", `/api/sounds?${new URLSearchParams({ name, emoji })}`, form);
+  },
+  deleteSound: (id: string) => request<void>("DELETE", `/api/sounds/${encodeURIComponent(id)}`),
   gifs: (q: string, offset = 0) =>
     request<{ gifs: GifResult[] }>("GET", `/api/gifs?${new URLSearchParams({ q, offset: String(offset) })}`),
 };

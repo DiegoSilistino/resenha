@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-/** Pedido para rolar a conversa até uma mensagem (clique numa citação). */
+/** Pedido para rolar a conversa até uma mensagem (clique numa citação ou num resultado da busca). */
 export interface JumpRequest {
   channelId: string;
   messageId: number;
@@ -13,6 +13,8 @@ interface UiState {
   settingsOpen: boolean;
   adminOpen: boolean;
   shareDialogOpen: boolean;
+  /** Painel de busca de mensagens aberto. */
+  searchOpen: boolean;
   /** Título da página atual (o contador de não lidas é somado na frente). */
   pageTitle: string;
   /** canal -> mensagem que está sendo respondida no compositor */
@@ -24,6 +26,7 @@ interface UiState {
   setSettingsOpen(open: boolean): void;
   setAdminOpen(open: boolean): void;
   setShareDialogOpen(open: boolean): void;
+  setSearchOpen(open: boolean): void;
   setPageTitle(title: string): void;
   setReplying(channelId: string, messageId: number | null): void;
   setEditing(id: number | null): void;
@@ -37,6 +40,7 @@ export const useUi = create<UiState>()((set) => ({
   settingsOpen: false,
   adminOpen: false,
   shareDialogOpen: false,
+  searchOpen: false,
   pageTitle: "Resenha",
   replying: {},
   editingId: null,
@@ -45,6 +49,7 @@ export const useUi = create<UiState>()((set) => ({
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setAdminOpen: (adminOpen) => set({ adminOpen }),
   setShareDialogOpen: (shareDialogOpen) => set({ shareDialogOpen }),
+  setSearchOpen: (searchOpen) => set({ searchOpen }),
   setPageTitle: (pageTitle) => set({ pageTitle }),
   setReplying: (channelId, messageId) =>
     set((s) => {

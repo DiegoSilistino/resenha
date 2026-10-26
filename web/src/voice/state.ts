@@ -29,6 +29,8 @@ export interface VoiceState {
   captions: Record<string, Caption>;
   /** Som da tela silenciado por pessoa (vale até recarregar a página). */
   streamMuted: Record<string, true>;
+  /** Último som da mesa tocado por pessoa (mostra a figurinha no quadradinho dela). */
+  soundPlays: Record<string, { soundId: string; at: number }>;
 }
 
 export const useVoice = create<VoiceState>()(() => ({
@@ -44,4 +46,5 @@ export const useVoice = create<VoiceState>()(() => ({
   speaking: {},
   captions: {},
   streamMuted: {},
+  soundPlays: {},
 }));

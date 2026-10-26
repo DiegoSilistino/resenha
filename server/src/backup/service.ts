@@ -16,6 +16,7 @@ export interface BackupDirs {
   backups: string;
   uploads: string;
   avatars: string;
+  sounds: string;
 }
 
 /**
@@ -87,7 +88,8 @@ export class BackupService {
     const last = this.store.getMeta(LAST_DOWNLOAD_KEY);
     const { page_count } = this.db.prepare("PRAGMA page_count").get() as { page_count: number };
     const { page_size } = this.db.prepare("PRAGMA page_size").get() as { page_size: number };
-    const files = (await dirSize(this.dirs.uploads)) + (await dirSize(this.dirs.avatars));
+    const files =
+      (await dirSize(this.dirs.uploads)) + (await dirSize(this.dirs.avatars)) + (await dirSize(this.dirs.sounds));
     let disk: BackupInfo["disk"] = null;
     try {
       const s = await statfs(this.dirs.data);
@@ -110,7 +112,7 @@ export class BackupService {
   archive(now = new Date()): { filename: string; stream: AsyncGenerator<Buffer> } {
     const tmp = path.join(this.dirs.backups, `download-${randomUUID()}.db`);
     this.snapshotTo(tmp);
-    const { uploads, avatars } = this.dirs;
+    const { uploads, avatars, sounds } = this.dirs;
     const store = this.store;
 
     async function* entries(): AsyncGenerator<TarEntry> {
@@ -118,6 +120,7 @@ export class BackupService {
       for (const [dir, prefix] of [
         [uploads, "uploads"],
         [avatars, "avatars"],
+        [sounds, "sounds"],
       ] as const) {
         yield { name: prefix, type: "dir", size: 0, mtime: Date.now() };
         const names = await readdir(dir).catch(() => [] as string[]);

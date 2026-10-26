@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Hash, Menu } from "lucide-react";
 import type { Channel } from "@resenha/shared";
+import { SearchButton } from "../search/SearchButton.tsx";
 import { useUi } from "../state/ui.ts";
 import { ChatPanel } from "./ChatPanel.tsx";
 
@@ -22,6 +23,9 @@ export function ChatView({ channel }: { channel: Channel }) {
         </button>
         <Hash size={20} aria-hidden="true" className="header-icon" />
         <h1 className="main-title">{channel.name}</h1>
+        <div className="header-actions">
+          <SearchButton />
+        </div>
       </header>
       <ChatPanel channel={channel} />
     </main>

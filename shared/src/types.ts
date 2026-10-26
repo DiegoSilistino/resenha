@@ -143,3 +143,38 @@ export interface BackupInfo {
   totalBytes: number;
   disk: { free: number; total: number } | null;
 }
+
+/** Tipo de falha que o navegador reporta para o painel de erros do admin. */
+export type ClientErrorKind = "voz" | "microfone" | "tela" | "ruido" | "inesperado";
+
+export interface ClientErrorEntry {
+  id: number;
+  userId: string;
+  kind: ClientErrorKind;
+  message: string;
+  /** Detalhe técnico (nome e mensagem do erro original, motivo da desconexão…). */
+  detail: string;
+  userAgent: string;
+  /** Situação no momento (página aberta, estado da voz, redução de ruído…). */
+  context: Record<string, string | number | boolean>;
+  createdAt: number;
+}
+
+export interface SearchResult {
+  message: Message;
+  /**
+   * Trecho com as palavras encontradas entre \u0001 e \u0002 (o cliente transforma em
+   * destaque; nunca é HTML).
+   */
+  snippet: string;
+}
+
+export interface SoundboardSound {
+  id: string;
+  name: string;
+  emoji: string;
+  uploaderId: string;
+  /** URL relativa do áudio. */
+  url: string;
+  createdAt: number;
+}
