@@ -87,11 +87,24 @@ export function uploadMbps(q: ScreenQuality): number {
 const SCREEN_AUDIO = { maxBitrate: 128_000 };
 
 /**
- * Pede ao navegador para tirar do "som do sistema" o áudio desta própria aba (as vozes
- * da call). Sem isso, ao transmitir a tela inteira com som, a turma ouve a própria voz
- * de volta. Opção experimental: navegadores que não a conhecem simplesmente ignoram.
+ * Captura do som da tela como ele é, sem o tratamento feito para microfone.
+ *
+ * - restrictOwnAudio: tira do "som do sistema" o áudio desta própria aba (as vozes da
+ *   call); sem isso, ao transmitir a tela inteira com som, a turma ouve a própria voz de
+ *   volta. Navegadores que não conhecem a opção simplesmente a ignoram.
+ * - Sem eco/ruído/ganho: no getDisplayMedia o Chrome liga por padrão o cancelamento de
+ *   eco, a supressão de ruído e o ganho automático (feitos para voz) e mistura em mono.
+ *   Em jogo e música isso abafa o som e faz o volume "respirar". O eco das vozes da call
+ *   já é resolvido pelo restrictOwnAudio.
+ * - channelCount 2: pede o som em estéreo.
  */
-const SCREEN_AUDIO_CAPTURE = { restrictOwnAudio: true } as unknown as AudioCaptureOptions;
+const SCREEN_AUDIO_CAPTURE = {
+  restrictOwnAudio: true,
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false,
+  channelCount: 2,
+} as unknown as AudioCaptureOptions;
 
 export function screenShareOptions(
   q: ScreenQuality,
@@ -115,8 +128,12 @@ export function screenShareOptions(
       screenShareEncoding: { maxBitrate: q.maxBitrate, maxFramerate: q.fps, priority: "high" },
       degradationPreference: q.degradation,
       audioPreset: SCREEN_AUDIO,
+      // O LiveKit publica em mono a menos que se peça estéreo explicitamente.
+      forceStereo: true,
       // DTX corta "silêncios", o que estraga música e efeitos baixos de jogo.
       dtx: false,
+      // Redundância (RED) é para voz em rede ruim; aqui só dobraria o envio do som.
+      red: false,
     },
   };
 }

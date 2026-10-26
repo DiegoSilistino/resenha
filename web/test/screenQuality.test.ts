@@ -40,11 +40,20 @@ describe("perfis de qualidade da tela", () => {
     const { capture, publish } = screenShareOptions(screenQuality("games"));
     expect(capture.resolution).toEqual({ width: 1920, height: 1080, frameRate: 60 });
     expect(capture.contentHint).toBe("motion");
-    // som do sistema sem as vozes da própria call (evita eco para a turma)
-    expect(capture.audio).toEqual({ restrictOwnAudio: true });
+    // som do sistema sem as vozes da própria call (evita eco para a turma) e sem o
+    // tratamento de voz do navegador (que abafa jogo e música), em estéreo
+    expect(capture.audio).toEqual({
+      restrictOwnAudio: true,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: 2,
+    });
     expect(publish.screenShareEncoding).toEqual({ maxBitrate: 9_000_000, maxFramerate: 60, priority: "high" });
     expect(publish.degradationPreference).toBe("maintain-framerate");
     expect(publish.dtx).toBe(false);
+    expect(publish.red).toBe(false);
+    expect(publish.forceStereo).toBe(true);
     expect(publish.audioPreset?.maxBitrate).toBe(128_000);
   });
 
@@ -88,7 +97,7 @@ describe("diagnóstico de falha ao transmitir", () => {
     const { capture } = screenShareOptions(screenQuality("high"), { audio: false });
     expect(capture.audio).toBe(false);
     expect(capture.systemAudio).toBe("exclude");
-    expect(screenShareOptions(screenQuality("high")).capture.audio).toEqual({ restrictOwnAudio: true });
+    expect(screenShareOptions(screenQuality("high")).capture.audio).toMatchObject({ restrictOwnAudio: true });
   });
 
   it("erro desconhecido mostra o detalhe técnico", () => {
