@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Maximize, MicOff, HeadphoneOff, SlidersHorizontal, Volume1, Volume2, VolumeX } from "lucide-react";
+import { Maximize, Minimize, MicOff, HeadphoneOff, SlidersHorizontal, Volume1, Volume2, VolumeX } from "lucide-react";
 import { Track, type Participant, type VideoTrack } from "livekit-client";
 import { Avatar } from "../components/Avatar.tsx";
 import { useApp } from "../state/app.ts";
@@ -208,11 +208,25 @@ export function ScreenTile({ participant }: { participant: Participant }) {
   const stats = useVideoStats(videoEl, track);
   // O som da tela é uma faixa à parte: só existe se a pessoa marcou "compartilhar áudio".
   const hasAudio = !!participant.getTrackPublication(Track.Source.ScreenShareAudio);
+  const fullscreen = useIsFullscreen(ref);
   if (!track) return null;
   const name = user?.displayName ?? participant.name ?? "Alguém";
 
+  // Já em tela cheia, o mesmo botão sai dela (antes só o Esc saía).
+  function toggleFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    else void ref.current?.requestFullscreen?.().catch(() => undefined);
+  }
+
   return (
-    <div className="screen-tile" ref={ref}>
+    <div
+      className="screen-tile"
+      ref={ref}
+      onDoubleClick={(e) => {
+        // duplo clique no vídeo alterna (como no YouTube); nos botões, não
+        if (!(e.target as Element).closest(".screen-controls")) toggleFullscreen();
+      }}
+    >
       <VideoView track={track} contain onElement={setVideoEl} />
       <div className="tile-label">
         <span className="live-chip">ao vivo</span>
@@ -231,15 +245,27 @@ export function ScreenTile({ participant }: { participant: Participant }) {
         <button
           type="button"
           className="icon-btn"
-          aria-label="Tela cheia"
-          title="Tela cheia"
-          onClick={() => void ref.current?.requestFullscreen?.()}
+          aria-label={fullscreen ? "Sair da tela cheia" : "Tela cheia"}
+          title={fullscreen ? "Sair da tela cheia (Esc)" : "Tela cheia (ou duplo clique no vídeo)"}
+          onClick={toggleFullscreen}
         >
-          <Maximize size={18} />
+          {fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
         </button>
       </div>
     </div>
   );
+}
+
+/** Este elemento está em tela cheia agora? (acompanha também o Esc e o F11 do navegador) */
+function useIsFullscreen(ref: RefObject<HTMLElement | null>): boolean {
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    const update = () => setFull(!!ref.current && document.fullscreenElement === ref.current);
+    update();
+    document.addEventListener("fullscreenchange", update);
+    return () => document.removeEventListener("fullscreenchange", update);
+  }, [ref]);
+  return full;
 }
 
 /**
