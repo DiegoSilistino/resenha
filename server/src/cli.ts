@@ -47,7 +47,7 @@ async function main() {
     case "reset-password": {
       if (!arg) throw new Error("Informe o usuário: npm run cli -- reset-password <usuario>");
       const user = store.userByUsername(arg.toLowerCase());
-      if (!user) throw new Error(`Usuário "${arg}" não existe`);
+      if (!user || user.removed) throw new Error(`Usuário "${arg}" não existe`);
       const temp = randomBytes(9).toString("base64url");
       store.setPasswordHash(user.id, await hashPassword(temp));
       store.deleteUserSessions(user.id);
@@ -55,7 +55,7 @@ async function main() {
       break;
     }
     case "users": {
-      for (const u of store.listUsers()) {
+      for (const u of store.listUsers().filter((x) => !x.removed)) {
         console.log(`${u.username.padEnd(24)} ${u.role.padEnd(7)} ${u.disabled ? "desativado" : "ativo"}  ${u.displayName}`);
       }
       break;

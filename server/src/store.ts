@@ -52,6 +52,7 @@ interface UserRow {
   avatar_color: string;
   created_at: number;
   disabled_at: number | null;
+  removed_at: number | null;
   avatar_id: string | null;
   avatar_mime: string | null;
 }
@@ -120,6 +121,7 @@ const toUser = (r: UserRow): UserRecord => ({
   avatarColor: r.avatar_color,
   role: r.role,
   disabled: r.disabled_at !== null,
+  removed: r.removed_at !== null,
   avatarUrl: r.avatar_id ? avatarUrl(r.avatar_id) : null,
   passwordHash: r.password_hash,
   createdAt: r.created_at,
@@ -137,8 +139,13 @@ export const toPublicUser = (u: UserRecord): PublicUser => ({
   avatarColor: u.avatarColor,
   role: u.role,
   disabled: u.disabled,
+  removed: u.removed,
   avatarUrl: u.avatarUrl,
 });
+
+/** Nome e cor de quem teve a conta removida, nas mensagens que ficaram. */
+export const REMOVED_DISPLAY_NAME = "Ex-membro";
+const REMOVED_AVATAR_COLOR = "#6f8792";
 
 const toChannel = (r: ChannelRow): Channel => ({
   id: r.id,
@@ -271,6 +278,34 @@ export class Store {
       .prepare("UPDATE users SET disabled_at = ? WHERE id = ?")
       .run(disabled ? Date.now() : null, id);
     return this.userById(id);
+  }
+
+  /**
+   * Remove a conta de vez: sem senha, sem foto e com o nome de usuário liberado para
+   * outra pessoa. A linha continua só para as mensagens antigas aparecerem como "Ex-membro".
+   * Devolve a foto e os anexos soltos que tinha (para apagar os arquivos), ou null se o usuário
+   * não existe ou já foi removido.
+   */
+  removeUser(id: string): { user: UserRecord; avatarId: string | null; orphanAttachmentIds: string[] } | null {
+    return transaction(this.db, () => {
+      const before = this.userById(id);
+      if (!before || before.removed) return null;
+      const now = Date.now();
+      this.db
+        .prepare(
+          `UPDATE users SET username = ?, display_name = ?, password_hash = '!', role = 'member',
+             avatar_color = ?, avatar_id = NULL, avatar_mime = NULL,
+             disabled_at = COALESCE(disabled_at, ?), removed_at = ?
+           WHERE id = ?`,
+        )
+        .run(`removido-${id.slice(0, 8)}`, REMOVED_DISPLAY_NAME, REMOVED_AVATAR_COLOR, now, now, id);
+      // Anexos que ela enviou mas nunca foram para uma mensagem não servem a ninguém.
+      const orphans = (
+        this.db.prepare("SELECT id FROM attachments WHERE uploader_id = ? AND message_id IS NULL").all(id) as { id: string }[]
+      ).map((r) => r.id);
+      this.db.prepare("DELETE FROM attachments WHERE uploader_id = ? AND message_id IS NULL").run(id);
+      return { user: this.userById(id)!, avatarId: before.avatarId, orphanAttachmentIds: orphans };
+    });
   }
 
   setUserRole(id: string, role: Role): UserRecord | null {

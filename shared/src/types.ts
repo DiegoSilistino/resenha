@@ -9,6 +9,8 @@ export interface PublicUser {
   role: Role;
   /** Contas desativadas continuam na lista para exibir o autor de mensagens antigas. */
   disabled: boolean;
+  /** Conta removida pelo admin: só aparece como autor "Ex-membro" de mensagens antigas. */
+  removed: boolean;
   /** Foto de perfil (URL relativa); null = iniciais sobre a cor do avatar. */
   avatarUrl: string | null;
 }

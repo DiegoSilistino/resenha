@@ -115,6 +115,9 @@ export const MIGRATIONS: string[] = [
     created_at  INTEGER NOT NULL
   );
   `,
+  /* 5: contas removidas (a linha fica só para assinar mensagens antigas como "Ex-membro") */ `
+  ALTER TABLE users ADD COLUMN removed_at INTEGER;
+  `,
 ];
 
 /**

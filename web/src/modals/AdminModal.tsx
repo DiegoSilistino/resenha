@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ArrowDown, ArrowUp, Copy, Download, Hash, Trash2, Volume2 } from "lucide-react";
-import type { BackupInfo, Channel, ChannelKind, ClientErrorEntry, ClientErrorKind, Role } from "@resenha/shared";
+import type { BackupInfo, Channel, ChannelKind, ClientErrorEntry, ClientErrorKind, PublicUser, Role } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { api, BACKUP_DOWNLOAD_URL, type InviteWithUrl } from "../lib/api.ts";
@@ -292,48 +292,82 @@ function ChannelsTab() {
 function MembersTab() {
   const users = useApp((s) => s.users);
   const meId = useApp((s) => (s.me ? s.me.id : null));
-  const list = Object.values(users).sort((a, b) => a.displayName.localeCompare(b.displayName, "pt-BR"));
+  // Contas removidas só existem para assinar mensagens antigas: não aparecem aqui.
+  const list = Object.values(users)
+    .filter((u) => !u.removed)
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, "pt-BR"));
 
   const run = (p: Promise<unknown>) => p.catch((err) => toast.fromError(err));
 
+  async function remove(u: PublicUser) {
+    const ok = confirm(
+      `Remover a conta de ${u.displayName} (@${u.username}) de vez?\n\n` +
+        `A pessoa sai na hora e não consegue mais entrar com ela. O nome @${u.username} fica livre. ` +
+        `As mensagens que ela mandou continuam, assinadas como "Ex-membro".\n\nNão dá para desfazer.`,
+    );
+    if (!ok) return;
+    try {
+      await api.removeUser(u.id);
+      toast.info(`Conta @${u.username} removida.`);
+    } catch (err) {
+      toast.fromError(err);
+    }
+  }
+
   return (
-    <ul className="admin-list">
-      {list.map((u) => (
-        <li key={u.id} data-disabled={u.disabled || undefined}>
-          <Avatar user={u} size={30} />
-          <div className="admin-list-main">
-            <strong>{u.displayName}</strong>
-            <span className="muted">
-              @{u.username}
-              {u.disabled ? ", desativado" : ""}
-            </span>
-          </div>
-          {u.id !== meId && (
-            <>
-              <select
-                value={u.role}
-                aria-label={`Papel de ${u.displayName}`}
-                onChange={(e) => void run(api.setUserRole(u.id, e.target.value as Role))}
-              >
-                <option value="member">Membro</option>
-                <option value="admin">Administrador</option>
-              </select>
-              <button
-                type="button"
-                className="btn btn-small"
-                data-danger={!u.disabled || undefined}
-                onClick={() => {
-                  if (!u.disabled && !confirm(`Desativar ${u.displayName}? A pessoa é desconectada na hora.`)) return;
-                  void run(api.setUserDisabled(u.id, !u.disabled));
-                }}
-              >
-                {u.disabled ? "Reativar" : "Desativar"}
-              </button>
-            </>
-          )}
-        </li>
-      ))}
-    </ul>
+    <div className="form">
+      <p className="muted small-note">
+        Desativar desconecta a pessoa e pode ser desfeito. Remover apaga a conta de vez (bom para conta duplicada ou
+        de quem saiu do grupo).
+      </p>
+      <ul className="admin-list">
+        {list.map((u) => (
+          <li key={u.id} data-disabled={u.disabled || undefined}>
+            <Avatar user={u} size={30} />
+            <div className="admin-list-main">
+              <strong>{u.displayName}</strong>
+              <span className="muted">
+                @{u.username}
+                {u.disabled ? ", desativado" : ""}
+              </span>
+            </div>
+            {u.id !== meId && (
+              <>
+                <select
+                  value={u.role}
+                  aria-label={`Papel de ${u.displayName}`}
+                  onChange={(e) => void run(api.setUserRole(u.id, e.target.value as Role))}
+                >
+                  <option value="member">Membro</option>
+                  <option value="admin">Administrador</option>
+                </select>
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  data-danger={!u.disabled || undefined}
+                  onClick={() => {
+                    if (!u.disabled && !confirm(`Desativar ${u.displayName}? A pessoa é desconectada na hora.`)) return;
+                    void run(api.setUserDisabled(u.id, !u.disabled));
+                  }}
+                >
+                  {u.disabled ? "Reativar" : "Desativar"}
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  data-danger
+                  aria-label={`Remover a conta de ${u.displayName}`}
+                  title="Remover a conta de vez"
+                  onClick={() => void remove(u)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

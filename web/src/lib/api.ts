@@ -100,6 +100,8 @@ export const api = {
   revokeInvite: (code: string) => request<void>("DELETE", `/api/admin/invites/${encodeURIComponent(code)}`),
   setUserDisabled: (id: string, disabled: boolean) =>
     request<{ user: PublicUser }>("POST", `/api/admin/users/${id}/${disabled ? "disable" : "enable"}`),
+  /** Remove a conta de vez (as mensagens ficam como "Ex-membro"). */
+  removeUser: (id: string) => request<void>("DELETE", `/api/admin/users/${id}`),
   setUserRole: (id: string, role: Role) => request<{ user: PublicUser }>("PATCH", `/api/admin/users/${id}/role`, { role }),
   backupInfo: () => request<BackupInfo>("GET", "/api/admin/backup/info"),
   adminErrors: () => request<{ errors: ClientErrorEntry[] }>("GET", "/api/admin/errors"),

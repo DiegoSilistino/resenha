@@ -40,28 +40,52 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     },
   );
 
+  /** Derruba todas as sessões da pessoa, o WebSocket e a voz, na hora. */
+  async function disconnectEverywhere(userId: string, reason: string) {
+    const revoked = new Set(store.deleteUserSessions(userId));
+    hub.closeWhere((c) => c.userId === userId || revoked.has(c.tokenHash), WS_CLOSE_SESSION_REVOKED, reason);
+    const channelId = voice.channelOf(userId);
+    if (channelId) {
+      voice.leave(userId);
+      await gateway.kick(userId, channelId);
+    }
+  }
+
+  /** Conta que pode ser alterada pelo admin (existe e não foi removida). */
+  function manageableUser(id: string) {
+    const user = store.userById(id);
+    if (!user || user.removed) throw notFound("Usuário não encontrado");
+    return user;
+  }
+
   app.post<{ Params: { id: string } }>(
     "/api/admin/users/:id/disable",
     { preHandler: requireAdmin },
     async (req) => {
       if (req.params.id === currentUser(req).id) throw badRequest("Você não pode desativar a própria conta");
-      const user = store.setUserDisabled(req.params.id, true);
-      if (!user) throw notFound("Usuário não encontrado");
-
-      const revoked = new Set(store.deleteUserSessions(user.id));
-      hub.closeWhere(
-        (c) => c.userId === user.id || revoked.has(c.tokenHash),
-        WS_CLOSE_SESSION_REVOKED,
-        "conta desativada",
-      );
-      const channelId = voice.channelOf(user.id);
-      if (channelId) {
-        voice.leave(user.id);
-        await gateway.kick(user.id, channelId);
-      }
+      manageableUser(req.params.id);
+      const user = store.setUserDisabled(req.params.id, true)!;
+      await disconnectEverywhere(user.id, "conta desativada");
       const pub = toPublicUser(user);
       hub.broadcast({ type: "user.upsert", user: pub });
       return { user: pub };
+    },
+  );
+
+  // Remover de vez (ex.: conta duplicada). As mensagens ficam, assinadas como "Ex-membro".
+  app.delete<{ Params: { id: string } }>(
+    "/api/admin/users/:id",
+    { preHandler: requireAdmin },
+    async (req, reply) => {
+      if (req.params.id === currentUser(req).id) throw badRequest("Você não pode remover a própria conta");
+      manageableUser(req.params.id);
+      const removed = store.removeUser(req.params.id);
+      if (!removed) throw notFound("Usuário não encontrado");
+      await disconnectEverywhere(removed.user.id, "conta removida");
+      if (removed.avatarId) await ctx.avatars.remove([removed.avatarId]);
+      if (removed.orphanAttachmentIds.length) await ctx.uploads.remove(removed.orphanAttachmentIds);
+      hub.broadcast({ type: "user.upsert", user: toPublicUser(removed.user) });
+      return reply.status(204).send();
     },
   );
 
@@ -69,6 +93,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     "/api/admin/users/:id/enable",
     { preHandler: requireAdmin },
     async (req) => {
+      manageableUser(req.params.id);
       const user = store.setUserDisabled(req.params.id, false);
       if (!user) throw notFound("Usuário não encontrado");
       const pub = toPublicUser(user);
@@ -85,6 +110,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       if (req.params.id === currentUser(req).id && role !== "admin") {
         throw badRequest("Você não pode remover o próprio acesso de administrador");
       }
+      manageableUser(req.params.id);
       const user = store.setUserRole(req.params.id, role);
       if (!user) throw notFound("Usuário não encontrado");
       const pub = toPublicUser(user);
