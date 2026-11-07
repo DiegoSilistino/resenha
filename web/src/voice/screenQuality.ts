@@ -75,12 +75,9 @@ export function screenQuality(id: string | null | undefined): ScreenQuality {
   return SCREEN_QUALITIES.find((q) => q.id === id) ?? SCREEN_QUALITIES.find((q) => q.id === DEFAULT_SCREEN_QUALITY)!;
 }
 
-/**
- * Upload aproximado de quem transmite: a camada principal mais a cópia em meia
- * resolução que o LiveKit envia para quem está com a janela pequena (1/4 da área).
- */
+/** Upload aproximado de quem transmite (uma camada só: sem simulcast, ver screenShareOptions). */
 export function uploadMbps(q: ScreenQuality): number {
-  return (q.maxBitrate * 1.25) / 1_000_000;
+  return q.maxBitrate / 1_000_000;
 }
 
 /** Som da tela (jogo, música, vídeo): estéreo a 128 kbps, igual a AudioPresets.musicHighQualityStereo. */
@@ -127,6 +124,9 @@ export function screenShareOptions(
     publish: {
       screenShareEncoding: { maxBitrate: q.maxBitrate, maxFramerate: q.fps, priority: "high" },
       degradationPreference: q.degradation,
+      // Sem a cópia em meia resolução: com ela, o adaptiveStream mandava a cópia para o quadro
+      // pequeno e a imagem só ficava nítida em tela cheia. Assim a qualidade é a mesma em qualquer tamanho.
+      simulcast: false,
       audioPreset: SCREEN_AUDIO,
       // O LiveKit publica em mono a menos que se peça estéreo explicitamente.
       forceStereo: true,

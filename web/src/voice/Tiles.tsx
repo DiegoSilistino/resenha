@@ -1,10 +1,24 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
-import { Maximize, Minimize, MicOff, HeadphoneOff, SlidersHorizontal, Volume1, Volume2, VolumeX } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  Eye,
+  EyeOff,
+  Maximize,
+  Minimize,
+  MicOff,
+  HeadphoneOff,
+  Pin,
+  PinOff,
+  SlidersHorizontal,
+  Volume1,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { Track, type Participant, type VideoTrack } from "livekit-client";
+import { placePopover } from "../chat/popover.ts";
 import { Avatar } from "../components/Avatar.tsx";
 import { useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
-import { toggleStreamMuted, useVoice } from "./controller.ts";
+import { setFocused, setWatching, toggleStreamMuted, useVoice } from "./controller.ts";
 import { SignalIcon } from "./SignalIcon.tsx";
 import { PLAY_MARK_MS } from "./soundboard.ts";
 
@@ -25,6 +39,33 @@ function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, close: ()
       document.removeEventListener("keydown", esc);
     };
   }, [ref, open, close]);
+}
+
+/**
+ * Painel de volume solto na tela (position: fixed), colado no botão. Preso dentro do
+ * quadradinho, ele era cortado pela borda e ficava pela metade nos quadros pequenos.
+ */
+function usePopPosition(box: RefObject<HTMLElement | null>, pop: RefObject<HTMLElement | null>, open: boolean) {
+  const version = useVoice((s) => s.version); // a grade mudou: o botão pode ter saído do lugar
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const anchor = box.current?.querySelector("button");
+      if (anchor && pop.current) setPos(placePopover(anchor, pop.current.offsetWidth, pop.current.offsetHeight));
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, version, box, pop]);
+  return pos ?? { visibility: "hidden" as const };
 }
 
 function VideoView({
@@ -124,10 +165,12 @@ function SoundMark({ userId }: { userId: string }) {
 function VolumeControl({ userId, name }: { userId: string; name: string }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLLabelElement>(null);
   useDismiss(box, open, () => setOpen(false));
+  const popStyle = usePopPosition(box, pop, open);
   const volume = useSettings((s) => s.userVolumes[userId] ?? 1);
   return (
-    <div className="tile-volume" ref={box}>
+    <div className="tile-volume" ref={box} data-open={open || undefined}>
       <button
         type="button"
         className="icon-btn"
@@ -139,7 +182,7 @@ function VolumeControl({ userId, name }: { userId: string; name: string }) {
         <SlidersHorizontal size={16} />
       </button>
       {open && (
-        <label className="volume-pop">
+        <label className="volume-pop" ref={pop} style={popStyle}>
           <span>
             Voz de {name}: {Math.round(volume * 100)}%
           </span>
@@ -198,40 +241,69 @@ function formatStats(s: VideoStats): string {
   return parts.join(" · ");
 }
 
-export function ScreenTile({ participant }: { participant: Participant }) {
-  const user = useApp((s) => s.users[participant.identity]);
+/**
+ * Tela de alguém, como no Discord: antes de clicar em Assistir é só um quadradinho (nada de
+ * vídeo chegando); assistindo, mostra o vídeo, e clicar nele fixa no quadro grande.
+ * A sua própria tela aparece direto (não gasta internet).
+ */
+export function ScreenTile({ participant, focused = false }: { participant: Participant; focused?: boolean }) {
+  const id = participant.identity;
+  const user = useApp((s) => s.users[id]);
+  const watched = useVoice((s) => participant.isLocal || !!s.watching[id]);
   const ref = useRef<HTMLDivElement>(null);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
   useVoice((s) => s.version);
   const pub = participant.getTrackPublication(Track.Source.ScreenShare);
   const track = pub?.track as VideoTrack | undefined;
-  const stats = useVideoStats(videoEl, track);
+  const stats = useVideoStats(videoEl, watched ? track : undefined);
   // O som da tela é uma faixa à parte: só existe se a pessoa marcou "compartilhar áudio".
   const hasAudio = !!participant.getTrackPublication(Track.Source.ScreenShareAudio);
   const fullscreen = useIsFullscreen(ref);
   if (!track) return null;
   const name = user?.displayName ?? participant.name ?? "Alguém";
+  const title = participant.isLocal ? "Sua tela" : `Tela de ${name}`;
+  const label = (
+    <div className="tile-label">
+      <span className="live-chip">ao vivo</span>
+      <span className="tile-name">{title}</span>
+    </div>
+  );
+
+  if (!watched) {
+    return (
+      <div className="screen-tile" data-idle>
+        <button type="button" className="btn btn-primary btn-small" onClick={() => setWatching(id, true)}>
+          <Eye size={16} aria-hidden="true" />
+          Assistir
+        </button>
+        {label}
+      </div>
+    );
+  }
 
   // Já em tela cheia, o mesmo botão sai dela (antes só o Esc saía).
   function toggleFullscreen() {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
     else void ref.current?.requestFullscreen?.().catch(() => undefined);
   }
+  const onVideo = (e: React.MouseEvent) => !(e.target as Element).closest(".screen-controls");
 
   return (
     <div
       className="screen-tile"
       ref={ref}
+      data-focused={focused || undefined}
+      title={focused || fullscreen ? undefined : "Clique para fixar no centro"}
+      onClick={(e) => {
+        if (!focused && !fullscreen && onVideo(e)) setFocused(id);
+      }}
       onDoubleClick={(e) => {
-        // duplo clique no vídeo alterna (como no YouTube); nos botões, não
-        if (!(e.target as Element).closest(".screen-controls")) toggleFullscreen();
+        // no quadro grande, duplo clique no vídeo alterna a tela cheia (como no YouTube); nos botões, não
+        if ((focused || fullscreen) && onVideo(e)) toggleFullscreen();
       }}
     >
       <VideoView track={track} contain onElement={setVideoEl} />
-      <div className="tile-label">
-        <span className="live-chip">ao vivo</span>
-        <span className="tile-name">{participant.isLocal ? "Sua tela" : `Tela de ${name}`}</span>
-      </div>
+      {label}
       {stats && stats.height > 0 && (
         <span
           className="screen-stats"
@@ -241,7 +313,30 @@ export function ScreenTile({ participant }: { participant: Participant }) {
         </span>
       )}
       <div className="screen-controls">
-        {!participant.isLocal && hasAudio && <StreamVolume userId={participant.identity} name={name} />}
+        {!participant.isLocal && hasAudio && <StreamVolume userId={id} name={name} />}
+        {/* em tela cheia somem: trocar de lugar recriaria o quadro e sairia da tela cheia */}
+        {!fullscreen && (
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={focused ? "Desafixar (voltar para a grade)" : "Fixar no centro"}
+            title={focused ? "Desafixar (voltar para a grade)" : "Fixar no centro"}
+            onClick={() => setFocused(focused ? null : id)}
+          >
+            {focused ? <PinOff size={18} /> : <Pin size={18} />}
+          </button>
+        )}
+        {!fullscreen && !participant.isLocal && (
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Parar de assistir"
+            title="Parar de assistir"
+            onClick={() => setWatching(id, false)}
+          >
+            <EyeOff size={18} />
+          </button>
+        )}
         <button
           type="button"
           className="icon-btn"
@@ -275,7 +370,9 @@ function useIsFullscreen(ref: RefObject<HTMLElement | null>): boolean {
 function StreamVolume({ userId, name }: { userId: string; name: string }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
   useDismiss(box, open, () => setOpen(false));
+  const popStyle = usePopPosition(box, pop, open);
   const volume = useSettings((s) => s.streamVolumes[userId] ?? 1);
   const muted = useVoice((s) => !!s.streamMuted[userId]);
   const silent = muted || volume === 0;
@@ -283,7 +380,7 @@ function StreamVolume({ userId, name }: { userId: string; name: string }) {
   const label = `Som da tela de ${name}`;
 
   return (
-    <div className="stream-volume" ref={box} data-muted={silent || undefined}>
+    <div className="stream-volume" ref={box} data-muted={silent || undefined} data-open={open || undefined}>
       <button
         type="button"
         className="icon-btn"
@@ -295,7 +392,7 @@ function StreamVolume({ userId, name }: { userId: string; name: string }) {
         <Icon size={18} />
       </button>
       {open && (
-        <div className="volume-pop stream-volume-pop">
+        <div className="volume-pop stream-volume-pop" ref={pop} style={popStyle}>
           <label className="stream-volume-slider">
             <span>
               {label}: {muted ? "silenciado" : `${Math.round(volume * 100)}%`}

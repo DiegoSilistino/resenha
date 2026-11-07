@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   Captions as CaptionsIcon,
   Headphones,
@@ -39,6 +39,7 @@ import {
   unlockAudio,
   useVoice,
 } from "./controller.ts";
+import { fitGrid } from "./grid.ts";
 import { SoundboardControl } from "./SoundboardPanel.tsx";
 import { ParticipantTile, ScreenTile } from "./Tiles.tsx";
 
@@ -158,8 +159,18 @@ function Stage({ channel }: { channel: Channel }) {
   const watch = useApp((s) => s.watch[channel.id]);
   const visibility = useWatchVisibility(channel.id, watch);
 
+  const watching = useVoice((s) => s.watching);
+  const focusedId = useVoice((s) => s.focused);
   const participants = roomParticipants();
   const screens = participants.filter((p) => p.getTrackPublication(Track.Source.ScreenShare)?.track);
+  // Fixada só vale enquanto a tela existe e você a assiste (parou de transmitir: volta para a grade).
+  const focus = screens.find((p) => p.identity === focusedId && (p.isLocal || watching[p.identity]));
+  const tiles = [
+    ...screens
+      .filter((p) => p !== focus)
+      .map((p) => <ScreenTile key={`tela:${p.identity}`} participant={p} />),
+    ...participants.map((p) => <ParticipantTile key={p.identity} participant={p} channelId={channel.id} />),
+  ];
 
   return (
     <div className="stage">
@@ -179,24 +190,55 @@ function Stage({ channel }: { channel: Channel }) {
       )}
 
       <div className="stage-scroll">
-        {screens.length > 0 && (
-          <div className="screens">
-            {screens.map((p) => (
-              <ScreenTile key={p.identity} participant={p} />
-            ))}
-          </div>
+        {focus ? (
+          <>
+            <ScreenTile key={`tela:${focus.identity}`} participant={focus} focused />
+            <div className="tiles-strip" style={{ "--tile-w": `${STRIP_TILE_W}px` } as React.CSSProperties}>
+              {tiles}
+            </div>
+          </>
+        ) : (
+          <TileGrid count={tiles.length}>{tiles}</TileGrid>
         )}
-
-        <div className="tiles" data-count={Math.min(participants.length, 9)}>
-          {participants.map((p) => (
-            <ParticipantTile key={p.identity} participant={p} channelId={channel.id} />
-          ))}
-        </div>
       </div>
 
       {captionsView && <Captions />}
 
       <ControlBar channelId={channel.id} watch={visibility} />
+    </div>
+  );
+}
+
+const TILE_GAP = 12;
+/** Abaixo disso, rolar é melhor que quadradinhos microscópicos. */
+const MIN_TILE_W = 150;
+/** Largura dos quadradinhos na faixa embaixo da tela fixada. */
+const STRIP_TILE_W = 220;
+
+/** Grade centralizada: com pouca gente os quadros são grandes; entrando mais, diminuem para caber todos. */
+function TileGrid({ count, children }: { count: number; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setBox({ width: el.clientWidth, height: el.clientHeight });
+    measure(); // antes de pintar: sem piscar quadradinhos pequenos ao entrar
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const { cols, tileWidth } = fitGrid(count, box.width, box.height, TILE_GAP, 16 / 9);
+  const w = Math.max(MIN_TILE_W, tileWidth);
+  return (
+    <div className="tiles" ref={ref}>
+      {/* a largura máxima força o número de colunas calculado (5 pessoas: 3 + 2, não 4 + 1) */}
+      <div
+        className="tiles-fit"
+        style={{ "--tile-w": `${w}px`, maxWidth: cols * w + (cols - 1) * TILE_GAP } as React.CSSProperties}
+      >
+        {children}
+      </div>
     </div>
   );
 }

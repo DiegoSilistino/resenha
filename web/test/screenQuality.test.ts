@@ -61,8 +61,9 @@ describe("perfis de qualidade da tela", () => {
     expect(screenShareOptions(screenQuality("high")).capture).not.toHaveProperty("contentHint");
   });
 
-  it("estimativa de upload inclui a cópia em meia resolução", () => {
-    expect(uploadMbps(screenQuality("games"))).toBeCloseTo(11.25);
+  it("uma camada só: mesma qualidade no quadro pequeno e em tela cheia", () => {
+    expect(screenShareOptions(screenQuality("games")).publish.simulcast).toBe(false);
+    expect(uploadMbps(screenQuality("games"))).toBeCloseTo(9);
   });
 });
 

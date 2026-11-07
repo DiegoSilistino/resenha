@@ -1573,19 +1573,38 @@ input[type="range"] {
   color: var(--lamp-ink);
 }
 
+/* grade centralizada; o tamanho de cada quadro (--tile-w) vem do TileGrid */
 .tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: safe center;
+  justify-content: center;
+}
+.tiles-fit,
+.tiles-strip {
+  display: flex;
   gap: 12px;
 }
-.tiles[data-count="1"] {
-  grid-template-columns: minmax(200px, 520px);
+.tiles-fit {
+  flex-wrap: wrap;
   justify-content: center;
+}
+/* faixa de quadradinhos embaixo da tela fixada */
+.tiles-strip {
+  flex: none;
+  justify-content: safe center;
+  overflow-x: auto;
+}
+.tiles-fit > *,
+.tiles-strip > * {
+  flex: none;
+  width: var(--tile-w);
+  aspect-ratio: 16 / 9;
 }
 
 .tile {
   position: relative;
-  aspect-ratio: 16 / 10;
   display: grid;
   place-items: center;
   border-radius: var(--r-lg);
@@ -1596,6 +1615,14 @@ input[type="range"] {
 }
 .tile[data-speaking] {
   border-color: var(--lamp);
+}
+/* o avatar acompanha o tamanho do quadro sem cobrir o nome (o Avatar traz tamanho fixo no style) */
+.tile > .avatar {
+  --a: clamp(28px, calc(var(--tile-w, 400px) * 0.5625 - 52px), 72px);
+  width: var(--a) !important;
+  height: var(--a) !important;
+  font-size: calc(var(--a) * 0.38) !important;
+  margin-bottom: 22px;
 }
 .tile-video {
   position: absolute;
@@ -1641,17 +1668,17 @@ input[type="range"] {
   opacity: 0;
 }
 .tile:hover .tile-volume,
-.tile-volume:focus-within {
+.tile-volume:focus-within,
+.tile-volume[data-open] {
   opacity: 1;
 }
 .tile-volume .icon-btn {
   background: rgb(14 24 32 / 0.78);
 }
+/* fixed: solto do quadradinho (que corta o que passa da borda); top/left vêm do usePopPosition */
 .volume-pop {
-  position: absolute;
-  right: 0;
-  top: 40px;
-  z-index: 5;
+  position: fixed;
+  z-index: 20;
   width: 220px;
   display: flex;
   flex-direction: column;
@@ -1663,20 +1690,30 @@ input[type="range"] {
   font-size: 13px;
 }
 
-.screens {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-  gap: 12px;
-}
 .screen-tile {
   position: relative;
-  aspect-ratio: 16 / 9;
   border-radius: var(--r-md);
   overflow: hidden;
   background: #000;
 }
 .screen-tile:fullscreen {
   border-radius: 0;
+}
+/* na grade, clicar no vídeo fixa a tela no quadro grande */
+.screen-tile:not([data-focused], [data-idle], :fullscreen) {
+  cursor: pointer;
+}
+.screen-tile[data-focused] {
+  flex: 1;
+  min-height: 240px;
+}
+/* ainda não assistida: só o aviso e o botão (nenhum vídeo chegando) */
+.screen-tile[data-idle] {
+  display: grid;
+  place-items: center;
+  padding-bottom: 28px;
+  background: var(--panel);
+  border: 2px solid var(--line);
 }
 .screen-stats {
   position: absolute;
@@ -1775,7 +1812,8 @@ input[type="range"] {
 .screen-tile:hover .screen-controls > *,
 .screen-tile:focus-within .screen-controls > *,
 .screen-tile:fullscreen .screen-controls > *,
-.stream-volume[data-muted] {
+.stream-volume[data-muted],
+.stream-volume[data-open] {
   opacity: 1;
 }
 .stream-volume {
@@ -2339,9 +2377,6 @@ input[type="range"] {
   .control-btn {
     width: 46px;
     height: 46px;
-  }
-  .tiles {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }
 

@@ -22,7 +22,8 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
   - push-to-talk;
   - redução de ruído com IA (GTCRN, roda no navegador): tira teclado, mouse e barulho de fundo até enquanto a pessoa fala;
   - sensibilidade do microfone (automática ou manual, com medidor e "me ouvir"): só transmite quando você fala;
-  - compartilhamento de tela com áudio e câmera, com perfis de qualidade (de "texto nítido" a 1440p a 60 fps) e indicador de resolução, fps e Mbps;
+  - compartilhamento de tela com áudio e câmera, com perfis de qualidade (de "texto nítido" a 1440p a 60 fps) e indicador de resolução, fps e Mbps; a mesma qualidade no quadro pequeno e em tela cheia;
+  - telas como no Discord: quem está na chamada clica em **Assistir** (antes disso não chega vídeo nem som), a tela vai para o quadro grande e dá para fixar outra ou desafixar e ver várias lado a lado na grade, que se ajusta ao número de pessoas;
   - mesa de sons: qualquer um envia trechos de até 5 s (escolhe o pedaço do áudio, o volume é igualado sozinho) e toca para a chamada; cada um tem o próprio volume e pode desligar;
   - indicador de conexão (barrinhas) de cada pessoa, para saber de quem é a internet ruim;
   - quem fala "acende".

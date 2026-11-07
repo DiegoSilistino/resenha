@@ -120,6 +120,22 @@ export function toggleStreamMuted(userId: string) {
   engine?.applyVolumes();
 }
 
+/** Abre ou fecha a tela de alguém. Abrir já fixa no quadro grande, como no Discord. */
+export function setWatching(userId: string, on: boolean) {
+  useVoice.setState((s) => {
+    const watching = { ...s.watching };
+    if (on) watching[userId] = true;
+    else delete watching[userId];
+    return { watching, focused: on ? userId : s.focused === userId ? null : s.focused };
+  });
+  engine?.applyVolumes(); // o som da tela só toca para quem está assistindo
+}
+
+/** Fixa uma tela no quadro grande (null volta para a grade). */
+export function setFocused(userId: string | null) {
+  useVoice.setState({ focused: userId });
+}
+
 /** Alguns navegadores bloqueiam áudio até um clique: chamado pelo botão "Ativar som". */
 export async function unlockAudio(): Promise<void> {
   await engine?.unlockAudio();

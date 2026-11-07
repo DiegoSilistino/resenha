@@ -12,6 +12,7 @@ import {
   type Participant,
   type RemoteParticipant,
   type RemoteTrack,
+  type RemoteTrackPublication,
   Room,
   RoomEvent,
   Track,
@@ -163,6 +164,8 @@ function resetCallState() {
     audioBlocked: false,
     speaking: {},
     captions: {},
+    watching: {},
+    focused: null,
     version: s.version + 1,
   }));
 }
@@ -196,7 +199,17 @@ function wire(r: Room) {
     .on(RoomEvent.TrackMuted, bump)
     .on(RoomEvent.TrackUnmuted, bump)
     .on(RoomEvent.TrackPublished, bump)
-    .on(RoomEvent.TrackUnpublished, bump)
+    .on(RoomEvent.TrackUnpublished, (pub: RemoteTrackPublication, p: RemoteParticipant) => {
+      // Parou de transmitir: se voltar, a turma clica em Assistir de novo (como no Discord).
+      if (pub.source === Track.Source.ScreenShare && useVoice.getState().watching[p.identity]) {
+        setV((s) => {
+          const watching = { ...s.watching };
+          delete watching[p.identity];
+          return { watching };
+        });
+      }
+      bump();
+    })
     .on(RoomEvent.ParticipantNameChanged, bump)
     .on(RoomEvent.LocalTrackPublished, (pub: LocalTrackPublication) => {
       onLocalTracksChanged(r);
@@ -302,14 +315,15 @@ function clearAudioSink() {
 export function applyVolumes() {
   const r = room;
   if (!r) return;
-  const { deafened, streamMuted } = useVoice.getState();
+  const { deafened, streamMuted, watching } = useVoice.getState();
   const { userVolumes, streamVolumes } = useSettings.getState();
   for (const p of r.remoteParticipants.values()) {
     const v = participantVolumes({
       deafened,
       voice: userVolumes[p.identity],
       stream: streamVolumes[p.identity],
-      streamMuted: !!streamMuted[p.identity],
+      // Tela que você não abriu fica muda. O vídeo dela nem chega: sem <video> ligado, o adaptiveStream pausa a faixa.
+      streamMuted: !!streamMuted[p.identity] || !watching[p.identity],
     });
     p.setVolume(v.voice, Track.Source.Microphone);
     p.setVolume(v.stream, Track.Source.ScreenShareAudio);
