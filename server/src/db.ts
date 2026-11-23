@@ -118,6 +118,15 @@ export const MIGRATIONS: string[] = [
   /* 5: contas removidas (a linha fica só para assinar mensagens antigas como "Ex-membro") */ `
   ALTER TABLE users ADD COLUMN removed_at INTEGER;
   `,
+  // 6: status, atividade, recado, visual do perfil (JSON validado pelo lookSchema) e capa.
+  `
+  ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'online';
+  ALTER TABLE users ADD COLUMN activity TEXT NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN note TEXT NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN look TEXT NOT NULL DEFAULT '{}';
+  ALTER TABLE users ADD COLUMN banner_id TEXT;
+  ALTER TABLE users ADD COLUMN banner_mime TEXT;
+  `,
 ];
 
 /**

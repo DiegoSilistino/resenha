@@ -10,12 +10,17 @@ export interface JumpRequest {
 
 /** Abas do painel do admin (a ordem e os nomes ficam no AdminModal). */
 export type AdminTab = "invites" | "channels" | "members" | "backup" | "errors";
+export type SettingsTab = "profile" | "appearance" | "audio" | "notifications" | "captions" | "account";
 
 interface UiState {
   settingsOpen: boolean;
   adminOpen: boolean;
   /** Aba pedida ao abrir o painel (ex.: "+ Texto" abre direto em Canais). */
   adminTab: AdminTab | null;
+  /** Aba pedida ao abrir as configurações ("Personalizar" no cartão abre em Perfil). */
+  settingsTab: SettingsTab | null;
+  /** Cartão de perfil aberto (id da pessoa). */
+  profileId: string | null;
   shareDialogOpen: boolean;
   /** Painel de busca de mensagens aberto. */
   searchOpen: boolean;
@@ -26,8 +31,9 @@ interface UiState {
   /** Mensagem aberta para edição (só uma por vez, como no Discord). */
   editingId: number | null;
   jump: JumpRequest | null;
-  setSettingsOpen(open: boolean): void;
+  setSettingsOpen(open: boolean, tab?: SettingsTab): void;
   setAdminOpen(open: boolean, tab?: AdminTab): void;
+  openProfile(userId: string | null): void;
   setShareDialogOpen(open: boolean): void;
   setSearchOpen(open: boolean): void;
   setPageTitle(title: string): void;
@@ -42,14 +48,17 @@ export const useUi = create<UiState>()((set) => ({
   settingsOpen: false,
   adminOpen: false,
   adminTab: null,
+  settingsTab: null,
+  profileId: null,
   shareDialogOpen: false,
   searchOpen: false,
   pageTitle: "Resenha",
   replying: {},
   editingId: null,
   jump: null,
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setSettingsOpen: (settingsOpen, tab) => set({ settingsOpen, settingsTab: tab ?? null }),
   setAdminOpen: (adminOpen, tab) => set({ adminOpen, adminTab: tab ?? null }),
+  openProfile: (profileId) => set({ profileId }),
   setShareDialogOpen: (shareDialogOpen) => set({ shareDialogOpen }),
   setSearchOpen: (searchOpen) => set({ searchOpen }),
   setPageTitle: (pageTitle) => set({ pageTitle }),

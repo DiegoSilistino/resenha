@@ -1,22 +1,32 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { AVATAR_COLORS, LIMITS } from "@resenha/shared";
-import { Avatar } from "../components/Avatar.tsx";
+import { AVATAR_COLORS, DEFAULT_LOOK, LIMITS, PROFILE_COLORS, type Me, type ProfileLook } from "@resenha/shared";
 import { Modal } from "../components/Modal.tsx";
 import { api, ApiError } from "../lib/api.ts";
+import { ACCENTS, accentColor, BGS, WALLS } from "../lib/theme.ts";
 import { notifyPermission, requestNotifyPermission, type NotifyPermission } from "../lib/notify.ts";
 import { logout } from "../lib/session.ts";
 import { playSound } from "../lib/sounds.ts";
 import { useApp } from "../state/app.ts";
-import { keyLabel, useSettings, type NoiseMode, type NotifyMode } from "../state/settings.ts";
+import {
+  keyLabel,
+  useSettings,
+  type ChatWall,
+  type NoiseMode,
+  type NotifyMode,
+  type ThemeAccent,
+  type ThemeBg,
+} from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { listDevices } from "../voice/controller.ts";
 import { speechSupported } from "../voice/speech.ts";
 import { AvatarEditor } from "./AvatarEditor.tsx";
 import { MicSensitivity } from "./MicSensitivity.tsx";
+import { ProfileCardView } from "./ProfileCard.tsx";
 
 const TABS = [
   { id: "profile", label: "Perfil" },
+  { id: "appearance", label: "Aparência" },
   { id: "audio", label: "Áudio" },
   { id: "notifications", label: "Notificações" },
   { id: "captions", label: "Legendas" },
@@ -25,7 +35,7 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export function SettingsModal() {
-  const [tab, setTab] = useState<TabId>("profile");
+  const [tab, setTab] = useState<TabId>(() => useUi.getState().settingsTab ?? "profile");
   return (
     <Modal title="Configurações" onClose={() => useUi.getState().setSettingsOpen(false)} wide>
       <div className="tabs" role="tablist">
@@ -44,6 +54,7 @@ export function SettingsModal() {
       </div>
       <div role="tabpanel" className="tab-panel">
         {tab === "profile" && <ProfileTab />}
+        {tab === "appearance" && <AppearanceTab />}
         {tab === "audio" && <AudioTab />}
         {tab === "notifications" && <NotificationsTab />}
         {tab === "captions" && <CaptionsTab />}
@@ -53,18 +64,43 @@ export function SettingsModal() {
   );
 }
 
+const FRAMES: { id: ProfileLook["frame"]; label: string }[] = [
+  { id: "nenhuma", label: "Nenhuma" },
+  { id: "anel", label: "Anel" },
+  { id: "duplo", label: "Anel duplo" },
+  { id: "tracejado", label: "Tracejado" },
+  { id: "halo", label: "Halo" },
+];
+const NICK_STYLES: { id: ProfileLook["nickStyle"]; label: string }[] = [
+  { id: "padrao", label: "Padrão" },
+  { id: "cor", label: "Cor do perfil" },
+  { id: "gradiente", label: "Degradê" },
+];
+const FONTS: { id: ProfileLook["font"]; label: string }[] = [
+  { id: "onest", label: "Padrão" },
+  { id: "mono", label: "Mono" },
+  { id: "larga", label: "Larga" },
+  { id: "serif", label: "Serifada" },
+  { id: "pixel", label: "Pixel" },
+];
+
 function ProfileTab() {
   const me = useApp((s) => s.me);
   const [name, setName] = useState(me ? me.displayName : "");
   const [color, setColor] = useState(me ? me.avatarColor : AVATAR_COLORS[0]);
+  const [activity, setActivity] = useState(me ? me.activity : "");
+  const [note, setNote] = useState(me ? me.note : "");
+  const [look, setLook] = useState<ProfileLook>(me ? me.look : DEFAULT_LOOK);
   const [busy, setBusy] = useState(false);
   if (!me) return null;
+  const patch = (p: Partial<ProfileLook>) => setLook((l) => ({ ...l, ...p }));
+  const draft = { ...me, displayName: name || me.displayName, avatarColor: color, activity, note, look };
 
   async function save(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
-      const { me: updated } = await api.updateMe({ displayName: name, avatarColor: color });
+      const { me: updated } = await api.updateMe({ displayName: name, avatarColor: color, activity, note, look });
       useApp.getState().setMe(updated);
       toast.info("Perfil salvo.");
     } catch (err) {
@@ -75,42 +111,226 @@ function ProfileTab() {
   }
 
   return (
-    <form className="form" onSubmit={save}>
-      <div className="profile-preview">
-        <Avatar user={{ displayName: name || me.displayName, avatarColor: color, avatarUrl: me.avatarUrl }} size={64} />
-        <div>
-          <strong>{name || me.displayName}</strong>
-          <div className="muted">@{me.username}</div>
-        </div>
+    <form className="profile-editor" onSubmit={save}>
+      <div className="form">
+        <fieldset className="field">
+          <legend>Foto de perfil</legend>
+          <AvatarEditor onDone={() => undefined} />
+        </fieldset>
+        <label className="field">
+          <span>Nome de exibição</span>
+          <input value={name} maxLength={LIMITS.displayNameMax} onChange={(e) => setName(e.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Status</span>
+          <input
+            value={activity}
+            maxLength={LIMITS.activityMax}
+            placeholder="maratonando série"
+            onChange={(e) => setActivity(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Recado</span>
+          <input value={note} maxLength={LIMITS.noteMax} placeholder="uma frase sobre você" onChange={(e) => setNote(e.target.value)} />
+        </label>
+        <fieldset className="field">
+          <legend>{me.avatarUrl ? "Cor do avatar (aparece se a foto não carregar)" : "Cor do avatar"}</legend>
+          <div className="swatches">
+            {AVATAR_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="swatch"
+                style={{ background: c }}
+                aria-label={`Cor ${c}`}
+                aria-pressed={color === c}
+                onClick={() => setColor(c)}
+              />
+            ))}
+          </div>
+        </fieldset>
+        <fieldset className="field">
+          <legend>Cor do perfil</legend>
+          <small>Aparece no seu cartão, nas molduras e no nick.</small>
+          <ColorPicker value={look.a} onChange={(a) => patch({ a })} fallback="Cor do avatar" />
+        </fieldset>
+        <label className="check">
+          <input type="checkbox" checked={look.twoTone} onChange={(e) => patch({ twoTone: e.target.checked })} />
+          <span>
+            Duas cores
+            <small>Pinta o cartão e as molduras com uma segunda cor, que também fecha o degradê do nick.</small>
+          </span>
+        </label>
+        {(look.twoTone || look.nickStyle === "gradiente") && (
+          <fieldset className="field">
+            <legend>Segunda cor</legend>
+            <ColorPicker value={look.b} onChange={(b) => patch({ b })} fallback="Padrão" />
+          </fieldset>
+        )}
+        <Choice label="Capa" value={look.banner} options={[{ id: "cor", label: "Cor do perfil" }, { id: "imagem", label: "Imagem ou GIF" }]} onChange={(banner) => patch({ banner })} />
+        {look.banner === "imagem" && <BannerUpload hasBanner={!!me.bannerUrl} />}
+        <Choice label="Moldura do avatar" value={look.frame} options={FRAMES} onChange={(frame) => patch({ frame })} />
+        <Choice label="Estilo do nick" value={look.nickStyle} options={NICK_STYLES} onChange={(nickStyle) => patch({ nickStyle })} />
+        <Choice label="Fonte do nick" value={look.font} options={FONTS} onChange={(font) => patch({ font })} />
+        <button className="btn btn-primary" disabled={busy}>
+          Salvar perfil
+        </button>
       </div>
-      <fieldset className="field">
-        <legend>Foto de perfil</legend>
-        <AvatarEditor onDone={() => undefined} />
-      </fieldset>
-      <label className="field">
-        <span>Nome de exibição</span>
-        <input value={name} maxLength={LIMITS.displayNameMax} onChange={(e) => setName(e.target.value)} required />
+      <aside className="profile-editor-preview" aria-label="Prévia do seu cartão">
+        <span className="mono-label">prévia</span>
+        <ProfileCardView user={draft} shown={me.status} />
+      </aside>
+    </form>
+  );
+}
+
+/** Paleta do perfil; o primeiro botão volta para a cor padrão. */
+function ColorPicker({ value, onChange, fallback }: { value: string | null; onChange(c: string | null): void; fallback: string }) {
+  return (
+    <div className="swatches">
+      <button type="button" className="swatch swatch-none" aria-label={fallback} title={fallback} aria-pressed={value === null} onClick={() => onChange(null)} />
+      {PROFILE_COLORS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          className="swatch"
+          style={{ background: c }}
+          aria-label={`Cor ${c}`}
+          aria-pressed={value === c}
+          onClick={() => onChange(c)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function Choice<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { id: T; label: string }[];
+  onChange(v: T): void;
+}) {
+  return (
+    <fieldset className="field">
+      <legend>{label}</legend>
+      <div className="choice-row">
+        {options.map((o) => (
+          <button key={o.id} type="button" className="choice" aria-pressed={value === o.id} onClick={() => onChange(o.id)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+/** A capa é enviada na hora (como a foto); "Salvar perfil" cuida do resto. */
+function BannerUpload({ hasBanner }: { hasBanner: boolean }) {
+  const [busy, setBusy] = useState(false);
+  async function run(task: () => Promise<{ me: Me }>) {
+    setBusy(true);
+    try {
+      const { me } = await task();
+      useApp.getState().setMe(me);
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="row-actions">
+      <label className="btn btn-small btn-outline" aria-disabled={busy || undefined}>
+        {hasBanner ? "Trocar imagem ou GIF" : "Escolher imagem ou GIF"}
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          hidden
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void run(() => api.uploadBanner(file));
+          }}
+        />
       </label>
+      {hasBanner && (
+        <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => void run(api.removeBanner)}>
+          Tirar a imagem
+        </button>
+      )}
+      <small className="muted">PNG, JPEG, WebP ou GIF, até {LIMITS.bannerMaxBytes / 1024 / 1024} MB.</small>
+    </div>
+  );
+}
+
+/** Cor de destaque, fundo e fundo do chat: mudam só para você e aparecem na hora. */
+function AppearanceTab() {
+  const accent = useSettings((s) => s.themeAccent);
+  const bg = useSettings((s) => s.themeBg);
+  const wall = useSettings((s) => s.chatWall);
+  const set = useSettings.getState().set;
+  return (
+    <div className="form">
+      <p className="small-note muted">Muda só para você, neste aparelho, e aparece na hora.</p>
       <fieldset className="field">
-        <legend>{me.avatarUrl ? "Cor (aparece se a foto não carregar)" : "Cor do avatar"}</legend>
+        <legend>Cor de destaque</legend>
         <div className="swatches">
-          {AVATAR_COLORS.map((c) => (
+          {(Object.keys(ACCENTS) as ThemeAccent[]).map((id) => (
             <button
-              key={c}
+              key={id}
               type="button"
               className="swatch"
-              style={{ background: c }}
-              aria-label={`Cor ${c}`}
-              aria-pressed={color === c}
-              onClick={() => setColor(c)}
+              style={{ background: accentColor(id) }}
+              aria-label={ACCENTS[id].label}
+              title={ACCENTS[id].label}
+              aria-pressed={accent === id}
+              onClick={() => set({ themeAccent: id })}
             />
           ))}
         </div>
       </fieldset>
-      <button className="btn btn-primary" disabled={busy}>
-        Salvar perfil
-      </button>
-    </form>
+      <fieldset className="field">
+        <legend>Fundo</legend>
+        <div className="choice-row">
+          {(Object.keys(BGS) as ThemeBg[]).map((id) => (
+            <button
+              key={id}
+              type="button"
+              className="choice choice-swatch"
+              style={{ "--sw": BGS[id].bg1 } as React.CSSProperties}
+              aria-pressed={bg === id}
+              onClick={() => set({ themeBg: id })}
+            >
+              {BGS[id].label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className="field">
+        <legend>Fundo do chat</legend>
+        <div className="choice-row">
+          {(Object.keys(WALLS) as ChatWall[]).map((id) => (
+            <button
+              key={id}
+              type="button"
+              className="choice choice-wall"
+              style={{ "--wall": WALLS[id].css } as React.CSSProperties}
+              aria-pressed={wall === id}
+              onClick={() => set({ chatWall: id })}
+            >
+              {WALLS[id].label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+    </div>
   );
 }
 

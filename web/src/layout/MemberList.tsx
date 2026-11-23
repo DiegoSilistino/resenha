@@ -1,7 +1,9 @@
 import { Volume2 } from "lucide-react";
 import type { PublicUser } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
+import { Nick } from "../components/Nick.tsx";
 import { useApp } from "../state/app.ts";
+import { useUi } from "../state/ui.ts";
 
 /** "Quem está aqui" na página da roda: online primeiro, depois quem está fora. */
 export function MemberList() {
@@ -45,11 +47,16 @@ function Group({
       </h3>
       <ul className="member-list">
         {users.map((u) => (
-          <li key={u.id} className="member" data-offline={!online || undefined}>
-            <Avatar user={u} size={32} online={online} />
-            <span className="member-name">{u.displayName}</span>
-            {u.role === "admin" && <span className="role-tag">admin</span>}
-            {inVoice.has(u.id) && <Volume2 size={14} className="member-voice" aria-label="em um canal de voz" />}
+          <li key={u.id}>
+            <button type="button" className="member" data-offline={!online || undefined} onClick={() => useUi.getState().openProfile(u.id)}>
+              <Avatar user={u} size={32} online={online} />
+              <span className="member-names">
+                <Nick user={u} className="member-name" />
+                {online && u.activity && <span className="member-activity">{u.activity}</span>}
+              </span>
+              {u.role === "admin" && <span className="role-tag">admin</span>}
+              {inVoice.has(u.id) && <Volume2 size={14} className="member-voice" aria-label="em um canal de voz" />}
+            </button>
           </li>
         ))}
       </ul>

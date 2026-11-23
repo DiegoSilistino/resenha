@@ -1,3 +1,5 @@
+import type { ProfileLook } from "./types.ts";
+
 /** Nome exibido no app. Troque aqui para renomear o produto inteiro. */
 export const APP_NAME = "Resenha";
 
@@ -30,7 +32,26 @@ export const LIMITS = {
   jumpMaxMessages: 1_500,
   /** Intervalo mínimo entre dois sons da mesma pessoa na mesa de sons. */
   soundboardCooldownMs: 1_500,
+  /** Perfil: "Jogando CS2" e o recado do cartão. */
+  activityMax: 60,
+  noteMax: 140,
+  /** Capa do perfil: imagem ou GIF, sem recorte no navegador. */
+  bannerMaxBytes: 8 * 1024 * 1024,
+  bannerMaxSide: 4096,
 } as const;
+
+/** Cores do perfil (cartão, molduras, nick colorido): mesmo brilho, matizes diferentes. */
+export const PROFILE_COLORS = [40, 85, 125, 160, 215, 260, 305, 350].map((h) => `oklch(0.8 0.13 ${h})`);
+
+export const DEFAULT_LOOK: ProfileLook = {
+  a: null,
+  b: null,
+  twoTone: false,
+  banner: "cor",
+  frame: "nenhuma",
+  nickStyle: "padrao",
+  font: "onest",
+};
 
 /** Usuário: letras minúsculas, números, ponto, hífen e underline. */
 export const USERNAME_PATTERN = /^[a-z0-9._-]+$/;

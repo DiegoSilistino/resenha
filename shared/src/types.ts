@@ -13,6 +13,34 @@ export interface PublicUser {
   removed: boolean;
   /** Foto de perfil (URL relativa); null = iniciais sobre a cor do avatar. */
   avatarUrl: string | null;
+  /**
+   * Status escolhido. "invisivel" vem só para a própria pessoa e quem lê o protocolo cru:
+   * para os outros ela simplesmente não aparece online (o servidor esconde a presença).
+   */
+  status: UserStatus;
+  /** "Jogando CS2", "maratonando série"… (vazio = nada). */
+  activity: string;
+  /** Recado no cartão do perfil. */
+  note: string;
+  look: ProfileLook;
+  /** Imagem ou GIF da capa do perfil (URL relativa); null = capa na cor do perfil. */
+  bannerUrl: string | null;
+}
+
+export type UserStatus = "online" | "ausente" | "ocupado" | "invisivel";
+
+/** Personalização do perfil: aparece no cartão, nos balões e nas listas. */
+export interface ProfileLook {
+  /** Cor do perfil (uma de PROFILE_COLORS); null = a cor do avatar. */
+  a: string | null;
+  /** Segunda cor, usada no degradê do nick e quando twoTone está ligado. */
+  b: string | null;
+  /** Cartão e molduras em duas cores. */
+  twoTone: boolean;
+  banner: "cor" | "imagem";
+  frame: "nenhuma" | "anel" | "duplo" | "tracejado" | "halo";
+  nickStyle: "padrao" | "cor" | "gradiente";
+  font: "onest" | "mono" | "larga" | "serif" | "pixel";
 }
 
 export type Me = PublicUser;

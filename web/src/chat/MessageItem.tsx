@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent } fr
 import { CornerUpLeft, Download, FileText, Image as ImageIcon, Pencil, Reply, SmilePlus, Trash2, Tv } from "lucide-react";
 import type { Attachment, Message, MessageReference } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
+import { Nick } from "../components/Nick.tsx";
 import { api } from "../lib/api.ts";
 import { formatBytes, formatFull, formatTime } from "../lib/format.ts";
 import { realtime } from "../lib/realtime.ts";
@@ -35,6 +36,7 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
   const knownUser = (username: string) => Object.values(users).some((u) => u.username === username);
   const ytLinks = voiceChannelId ? youTubeLinks(message.content) : [];
   const gif = parseGifMessage(message.content);
+  const openAuthor = () => author && !author.removed && useUi.getState().openProfile(author.id);
 
   async function remove() {
     if (!confirm("Apagar esta mensagem? Não dá para desfazer.")) return;
@@ -61,13 +63,17 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
             {formatTime(message.createdAt)}
           </time>
         ) : (
-          <Avatar user={author} size={38} />
+          <button type="button" className="avatar-btn" onClick={openAuthor} aria-label={`Perfil de ${author?.displayName ?? "quem enviou"}`}>
+            <Avatar user={author} size={36} />
+          </button>
         )}
       </div>
       <div className="message-main">
         {!grouped && (
           <header className="message-header">
-            <span className="message-author">{author?.displayName ?? "Conta removida"}</span>
+            <button type="button" className="message-author" onClick={openAuthor}>
+              <Nick user={author} fallback="Conta removida" />
+            </button>
             <time dateTime={new Date(message.createdAt).toISOString()} title={formatFull(message.createdAt)}>
               {formatTime(message.createdAt)}
             </time>

@@ -23,6 +23,15 @@ export function imageInfo(buf: Buffer): ImageInfo | null {
   }
 }
 
+/** Capa do perfil: as mesmas imagens da foto e também GIF (animado ou não). */
+export function bannerInfo(buf: Buffer): { mime: ImageInfo["mime"] | "image/gif"; width: number; height: number } | null {
+  const info = imageInfo(buf);
+  if (info) return info;
+  const sig = ascii(buf, 0, 6);
+  if (buf.length < 10 || (sig !== "GIF87a" && sig !== "GIF89a")) return null;
+  return { mime: "image/gif", width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
+}
+
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 function png(buf: Buffer): ImageInfo | null {

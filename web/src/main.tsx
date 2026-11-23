@@ -4,6 +4,9 @@ import { BrowserRouter } from "react-router";
 import "@fontsource-variable/onest";
 import "@fontsource-variable/unbounded";
 import "@fontsource-variable/jetbrains-mono";
+// fontes que só aparecem no nick de quem as escolheu (o navegador só baixa quando alguém usa)
+import "@fontsource/instrument-serif/latin-400.css";
+import "@fontsource/silkscreen/latin-400.css";
 import "./styles.css";
 import "./lib/errors.ts"; // registra o envio de erros inesperados para o painel do admin
 import "./voice/soundboard.ts"; // toca os sons da mesa que os amigos disparam na chamada

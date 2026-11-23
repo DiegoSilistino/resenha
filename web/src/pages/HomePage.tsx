@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { Link } from "react-router";
 import { APP_NAME, type Channel } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
+import { Nick } from "../components/Nick.tsx";
+import { statusLine } from "../lib/look.ts";
 import { useApp } from "../state/app.ts";
 import { useUi } from "../state/ui.ts";
 import { preloadVoice } from "../voice/controller.ts";
@@ -72,12 +74,14 @@ export function HomePage() {
           {onlineNow.length > 0 ? (
             <ul className="online-grid">
               {onlineNow.map((u) => (
-                <li key={u.id} className="person-card">
-                  <Avatar user={u} size={44} online />
-                  <span className="person-names">
-                    <span className="person-name">{u.displayName}</span>
-                    <span className="person-sub">@{u.username}</span>
-                  </span>
+                <li key={u.id}>
+                  <button type="button" className="person-card" onClick={() => useUi.getState().openProfile(u.id)}>
+                    <Avatar user={u} size={44} online />
+                    <span className="person-names">
+                      <Nick user={u} className="person-name" />
+                      <span className="person-sub">{statusLine(u, u.status)}</span>
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>

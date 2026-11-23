@@ -55,12 +55,19 @@ export interface Settings {
   soundboardVolume: number;
   /** Admins: último erro do painel já visto neste aparelho. */
   errorsSeenId: number;
+  /** Aparência (só para você, neste aparelho): cor de destaque, fundo e fundo do chat. */
+  themeAccent: ThemeAccent;
+  themeBg: ThemeBg;
+  chatWall: ChatWall;
   set(patch: Partial<Omit<Settings, "set" | "setUserVolume" | "setStreamVolume">>): void;
   setUserVolume(userId: string, volume: number): void;
   setStreamVolume(userId: string, volume: number): void;
 }
 
 export type NotifyMode = "all" | "mentions" | "none";
+export type ThemeAccent = "lima" | "coral" | "ceu" | "lilas" | "rosa";
+export type ThemeBg = "carvao" | "grafite" | "noite";
+export type ChatWall = "nenhum" | "listras" | "pontos";
 export type NoiseMode = "ai" | "browser" | "off";
 
 const RECENT_EMOJIS_MAX = 8;
@@ -102,6 +109,9 @@ export const useSettings = create<Settings>()(
       soundboardEnabled: true,
       soundboardVolume: 0.7,
       errorsSeenId: 0,
+      themeAccent: "lima",
+      themeBg: "carvao",
+      chatWall: "nenhum",
       set: (patch) => set(patch),
       setUserVolume: (userId, volume) =>
         set((s) => ({ userVolumes: { ...s.userVolumes, [userId]: Math.min(2, Math.max(0, volume)) } })),

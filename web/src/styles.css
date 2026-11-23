@@ -921,11 +921,19 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-width: 0;
   padding: 12px;
   border-radius: 20px;
   background: var(--night);
   border: 1px solid var(--line);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.person-card:hover {
+  border-color: #3a3a42;
 }
 .person-card .presence-dot {
   border-color: var(--night);
@@ -1460,12 +1468,6 @@ input[type="range"] {
   border-radius: 50%;
   object-fit: cover;
 }
-.avatar[data-speaking] {
-  box-shadow:
-    0 0 0 2px var(--night),
-    0 0 0 4px var(--accent),
-    0 0 22px 6px var(--glow);
-}
 
 .presence-dot {
   position: absolute;
@@ -1474,11 +1476,94 @@ input[type="range"] {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 3px solid var(--night);
-  background: var(--faint);
+  border: 3px solid var(--ring-bg, var(--night));
+  background: #5d5d66;
 }
-.presence-dot[data-online] {
+.presence-dot[data-status="online"] {
   background: var(--online);
+}
+.presence-dot[data-status="ausente"] {
+  background: #f5b84a;
+}
+.presence-dot[data-status="ocupado"] {
+  background: #ff5a4f;
+}
+.status-dot {
+  flex: none;
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+/* molduras do perfil (--pa/--pb vêm do Avatar; --ring-bg é a cor do fundo onde o avatar está) */
+.avatar[data-frame="anel"] {
+  box-shadow:
+    0 0 0 2px var(--ring-bg, var(--night)),
+    0 0 0 4px var(--pa);
+}
+.avatar[data-frame="duplo"] {
+  box-shadow:
+    0 0 0 2px var(--ring-bg, var(--night)),
+    0 0 0 4px var(--pa),
+    0 0 0 6px var(--ring-bg, var(--night)),
+    0 0 0 8px var(--pb);
+}
+.avatar[data-frame="halo"] {
+  box-shadow:
+    0 0 0 2px var(--ring-bg, var(--night)),
+    0 0 0 4px var(--pa),
+    0 0 14px 4px color-mix(in oklch, var(--pa) 55%, transparent);
+}
+.avatar[data-frame="tracejado"] {
+  outline: 2px dashed var(--pa);
+  outline-offset: 2px;
+}
+/* falando vence a moldura */
+.avatar[data-speaking] {
+  box-shadow:
+    0 0 0 2px var(--ring-bg, var(--night)),
+    0 0 0 4px var(--accent),
+    0 0 22px 6px var(--glow);
+}
+
+/* nick com o estilo do perfil */
+.nick {
+  font-family: var(--nick-font, inherit);
+}
+/* fontes de nick com letra mais baixa ou mais alta: iguala a altura do "x" à do texto em volta */
+.nick[data-font="serif"],
+.nick[data-font="pixel"] {
+  font-weight: 400;
+  letter-spacing: 0;
+  font-size-adjust: 0.52;
+}
+.nick[data-font="larga"] {
+  letter-spacing: -0.02em;
+}
+.nick[data-style="cor"] {
+  color: var(--pa);
+}
+.nick[data-style="gradiente"] {
+  background: linear-gradient(90deg, var(--pa), var(--pg));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* avatar e nome que abrem o cartão de perfil */
+.avatar-btn,
+.message-author {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.message-author:hover .nick {
+  text-decoration: underline;
 }
 
 /* ------------------------------------------------------------ quem está aqui */
@@ -1500,9 +1585,32 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: calc(100% + 12px);
   padding: 5px 6px;
   margin: 0 -6px;
+  border: 0;
   border-radius: 12px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.member:hover {
+  background: #1a1a1e;
+}
+.member-names {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.member-activity {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .member[data-offline] {
   opacity: 0.45;
@@ -1539,6 +1647,7 @@ input[type="range"] {
   height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
+  background: var(--chat-wall, none);
 }
 .messages-inner {
   padding: 16px 0 8px;
@@ -3084,6 +3193,205 @@ input[type="range"] {
   flex: 1;
 }
 
+/* ------------------------------------------------------------ cartão de perfil */
+
+.member-names > .nick,
+.person-names > .nick {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.modal[data-bare] {
+  width: min(390px, calc(100vw - 24px));
+  border: 0;
+  background: none;
+  overflow: visible;
+}
+.profile-card {
+  --card-top: color-mix(in oklch, var(--pa) 12%, #111113);
+  --ring-bg: var(--card-top);
+  display: flex;
+  flex-direction: column;
+  max-height: min(86dvh, 760px);
+  overflow-y: auto;
+  border: 1px solid var(--line-2);
+  border-radius: 28px;
+  background: var(--card-top);
+  color: var(--text);
+}
+.profile-card[data-two] {
+  --card-top: color-mix(in oklch, var(--pa) 24%, #111113);
+  background: linear-gradient(180deg, var(--card-top), color-mix(in oklch, var(--pb) 20%, #111113));
+  border-color: color-mix(in oklch, var(--pa) 40%, #26262c);
+}
+.profile-banner {
+  flex: none;
+  height: 120px;
+  border-radius: 27px 27px 0 0;
+  background: var(--pa);
+  overflow: hidden;
+}
+.profile-banner img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.profile-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 24px 24px;
+}
+.profile-avatar {
+  margin-top: -42px;
+  align-self: flex-start;
+  display: grid;
+  border-radius: 50%;
+  box-shadow: 0 0 0 6px var(--card-top);
+}
+.profile-avatar .avatar[data-frame="anel"],
+.profile-avatar .avatar[data-frame="duplo"],
+.profile-avatar .avatar[data-frame="halo"] {
+  --ring-bg: var(--card-top);
+}
+.profile-avatar .presence-dot {
+  width: 20px;
+  height: 20px;
+  right: 0;
+  bottom: 0;
+  border-width: 4px;
+}
+.profile-names {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.profile-nick-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.profile-nick {
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.profile-handle {
+  font: 400 14px var(--font-mono);
+  color: #8b8b93;
+}
+.profile-sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  color: #b4b4bc;
+}
+.profile-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgb(0 0 0 / 0.28);
+  color: #e4e4e7;
+  overflow-wrap: anywhere;
+}
+.profile-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.status-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid #222228;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.status-option[aria-checked="true"] {
+  border-color: #3a3a42;
+  background: rgb(255 255 255 / 0.06);
+}
+.profile-actions {
+  display: flex;
+  gap: 8px;
+}
+.profile-actions > .btn {
+  flex: 1;
+}
+
+/* personalizar: campos à esquerda, prévia do cartão à direita */
+.profile-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 22px;
+  align-items: start;
+}
+.profile-editor-preview {
+  position: sticky;
+  top: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.profile-editor-preview .profile-card {
+  max-height: none;
+}
+.choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.choice {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #26262c;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.choice[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.choice-swatch::before,
+.choice-wall::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border-radius: 4px;
+  border: 1px solid var(--line-2);
+  background: var(--sw, var(--night));
+}
+.choice-wall::before {
+  background: var(--wall), var(--night);
+}
+.swatch-none {
+  background: conic-gradient(from 45deg, #3a3a42 0 25%, #26262c 0 50%, #3a3a42 0 75%, #26262c 0);
+}
+
 /* ------------------------------------------------------------ telas menores */
 
 @media (max-width: 1100px) {
@@ -3107,6 +3415,13 @@ input[type="range"] {
 }
 
 @media (max-width: 760px) {
+  .profile-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .profile-editor-preview {
+    position: static;
+    order: -1;
+  }
   /* celular: topo enxuto, abas no menu de baixo e a sala ocupando a tela toda */
   .topbar {
     height: 60px;

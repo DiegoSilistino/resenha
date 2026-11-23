@@ -58,7 +58,14 @@ export const api = {
   register: (b: { code: string; username: string; displayName: string; password: string }) =>
     request<{ me: Me }>("POST", "/api/auth/register", b),
 
-  updateMe: (b: { displayName?: string; avatarColor?: string }) => request<{ me: Me }>("PATCH", "/api/me", b),
+  updateMe: (b: Partial<Pick<Me, "displayName" | "avatarColor" | "status" | "activity" | "note" | "look">>) =>
+    request<{ me: Me }>("PATCH", "/api/me", b),
+  uploadBanner: (image: File) => {
+    const form = new FormData();
+    form.append("file", image, image.name);
+    return request<{ me: Me }>("POST", "/api/me/banner", form);
+  },
+  removeBanner: () => request<{ me: Me }>("DELETE", "/api/me/banner"),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>("POST", "/api/me/password", { currentPassword, newPassword }),
   uploadAvatar: (image: Blob) => {

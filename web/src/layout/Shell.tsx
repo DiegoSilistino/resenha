@@ -8,6 +8,7 @@ import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { ChatView } from "../chat/ChatView.tsx";
+import { ProfileCard } from "../modals/ProfileCard.tsx";
 import { HomePage } from "../pages/HomePage.tsx";
 import { RodaPage } from "../pages/RodaPage.tsx";
 import { preloadVoice } from "../voice/controller.ts";
@@ -88,6 +89,7 @@ export function Shell() {
       </div>
       <Dock />
       <WatchDock />
+      <ProfileCard />
       <Suspense fallback={null}>
         {settingsOpen && <SettingsModal />}
         {adminOpen && <AdminModal />}

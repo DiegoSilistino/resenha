@@ -82,6 +82,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   const hub = new Hub();
   const voice = new VoicePresence(hub);
   const store = new Store(deps.db);
+  for (const id of store.invisibleUserIds()) hub.setHidden(id, true);
   const ctx: AppContext = {
     config,
     store,

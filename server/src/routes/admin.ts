@@ -82,7 +82,8 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       const removed = store.removeUser(req.params.id);
       if (!removed) throw notFound("Usuário não encontrado");
       await disconnectEverywhere(removed.user.id, "conta removida");
-      if (removed.avatarId) await ctx.avatars.remove([removed.avatarId]);
+      const images = [removed.avatarId, removed.bannerId].filter((id): id is string => !!id);
+      if (images.length) await ctx.avatars.remove(images);
       if (removed.orphanAttachmentIds.length) await ctx.uploads.remove(removed.orphanAttachmentIds);
       hub.broadcast({ type: "user.upsert", user: toPublicUser(removed.user) });
       return reply.status(204).send();

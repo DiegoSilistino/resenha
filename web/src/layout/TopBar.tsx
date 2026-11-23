@@ -45,9 +45,9 @@ export function TopBar() {
       <button
         type="button"
         className="topbar-me"
-        onClick={() => useUi.getState().setSettingsOpen(true)}
-        aria-label="Seu perfil e configurações"
-        title="Seu perfil e configurações"
+        onClick={() => me && useUi.getState().openProfile(me.id)}
+        aria-label="Seu perfil e status"
+        title="Seu perfil e status"
       >
         {me && <Avatar user={me} size={40} online />}
       </button>

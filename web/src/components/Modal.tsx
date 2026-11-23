@@ -6,10 +6,12 @@ interface Props {
   onClose(): void;
   children: ReactNode;
   wide?: boolean;
+  /** Sem cabeçalho nem moldura: o conteúdo é o próprio cartão (ex.: perfil). */
+  bare?: boolean;
 }
 
 /** Diálogo nativo (<dialog>): foco preso, Esc fecha e leitores de tela entendem. */
-export function Modal({ title, onClose, children, wide }: Props) {
+export function Modal({ title, onClose, children, wide, bare }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   // Guardado em ref para o efeito abaixo rodar só uma vez, mesmo com onClose inline.
   const closeRef = useRef(onClose);
@@ -35,11 +37,15 @@ export function Modal({ title, onClose, children, wide }: Props) {
       ref={ref}
       className="modal"
       data-wide={wide || undefined}
+      data-bare={bare || undefined}
       aria-label={title}
       onMouseDown={(e) => {
         if (e.target === ref.current) closeRef.current(); // clique no fundo escurecido
       }}
     >
+      {bare ? (
+        children
+      ) : (
       <div className="modal-body">
         <header className="modal-header">
           <h2>{title}</h2>
@@ -49,6 +55,7 @@ export function Modal({ title, onClose, children, wide }: Props) {
         </header>
         {children}
       </div>
+      )}
     </dialog>
   );
 }

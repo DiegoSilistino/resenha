@@ -4,7 +4,7 @@
  * - `ServerEvent` descreve tudo que o servidor envia pelo WebSocket.
  */
 import { z } from "zod";
-import { AVATAR_COLORS, LIMITS, USERNAME_PATTERN } from "./constants.ts";
+import { AVATAR_COLORS, LIMITS, PROFILE_COLORS, USERNAME_PATTERN } from "./constants.ts";
 import type {
   Channel,
   ClientErrorEntry,
@@ -52,12 +52,37 @@ export const registerBody = z.object({
   password: passwordSchema,
 });
 
+const profileColor = z.string().refine((c) => PROFILE_COLORS.includes(c), "Cor fora da paleta");
+
+export const lookSchema = z.object({
+  a: profileColor.nullable(),
+  b: profileColor.nullable(),
+  twoTone: z.boolean(),
+  banner: z.enum(["cor", "imagem"]),
+  frame: z.enum(["nenhuma", "anel", "duplo", "tracejado", "halo"]),
+  nickStyle: z.enum(["padrao", "cor", "gradiente"]),
+  font: z.enum(["onest", "mono", "larga", "serif", "pixel"]),
+});
+
+export const userStatusSchema = z.enum(["online", "ausente", "ocupado", "invisivel"]);
+
+/** Texto curto de uma linha (atividade, recado): sem quebras de linha. */
+const oneLine = (max: number) =>
+  z
+    .string()
+    .transform((s) => s.replace(/\s+/g, " ").trim())
+    .pipe(z.string().max(max));
+
 export const updateMeBody = z
   .object({
     displayName: displayNameSchema.optional(),
     avatarColor: z.enum(AVATAR_COLORS).optional(),
+    status: userStatusSchema.optional(),
+    activity: oneLine(LIMITS.activityMax).optional(),
+    note: oneLine(LIMITS.noteMax).optional(),
+    look: lookSchema.optional(),
   })
-  .refine((b) => b.displayName !== undefined || b.avatarColor !== undefined, "Nada para alterar");
+  .refine((b) => Object.values(b).some((v) => v !== undefined), "Nada para alterar");
 
 export const changePasswordBody = z.object({
   currentPassword: z.string().min(1).max(LIMITS.passwordMax),

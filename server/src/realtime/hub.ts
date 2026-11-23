@@ -17,6 +17,8 @@ export interface Connection {
 export class Hub {
   private readonly conns = new Map<string, Connection>();
   private readonly onPresence: ((userId: string, online: boolean) => void)[] = [];
+  /** Quem escolheu "Invisível": conectado, mas os outros não o veem online. */
+  private readonly hidden = new Set<string>();
 
   onPresenceChange(fn: (userId: string, online: boolean) => void) {
     this.onPresence.push(fn);
@@ -26,7 +28,7 @@ export class Hub {
     const wasOnline = this.isOnline(conn.userId);
     this.conns.set(conn.id, conn);
     if (!wasOnline) {
-      this.broadcast({ type: "presence", userId: conn.userId, online: true }, conn.id);
+      if (!this.hidden.has(conn.userId)) this.broadcast({ type: "presence", userId: conn.userId, online: true }, conn.id);
       for (const fn of this.onPresence) fn(conn.userId, true);
     }
   }
@@ -36,10 +38,18 @@ export class Hub {
     if (!conn) return undefined;
     this.conns.delete(connId);
     if (!this.isOnline(conn.userId)) {
-      this.broadcast({ type: "presence", userId: conn.userId, online: false });
+      if (!this.hidden.has(conn.userId)) this.broadcast({ type: "presence", userId: conn.userId, online: false });
       for (const fn of this.onPresence) fn(conn.userId, false);
     }
     return conn;
+  }
+
+  /** Liga/desliga o "Invisível"; se a pessoa está conectada, os outros a veem sair ou voltar. */
+  setHidden(userId: string, hidden: boolean): void {
+    if (this.hidden.has(userId) === hidden) return;
+    if (hidden) this.hidden.add(userId);
+    else this.hidden.delete(userId);
+    if (this.isOnline(userId)) this.broadcast({ type: "presence", userId, online: !hidden });
   }
 
   get(connId: string): Connection | undefined {
@@ -51,8 +61,9 @@ export class Hub {
     return false;
   }
 
+  /** Quem aparece online para os outros (invisíveis ficam de fora). */
   onlineUserIds(): string[] {
-    return [...new Set([...this.conns.values()].map((c) => c.userId))];
+    return [...new Set([...this.conns.values()].map((c) => c.userId))].filter((id) => !this.hidden.has(id));
   }
 
   send(conn: Connection, event: ServerEvent): void {

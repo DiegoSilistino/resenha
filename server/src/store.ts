@@ -3,7 +3,10 @@
  */
 import { randomUUID } from "node:crypto";
 import {
+  DEFAULT_LOOK,
   LIMITS,
+  lookSchema,
+  userStatusSchema,
   type Attachment,
   type Channel,
   type ChannelKind,
@@ -12,11 +15,13 @@ import {
   type Invite,
   type Message,
   type MessageReference,
+  type ProfileLook,
   type PublicUser,
   type Reaction,
   type Role,
   type SearchResult,
   type SoundboardSound,
+  type UserStatus,
 } from "@resenha/shared";
 import { transaction, type Db } from "./db.ts";
 import { ftsQuery, makeSnippet, MARK_END, MARK_START } from "./search.ts";
@@ -55,6 +60,12 @@ interface UserRow {
   removed_at: number | null;
   avatar_id: string | null;
   avatar_mime: string | null;
+  status: string;
+  activity: string;
+  note: string;
+  look: string;
+  banner_id: string | null;
+  banner_mime: string | null;
 }
 
 export interface UserRecord extends PublicUser {
@@ -62,6 +73,16 @@ export interface UserRecord extends PublicUser {
   createdAt: number;
   avatarId: string | null;
   avatarMime: string | null;
+  bannerId: string | null;
+}
+
+/** JSON do banco que não bate com o schema (versão antiga, edição manual) volta ao padrão. */
+function parseLook(json: string): ProfileLook {
+  try {
+    return lookSchema.parse({ ...DEFAULT_LOOK, ...JSON.parse(json) });
+  } catch {
+    return DEFAULT_LOOK;
+  }
 }
 
 export type ReactionResult = "added" | "exists" | "limit";
@@ -123,11 +144,19 @@ const toUser = (r: UserRow): UserRecord => ({
   disabled: r.disabled_at !== null,
   removed: r.removed_at !== null,
   avatarUrl: r.avatar_id ? avatarUrl(r.avatar_id) : null,
+  status: userStatusSchema.catch("online").parse(r.status),
+  activity: r.activity,
+  note: r.note,
+  look: parseLook(r.look),
+  bannerUrl: r.banner_id ? bannerUrl(r.banner_id) : null,
   passwordHash: r.password_hash,
   createdAt: r.created_at,
   avatarId: r.avatar_id,
   avatarMime: r.avatar_mime,
+  bannerId: r.banner_id,
 });
+
+export const bannerUrl = (id: string) => `/api/banners/${id}`;
 
 /** O id muda a cada foto nova, então a URL pode ficar em cache para sempre. */
 export const avatarUrl = (id: string) => `/api/avatars/${id}`;
@@ -141,6 +170,11 @@ export const toPublicUser = (u: UserRecord): PublicUser => ({
   disabled: u.disabled,
   removed: u.removed,
   avatarUrl: u.avatarUrl,
+  status: u.status,
+  activity: u.activity,
+  note: u.note,
+  look: u.look,
+  bannerUrl: u.bannerUrl,
 });
 
 /** Nome e cor de quem teve a conta removida, nas mensagens que ficaram. */
@@ -231,14 +265,52 @@ export class Store {
     return this.userById(id)!;
   }
 
-  updateUserProfile(id: string, p: { displayName?: string; avatarColor?: string }): UserRecord {
+  updateUserProfile(
+    id: string,
+    p: { displayName?: string; avatarColor?: string; status?: UserStatus; activity?: string; note?: string; look?: ProfileLook },
+  ): UserRecord {
     this.db
       .prepare(
-        `UPDATE users SET display_name = COALESCE(?, display_name), avatar_color = COALESCE(?, avatar_color)
+        `UPDATE users SET display_name = COALESCE(?, display_name), avatar_color = COALESCE(?, avatar_color),
+           status = COALESCE(?, status), activity = COALESCE(?, activity), note = COALESCE(?, note),
+           look = COALESCE(?, look)
          WHERE id = ?`,
       )
-      .run(p.displayName ?? null, p.avatarColor ?? null, id);
+      .run(
+        p.displayName ?? null,
+        p.avatarColor ?? null,
+        p.status ?? null,
+        p.activity ?? null,
+        p.note ?? null,
+        p.look ? JSON.stringify(p.look) : null,
+        id,
+      );
     return this.userById(id)!;
+  }
+
+  /** Troca a capa (ou remove, com null) e devolve o id da anterior, para apagar o arquivo. */
+  setBanner(userId: string, banner: { id: string; mime: string } | null): string | null {
+    return transaction(this.db, () => {
+      const prev = this.db.prepare("SELECT banner_id FROM users WHERE id = ?").get(userId) as
+        | { banner_id: string | null }
+        | undefined;
+      this.db
+        .prepare("UPDATE users SET banner_id = ?, banner_mime = ? WHERE id = ?")
+        .run(banner?.id ?? null, banner?.mime ?? null, userId);
+      return prev?.banner_id ?? null;
+    });
+  }
+
+  bannerById(id: string): { mime: string } | null {
+    const r = this.db.prepare("SELECT banner_mime FROM users WHERE banner_id = ?").get(id) as
+      | { banner_mime: string | null }
+      | undefined;
+    return r?.banner_mime ? { mime: r.banner_mime } : null;
+  }
+
+  /** Quem está invisível (o hub esconde a presença dessas pessoas). */
+  invisibleUserIds(): string[] {
+    return (this.db.prepare("SELECT id FROM users WHERE status = 'invisivel'").all() as { id: string }[]).map((r) => r.id);
   }
 
   /** Troca a foto (ou remove, com null) e devolve o id da anterior, para apagar o arquivo. */
@@ -261,12 +333,15 @@ export class Store {
     return r?.avatar_mime ? { mime: r.avatar_mime } : null;
   }
 
+  /** Fotos e capas em uso (os dois moram na pasta de avatares; o resto é apagado na limpeza). */
   allAvatarIds(): Set<string> {
-    return new Set(
-      (this.db.prepare("SELECT avatar_id FROM users WHERE avatar_id IS NOT NULL").all() as { avatar_id: string }[]).map(
-        (r) => r.avatar_id,
-      ),
-    );
+    const rows = this.db
+      .prepare(
+        `SELECT avatar_id AS id FROM users WHERE avatar_id IS NOT NULL
+         UNION SELECT banner_id FROM users WHERE banner_id IS NOT NULL`,
+      )
+      .all() as { id: string }[];
+    return new Set(rows.map((r) => r.id));
   }
 
   setPasswordHash(id: string, hash: string): void {
@@ -286,7 +361,9 @@ export class Store {
    * Devolve a foto e os anexos soltos que tinha (para apagar os arquivos), ou null se o usuário
    * não existe ou já foi removido.
    */
-  removeUser(id: string): { user: UserRecord; avatarId: string | null; orphanAttachmentIds: string[] } | null {
+  removeUser(
+    id: string,
+  ): { user: UserRecord; avatarId: string | null; bannerId: string | null; orphanAttachmentIds: string[] } | null {
     return transaction(this.db, () => {
       const before = this.userById(id);
       if (!before || before.removed) return null;
@@ -294,7 +371,8 @@ export class Store {
       this.db
         .prepare(
           `UPDATE users SET username = ?, display_name = ?, password_hash = '!', role = 'member',
-             avatar_color = ?, avatar_id = NULL, avatar_mime = NULL,
+             avatar_color = ?, avatar_id = NULL, avatar_mime = NULL, banner_id = NULL, banner_mime = NULL,
+             status = 'online', activity = '', note = '', look = '{}',
              disabled_at = COALESCE(disabled_at, ?), removed_at = ?
            WHERE id = ?`,
         )
@@ -304,7 +382,7 @@ export class Store {
         this.db.prepare("SELECT id FROM attachments WHERE uploader_id = ? AND message_id IS NULL").all(id) as { id: string }[]
       ).map((r) => r.id);
       this.db.prepare("DELETE FROM attachments WHERE uploader_id = ? AND message_id IS NULL").run(id);
-      return { user: this.userById(id)!, avatarId: before.avatarId, orphanAttachmentIds: orphans };
+      return { user: this.userById(id)!, avatarId: before.avatarId, bannerId: before.bannerId, orphanAttachmentIds: orphans };
     });
   }
 

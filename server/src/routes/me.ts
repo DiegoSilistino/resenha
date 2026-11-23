@@ -12,6 +12,7 @@ export function registerMeRoutes(app: FastifyInstance, ctx: AppContext) {
     const body = parse(updateMeBody, req.body);
     const user = store.updateUserProfile(currentUser(req).id, body);
     const me = toPublicUser(user);
+    if (body.status) hub.setHidden(user.id, body.status === "invisivel");
     hub.broadcast({ type: "user.upsert", user: me });
     return { me };
   });
