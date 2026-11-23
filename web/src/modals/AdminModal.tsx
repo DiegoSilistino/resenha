@@ -22,8 +22,8 @@ type TabId = (typeof TABS)[number]["id"];
 
 export function AdminModal() {
   const hasNewErrors = useHasNewErrors();
-  // Chegou aqui pelo aviso de erro novo: abre direto na aba de erros.
-  const [tab, setTab] = useState<TabId>(() => (hasNewErrors ? "errors" : "invites"));
+  // Aba pedida por quem abriu ("+ Texto" → Canais); senão, aviso de erro novo abre direto em Erros.
+  const [tab, setTab] = useState<TabId>(() => useUi.getState().adminTab ?? (hasNewErrors ? "errors" : "invites"));
   return (
     <Modal title="Administrar o grupo" onClose={() => useUi.getState().setAdminOpen(false)} wide>
       <div className="tabs" role="tablist">

@@ -3,7 +3,6 @@ import {
   Captions as CaptionsIcon,
   Headphones,
   HeadphoneOff,
-  Menu,
   MessageSquare,
   Mic,
   MicOff,
@@ -13,13 +12,13 @@ import {
   Tv,
   Video,
   VideoOff,
-  Volume2,
 } from "lucide-react";
 import { Track } from "livekit-client";
 import { useLocation } from "react-router";
-import type { Channel } from "@resenha/shared";
+import { APP_NAME, type Channel } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { ChatPanel } from "../chat/ChatPanel.tsx";
+import { BackToRoda } from "../layout/BackToRoda.tsx";
 import { useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { SearchButton } from "../search/SearchButton.tsx";
@@ -57,6 +56,7 @@ export function VoiceView({ channel }: { channel: Channel }) {
   const chatOpen = narrow ? narrowOpen : savedOpen;
   const toggleChat = () => (narrow ? setNarrowOpen(!chatOpen) : useSettings.getState().set({ voiceChatOpen: !chatOpen }));
   const unread = useApp((s) => (s.unread[channel.id] ?? 0) > 0);
+  const inCall = useApp((s) => s.voice[channel.id]?.length ?? 0);
 
   useEffect(() => {
     useUi.getState().setPageTitle(channel.name);
@@ -74,16 +74,12 @@ export function VoiceView({ channel }: { channel: Channel }) {
   return (
     <main className="main voice-view">
       <header className="main-header">
-        <button
-          type="button"
-          className="icon-btn nav-toggle"
-          onClick={() => useUi.getState().setNavOpen(true)}
-          aria-label="Abrir lista de canais"
-        >
-          <Menu size={20} />
-        </button>
-        <Volume2 size={20} aria-hidden="true" className="header-icon" />
-        <h1 className="main-title">{channel.name}</h1>
+        <BackToRoda />
+        <div className="main-titles">
+          <span className="mono-label">sala de voz · {APP_NAME}</span>
+          <h1 className="main-title">{channel.name}</h1>
+        </div>
+        <span className="mono-label voice-count">{inCall > 0 ? `${inCall} na call` : "ninguém na call"}</span>
         <div className="header-actions">
           <SearchButton />
           <button
@@ -145,7 +141,7 @@ function JoinCard({ channel }: { channel: Channel }) {
         disabled={status === "connecting"}
         onClick={() => void joinVoice(channel.id)}
       >
-        {status === "connecting" ? "Conectando…" : "Entrar no canal"}
+        {status === "connecting" ? "Conectando…" : "Entrar na call"}
       </button>
     </div>
   );
@@ -336,6 +332,7 @@ function ControlBar({ channelId, watch }: { channelId: string; watch: WatchVisib
       </ControlButton>
       <ControlButton label="Sair da chamada" danger solid onClick={() => void leaveVoice()}>
         <PhoneOff />
+        <span className="control-text">Sair da call</span>
       </ControlButton>
     </div>
   );

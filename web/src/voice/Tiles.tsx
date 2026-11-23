@@ -118,7 +118,12 @@ export function ParticipantTile({ participant, channelId }: { participant: Parti
   const name = user?.displayName ?? participant.name ?? "…";
 
   return (
-    <div className="tile" data-speaking={speaking || undefined} data-video={!!camTrack || undefined}>
+    <div
+      className="tile"
+      data-speaking={speaking || undefined}
+      data-video={!!camTrack || undefined}
+      style={user ? ({ "--tint": user.avatarColor } as React.CSSProperties) : undefined}
+    >
       {camTrack ? (
         <VideoView track={camTrack} mirror={participant.isLocal} />
       ) : (

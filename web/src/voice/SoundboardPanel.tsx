@@ -437,7 +437,7 @@ function Waveform({
     el.height = Math.round(h * dpr);
     g.scale(dpr, dpr);
     const style = getComputedStyle(el);
-    const on = style.getPropertyValue("--wave-on").trim() || "#f2a93b";
+    const on = style.getPropertyValue("--wave-on").trim() || "#d8f26a";
     const off = style.getPropertyValue("--wave-off").trim() || "#6f8792";
     const col = w / peaks.length;
     peaks.forEach((p, i) => {

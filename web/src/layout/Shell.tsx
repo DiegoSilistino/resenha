@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
+import { Navigate, Route, Routes, useNavigate, useParams } from "react-router";
 import { BellRing, X } from "lucide-react";
 import { lazyChunk } from "../lib/chunks.ts";
 import { notifyPermission, requestNotifyPermission, setNotifyNavigator } from "../lib/notify.ts";
@@ -8,8 +8,12 @@ import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { ChatView } from "../chat/ChatView.tsx";
+import { HomePage } from "../pages/HomePage.tsx";
+import { RodaPage } from "../pages/RodaPage.tsx";
 import { preloadVoice } from "../voice/controller.ts";
 import { WatchDock } from "../watch/WatchDock.tsx";
+import { Sidebar } from "./Sidebar.tsx";
+import { Dock, TopBar } from "./TopBar.tsx";
 
 // Partes que nem todo mundo abre ficam fora do pacote inicial (a tela de voz traz o LiveKit).
 const loadVoiceView = () => import("../voice/VoiceView.tsx");
@@ -37,26 +41,17 @@ function useIdlePreload(ready: boolean) {
     return () => clearTimeout(timer);
   }, [ready]);
 }
-import { MemberList } from "./MemberList.tsx";
-import { Sidebar } from "./Sidebar.tsx";
 
 export function Shell() {
   const ready = useApp((s) => s.ready);
   const connection = useApp((s) => s.connection);
-  const navOpen = useUi((s) => s.navOpen);
   const settingsOpen = useUi((s) => s.settingsOpen);
   const adminOpen = useUi((s) => s.adminOpen);
   const shareDialogOpen = useUi((s) => s.shareDialogOpen);
   const searchOpen = useUi((s) => s.searchOpen);
-  const location = useLocation();
   const navigate = useNavigate();
   useDocumentTitle();
   useIdlePreload(ready);
-
-  // No celular, a gaveta de canais fecha ao navegar.
-  useEffect(() => {
-    useUi.getState().setNavOpen(false);
-  }, [location.pathname]);
 
   // Clique numa notificação do Windows abre o canal da mensagem.
   useEffect(() => {
@@ -67,13 +62,14 @@ export function Shell() {
   if (!ready) {
     return (
       <div className="splash" aria-busy="true">
-        <span className="wordmark">Conectando…</span>
+        <span className="splash-text">Conectando…</span>
       </div>
     );
   }
 
   return (
-    <div className="shell" data-nav-open={navOpen || undefined}>
+    <div className="shell">
+      <TopBar />
       <div className="banners">
         {connection !== "online" && (
           <div className="connection-banner" role="status">
@@ -82,18 +78,15 @@ export function Shell() {
         )}
         <NotifyPrompt />
       </div>
-      <Sidebar />
-      <button
-        type="button"
-        className="nav-scrim"
-        aria-label="Fechar lista de canais"
-        tabIndex={navOpen ? 0 : -1}
-        onClick={() => useUi.getState().setNavOpen(false)}
-      />
-      <Routes>
-        <Route path="/c/:channelId" element={<ChannelRoute />} />
-        <Route path="*" element={<DefaultChannel />} />
-      </Routes>
+      <div className="content">
+        <Routes>
+          <Route index element={<HomePage />} />
+          <Route path="/roda" element={<RodaPage />} />
+          <Route path="/c/:channelId" element={<ChannelRoute />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+      <Dock />
       <WatchDock />
       <Suspense fallback={null}>
         {settingsOpen && <SettingsModal />}
@@ -105,28 +98,23 @@ export function Shell() {
   );
 }
 
-function DefaultChannel() {
-  const first = useApp((s) => s.channels.find((c) => c.kind === "text") ?? s.channels[0]);
-  if (!first) return <main className="main empty-state">Nenhum canal ainda.</main>;
-  return <Navigate to={`/c/${first.id}`} replace />;
-}
-
+/** Sala aberta: painel das salas à esquerda (some no celular) e a conversa ou a chamada. */
 function ChannelRoute() {
   const { channelId = "" } = useParams();
   const channel = useApp((s) => s.channels.find((c) => c.id === channelId));
-  if (!channel) return <DefaultChannel />;
-  if (channel.kind === "voice") {
-    return (
-      <Suspense fallback={<main className="main empty-state">Carregando…</main>}>
-        <VoiceView key={channel.id} channel={channel} />
-      </Suspense>
-    );
-  }
+  // Sala apagada (ou link velho): volta para a roda.
+  if (!channel) return <Navigate to="/roda" replace />;
   return (
-    <>
-      <ChatView key={channel.id} channel={channel} />
-      <MemberList />
-    </>
+    <div className="room-layout">
+      <Sidebar />
+      {channel.kind === "voice" ? (
+        <Suspense fallback={<main className="main empty-state">Carregando…</main>}>
+          <VoiceView key={channel.id} channel={channel} />
+        </Suspense>
+      ) : (
+        <ChatView key={channel.id} channel={channel} />
+      )}
+    </div>
   );
 }
 

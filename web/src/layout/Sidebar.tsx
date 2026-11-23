@@ -1,25 +1,39 @@
-import { NavLink, useNavigate } from "react-router";
-import { Hash, MessageSquare, MicOff, HeadphoneOff, Settings2, Video, Volume2 } from "lucide-react";
+import { Link, NavLink, useNavigate } from "react-router";
+import { MessageSquare, MicOff, HeadphoneOff, Plus, Settings2, Video } from "lucide-react";
 import { APP_NAME, type Channel, type VoiceMember } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
+import { initials } from "../lib/format.ts";
 import { useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { useUi } from "../state/ui.ts";
 import { joinVoice, preloadVoice, useVoice } from "../voice/controller.ts";
-import { UserPanel } from "./UserPanel.tsx";
-import { VoiceBar } from "./VoiceBar.tsx";
 
+/** Erro novo no painel do admin que ele ainda não viu. */
+export function useAdminBadge() {
+  const isAdmin = useApp((s) => !!s.me && s.me.role === "admin");
+  const newErrors = useApp((s) => s.latestErrorId) > useSettings((s) => s.errorsSeenId);
+  return { isAdmin, newErrors: isAdmin && newErrors };
+}
+
+/** Painel das salas da roda, ao lado da conversa ou da chamada (no celular, a página da roda faz esse papel). */
 export function Sidebar() {
   const channels = useApp((s) => s.channels);
-  const isAdmin = useApp((s) => s.me && s.me.role === "admin");
-  const newErrors = useApp((s) => s.latestErrorId) > useSettings((s) => s.errorsSeenId);
+  const { isAdmin, newErrors } = useAdminBadge();
   const text = channels.filter((c) => c.kind === "text");
   const voice = channels.filter((c) => c.kind === "voice");
 
   return (
-    <nav className="sidebar" aria-label="Canais">
+    <nav className="sidebar" aria-label="Salas">
       <header className="sidebar-header">
-        <span className="wordmark">{APP_NAME}</span>
+        <Link to="/roda" className="roda-link">
+          <span className="roda-badge" aria-hidden="true">
+            {initials(APP_NAME)}
+          </span>
+          <span className="roda-link-names">
+            <span className="roda-link-name">{APP_NAME}</span>
+            <span className="mono-label">ver a roda</span>
+          </span>
+        </Link>
         {isAdmin && (
           <button
             type="button"
@@ -36,7 +50,7 @@ export function Sidebar() {
 
       <div className="channel-groups">
         <section>
-          <h2 className="group-title">Texto</h2>
+          <GroupTitle title="texto" add={isAdmin ? "Nova sala de texto" : null} />
           <ul className="channel-list">
             {text.map((c) => (
               <TextChannelItem key={c.id} channel={c} />
@@ -44,7 +58,7 @@ export function Sidebar() {
           </ul>
         </section>
         <section>
-          <h2 className="group-title">Voz</h2>
+          <GroupTitle title="voz" add={isAdmin ? "Nova sala de voz" : null} />
           <ul className="channel-list">
             {voice.map((c) => (
               <VoiceChannelItem key={c.id} channel={c} />
@@ -52,10 +66,37 @@ export function Sidebar() {
           </ul>
         </section>
       </div>
-
-      <VoiceBar />
-      <UserPanel />
     </nav>
+  );
+}
+
+function GroupTitle({ title, add }: { title: string; add: string | null }) {
+  return (
+    <div className="group-head">
+      <h2 className="mono-label">{title}</h2>
+      {add && (
+        <button
+          type="button"
+          className="icon-btn icon-btn-round"
+          onClick={() => useUi.getState().setAdminOpen(true, "channels")}
+          aria-label={add}
+          title={add}
+        >
+          <Plus size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Três barrinhas de "som": acesas quando tem gente na sala. */
+export function VoiceBars({ on }: { on: boolean }) {
+  return (
+    <span className="voice-bars" data-on={on || undefined} aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </span>
   );
 }
 
@@ -65,7 +106,9 @@ function TextChannelItem({ channel }: { channel: Channel }) {
   return (
     <li>
       <NavLink to={`/c/${channel.id}`} className="channel-link" data-unread={unread || undefined}>
-        <Hash size={18} aria-hidden="true" />
+        <span className="channel-hash" aria-hidden="true">
+          #
+        </span>
         <span className="channel-name">{channel.name}</span>
         {mentions > 0 ? (
           <span className="mention-badge" aria-label={`${mentions} ${mentions === 1 ? "menção" : "menções"} a você`}>
@@ -100,14 +143,16 @@ function VoiceChannelItem({ channel }: { channel: Channel }) {
           void joinVoice(channel.id);
         }}
       >
-        <Volume2 size={18} aria-hidden="true" />
+        <VoiceBars on={members.length > 0} />
         <span className="channel-name">{channel.name}</span>
         {mentions > 0 ? (
           <span className="mention-badge" aria-label={`${mentions} ${mentions === 1 ? "menção" : "menções"} a você no chat`}>
             {mentions > 99 ? "99+" : mentions}
           </span>
+        ) : unread ? (
+          <span className="unread-dot" aria-label="mensagens novas no chat" />
         ) : (
-          unread && <span className="unread-dot" aria-label="mensagens novas no chat" />
+          members.length > 0 && <span className="channel-count">{members.length}</span>
         )}
       </NavLink>
       {/* Ler o chat do canal sem entrar na chamada */}

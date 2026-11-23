@@ -8,10 +8,14 @@ export interface JumpRequest {
   nonce: number;
 }
 
+/** Abas do painel do admin (a ordem e os nomes ficam no AdminModal). */
+export type AdminTab = "invites" | "channels" | "members" | "backup" | "errors";
+
 interface UiState {
-  navOpen: boolean;
   settingsOpen: boolean;
   adminOpen: boolean;
+  /** Aba pedida ao abrir o painel (ex.: "+ Texto" abre direto em Canais). */
+  adminTab: AdminTab | null;
   shareDialogOpen: boolean;
   /** Painel de busca de mensagens aberto. */
   searchOpen: boolean;
@@ -22,9 +26,8 @@ interface UiState {
   /** Mensagem aberta para edição (só uma por vez, como no Discord). */
   editingId: number | null;
   jump: JumpRequest | null;
-  setNavOpen(open: boolean): void;
   setSettingsOpen(open: boolean): void;
-  setAdminOpen(open: boolean): void;
+  setAdminOpen(open: boolean, tab?: AdminTab): void;
   setShareDialogOpen(open: boolean): void;
   setSearchOpen(open: boolean): void;
   setPageTitle(title: string): void;
@@ -36,18 +39,17 @@ interface UiState {
 let jumpNonce = 0;
 
 export const useUi = create<UiState>()((set) => ({
-  navOpen: false,
   settingsOpen: false,
   adminOpen: false,
+  adminTab: null,
   shareDialogOpen: false,
   searchOpen: false,
   pageTitle: "Resenha",
   replying: {},
   editingId: null,
   jump: null,
-  setNavOpen: (navOpen) => set({ navOpen }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
-  setAdminOpen: (adminOpen) => set({ adminOpen }),
+  setAdminOpen: (adminOpen, tab) => set({ adminOpen, adminTab: tab ?? null }),
   setShareDialogOpen: (shareDialogOpen) => set({ shareDialogOpen }),
   setSearchOpen: (searchOpen) => set({ searchOpen }),
   setPageTitle: (pageTitle) => set({ pageTitle }),

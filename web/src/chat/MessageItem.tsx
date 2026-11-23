@@ -49,6 +49,7 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
     <article
       id={`msg-${message.id}`}
       className="message"
+      data-mine={mine || undefined}
       data-grouped={grouped || undefined}
       data-menu-open={pickerAnchor ? true : undefined}
       data-mentions-me={mentionsMeHere || undefined}
