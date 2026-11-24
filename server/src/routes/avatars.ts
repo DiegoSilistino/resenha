@@ -10,6 +10,32 @@ import { bannerInfo, imageInfo } from "../uploads/image.ts";
 const UUID = /^[0-9a-f-]{36}$/;
 const tooLarge = () => new HttpError(413, `A foto pode ter no máximo ${LIMITS.avatarMaxBytes / 1024 / 1024} MB`);
 
+/** Recebe a foto enviada (perfil ou roda): imagem parada, no tamanho certo, gravada na pasta das fotos. */
+export async function receiveAvatar(req: FastifyRequest, ctx: AppContext): Promise<{ id: string; mime: string }> {
+  const file = await req.file({ limits: { fileSize: LIMITS.avatarMaxBytes, files: 1 } });
+  if (!file) throw badRequest("Nenhuma imagem enviada");
+  let data: Buffer;
+  try {
+    data = await file.toBuffer();
+  } catch (err) {
+    if ((err as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") throw tooLarge();
+    throw err;
+  }
+  if (file.file.truncated) throw tooLarge();
+
+  // O tipo vem dos bytes, nunca do nome nem do que o navegador diz.
+  const info = imageInfo(data);
+  if (!info) throw badRequest("Envie uma imagem PNG, JPEG ou WebP");
+  if (info.animated) throw badRequest("Foto animada não é aceita; use uma imagem parada");
+  const { avatarMinSide: min, avatarMaxSide: max } = LIMITS;
+  if (info.width < min || info.height < min || info.width > max || info.height > max) {
+    throw badRequest(`A foto precisa ter entre ${min} e ${max} pixels de lado`);
+  }
+  const id = randomUUID();
+  await writeFile(ctx.avatars.pathFor(id), data, { flag: "wx" });
+  return { id, mime: info.mime };
+}
+
 /** Lê a capa enviada pelo formulário (perfil ou roda), recusando o que passar do limite. */
 export async function readBannerUpload(req: FastifyRequest): Promise<Buffer> {
   const tooBig = () => new HttpError(413, `A capa pode ter no máximo ${LIMITS.bannerMaxBytes / 1024 / 1024} MB`);
@@ -47,30 +73,8 @@ export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
     "/api/me/avatar",
     { preHandler: requireUser, config: rateLimited(ctx, 10, "10 minutes") },
     async (req) => {
-      const file = await req.file({ limits: { fileSize: LIMITS.avatarMaxBytes, files: 1 } });
-      if (!file) throw badRequest("Nenhuma imagem enviada");
-      let data: Buffer;
-      try {
-        data = await file.toBuffer();
-      } catch (err) {
-        if ((err as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") throw tooLarge();
-        throw err;
-      }
-      if (file.file.truncated) throw tooLarge();
-
-      // O tipo vem dos bytes, nunca do nome nem do que o navegador diz.
-      const info = imageInfo(data);
-      if (!info) throw badRequest("Envie uma imagem PNG, JPEG ou WebP");
-      if (info.animated) throw badRequest("Foto animada não é aceita; use uma imagem parada");
-      const { avatarMinSide: min, avatarMaxSide: max } = LIMITS;
-      if (info.width < min || info.height < min || info.width > max || info.height > max) {
-        throw badRequest(`A foto precisa ter entre ${min} e ${max} pixels de lado`);
-      }
-
       const user = currentUser(req);
-      const id = randomUUID();
-      await writeFile(avatars.pathFor(id), data, { flag: "wx" });
-      const previous = store.setAvatar(user.id, { id, mime: info.mime });
+      const previous = store.setAvatar(user.id, await receiveAvatar(req, ctx));
       if (previous) await avatars.remove([previous]);
       const me = toPublicUser(store.userById(user.id)!);
       hub.broadcast({ type: "user.upsert", user: me });

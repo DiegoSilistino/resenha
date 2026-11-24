@@ -4,6 +4,7 @@ import { MessageSquare, MicOff, HeadphoneOff, Plus, Settings2, ShieldAlert, Vide
 import type { Channel, ChannelKind, Me, Roda, VoiceMember } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { initials } from "../lib/format.ts";
+import { bannerImageStyle } from "../lib/look.ts";
 import { moveRoom } from "../lib/rodas.ts";
 import { isRodaOwner, rodaColor, rodaPerms, useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
@@ -17,8 +18,11 @@ export function useAdminBadge() {
   return { isAdmin, newErrors: isAdmin && newErrors };
 }
 
-/** Ícone da roda: quadradinho na cor dela com as iniciais. */
-export function RodaBadge({ roda, size = 38 }: { roda: Pick<Roda, "name" | "hue">; size?: number }) {
+/** Ícone da roda: a foto dela ou, sem foto, um quadradinho na cor dela com as iniciais. */
+export function RodaBadge({ roda, size = 38 }: { roda: Pick<Roda, "name" | "hue" | "iconUrl">; size?: number }) {
+  if (roda.iconUrl) {
+    return <img className="roda-badge" src={roda.iconUrl} alt="" width={size} height={size} style={{ width: size, height: size }} />;
+  }
   return (
     <span
       className="roda-badge"
@@ -50,6 +54,11 @@ export function Sidebar({ rodaId }: { rodaId: string }) {
 
   return (
     <nav className="sidebar" aria-label={`Salas de ${roda.name}`}>
+      {roda.bannerUrl && (
+        <div className="sidebar-banner">
+          <img src={roda.bannerUrl} alt="" style={bannerImageStyle(roda)} />
+        </div>
+      )}
       <header className="sidebar-header">
         <Link to={`/r/${roda.id}`} className="roda-link">
           <RodaBadge roda={roda} />

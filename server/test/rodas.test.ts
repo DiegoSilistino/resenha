@@ -146,6 +146,32 @@ describe("rodas", () => {
     expect(existsSync(t.ctx.avatars.pathFor(second))).toBe(false);
   });
 
+  it("foto da roda: só o dono troca, sem animação; quem está de fora vê foto e capa da roda aberta; sai junto ao apagar", async () => {
+    const roda = await newRoda(bob, { privacy: "aberta" });
+    const send = (user: TestUser, image: Buffer, kind: "icon" | "banner" = "icon") => {
+      const { payload, headers } = multipart("foto.png", image);
+      return t.app.inject({ method: "POST", url: `/api/rodas/${roda.id}/${kind}`, headers: { ...headers, cookie: user.cookie }, payload });
+    };
+
+    expect((await send(carol, png(256, 256))).statusCode).toBe(404); // de fora nem encontra; membro sem ser dono: 403 (teste da capa)
+    expect((await send(bob, png(256, 256, { animated: true }))).statusCode).toBe(400);
+    const res = await send(bob, png(256, 256));
+    expect(res.statusCode).toBe(200);
+    const iconUrl = res.json().roda.iconUrl as string;
+    expect(iconUrl).toMatch(/^\/api\/avatars\/[0-9a-f-]{36}$/);
+    const id = iconUrl.split("/").pop()!;
+    expect(t.ctx.store.allAvatarIds().has(id)).toBe(true);
+    expect((await req(carol, "GET", iconUrl)).headers["content-type"]).toBe("image/png");
+
+    await send(bob, png(600, 200), "banner");
+    const [open] = t.ctx.store.openRodasFor(carol.id);
+    expect(open).toMatchObject({ id: roda.id, iconUrl, bannerX: 50, bannerZoom: 1 });
+    expect(open!.bannerUrl).toMatch(/^\/api\/banners\//);
+
+    expect((await req(bob, "DELETE", `/api/rodas/${roda.id}`)).statusCode).toBe(204);
+    expect(existsSync(t.ctx.avatars.pathFor(id))).toBe(false);
+  });
+
   it("expulsar tira o acesso; o dono não sai nem é expulso", async () => {
     const roda = await newRoda(bob);
     const invite = (await req(bob, "POST", `/api/rodas/${roda.id}/invites`, {})).json().invite;

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Copy, Trash2 } from "lucide-react";
 import { LIMITS, PERMISSIONS, type Invite, type Permission, type Roda, type RodaRole } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { BannerEditor, BannerPicker, type BannerPos, type PendingBanner } from "../components/Banner.tsx";
+import { AvatarEditor } from "./AvatarEditor.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { Nick } from "../components/Nick.tsx";
 import { api } from "../lib/api.ts";
@@ -132,6 +133,16 @@ function GeneralTab({ roda, onDeleted }: { roda: Roda; onDeleted(): void }) {
             <button key={h} type="button" className="swatch" style={{ background: rodaColor(h) }} aria-label={`Cor ${h}`} aria-pressed={hue === h} onClick={() => setHue(h)} />
           ))}
         </div>
+      </fieldset>
+      <fieldset className="field">
+        <legend>Foto</legend>
+        <AvatarEditor
+          hasImage={!!roda.iconUrl}
+          upload={(image) => api.uploadRodaIcon(roda.id, image)}
+          remove={() => api.removeRodaIcon(roda.id)}
+          square
+        />
+        <small className="muted">Aparece no lugar das iniciais. Vale na hora, sem precisar salvar.</small>
       </fieldset>
       <fieldset className="field">
         <legend>Capa</legend>

@@ -133,7 +133,11 @@ function ProfileTab() {
         </div>
         <fieldset className="field">
           <legend>Foto de perfil</legend>
-          <AvatarEditor onDone={() => undefined} />
+          <AvatarEditor
+            hasImage={!!me.avatarUrl}
+            upload={async (image) => useApp.getState().setMe((await api.uploadAvatar(image)).me)}
+            remove={async () => useApp.getState().setMe((await api.removeAvatar()).me)}
+          />
         </fieldset>
         <label className="field">
           <span>Nome de exibição</span>

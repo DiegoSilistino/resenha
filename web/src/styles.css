@@ -1220,6 +1220,26 @@ input[type="range"] {
   font: 700 12px/38px var(--font-display);
   text-align: center;
 }
+/* foto da roda no lugar das iniciais */
+img.roda-badge {
+  object-fit: cover;
+  background: var(--well);
+}
+/* capa da roda no topo da lista de salas */
+.sidebar-banner {
+  flex: none;
+  height: 84px;
+  margin: 8px 8px 0;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--well);
+}
+.sidebar-banner img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .roda-link-names {
   min-width: 0;
   display: flex;
@@ -1497,6 +1517,10 @@ input[type="range"] {
   box-shadow: 0 0 0 9999px rgb(8 8 10 / 0.6);
   outline: 2px solid rgb(255 255 255 / 0.55);
   pointer-events: none;
+}
+/* foto da roda: o ícone é um quadrado arredondado, não um círculo */
+.crop-mask[data-square] {
+  border-radius: 34%;
 }
 
 .avatar[data-photo] {

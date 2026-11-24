@@ -86,6 +86,8 @@ export interface Roda {
   /** Matiz da cor da roda (faixa, ícone). */
   hue: number;
   privacy: "privada" | "aberta";
+  /** Foto da roda; sem ela, o ícone mostra as iniciais na cor da roda. */
+  iconUrl: string | null;
   /** Capa (imagem ou GIF); sem ela, a faixa usa a cor da roda. */
   bannerUrl: string | null;
   /** Ponto da capa que fica à vista (0–100%) e zoom, como na capa do perfil. */
@@ -101,11 +103,8 @@ export interface Roda {
 }
 
 /** Roda aberta em que você ainda não está (para encontrar e entrar). */
-export interface RodaSummary {
-  id: string;
-  name: string;
-  description: string;
-  hue: number;
+export interface RodaSummary
+  extends Pick<Roda, "id" | "name" | "description" | "hue" | "iconUrl" | "bannerUrl" | "bannerX" | "bannerY" | "bannerZoom"> {
   memberCount: number;
 }
 

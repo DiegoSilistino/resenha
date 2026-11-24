@@ -218,6 +218,20 @@ export const bannerUrl = (id: string) => `/api/banners/${id}`;
 /** O id muda a cada foto nova, então a URL pode ficar em cache para sempre. */
 export const avatarUrl = (id: string) => `/api/avatars/${id}`;
 
+/** O que quem está de fora vê de uma roda aberta (lista "Abertas para entrar"). */
+export const toRodaSummary = (r: Roda): RodaSummary => ({
+  id: r.id,
+  name: r.name,
+  description: r.description,
+  hue: r.hue,
+  iconUrl: r.iconUrl,
+  bannerUrl: r.bannerUrl,
+  bannerX: r.bannerX,
+  bannerY: r.bannerY,
+  bannerZoom: r.bannerZoom,
+  memberCount: Object.keys(r.members).length,
+});
+
 export const toPublicUser = (u: UserRecord): PublicUser => ({
   id: u.id,
   username: u.username,
@@ -389,10 +403,11 @@ export class Store {
     });
   }
 
+  /** Foto de perfil ou de roda (as duas são servidas por /api/avatars/:id). */
   avatarById(id: string): { mime: string } | null {
-    const r = this.db.prepare("SELECT avatar_mime FROM users WHERE avatar_id = ?").get(id) as
-      | { avatar_mime: string | null }
-      | undefined;
+    const r = this.db
+      .prepare("SELECT avatar_mime FROM users WHERE avatar_id = ? UNION ALL SELECT icon_mime FROM rodas WHERE icon_id = ?")
+      .get(id, id) as { avatar_mime: string | null } | undefined;
     return r?.avatar_mime ? { mime: r.avatar_mime } : null;
   }
 
@@ -402,7 +417,8 @@ export class Store {
       .prepare(
         `SELECT avatar_id AS id FROM users WHERE avatar_id IS NOT NULL
          UNION SELECT banner_id FROM users WHERE banner_id IS NOT NULL
-         UNION SELECT banner_id FROM rodas WHERE banner_id IS NOT NULL`,
+         UNION SELECT banner_id FROM rodas WHERE banner_id IS NOT NULL
+         UNION SELECT icon_id FROM rodas WHERE icon_id IS NOT NULL`,
       )
       .all() as { id: string }[];
     return new Set(rows.map((r) => r.id));
@@ -698,6 +714,7 @@ export class Store {
           description: string;
           hue: number;
           privacy: Roda["privacy"];
+          icon_id: string | null;
           banner_id: string | null;
           banner_x: number;
           banner_y: number;
@@ -718,6 +735,7 @@ export class Store {
       description: r.description,
       hue: Number(r.hue),
       privacy: r.privacy,
+      iconUrl: r.icon_id ? avatarUrl(r.icon_id) : null,
       bannerUrl: r.banner_id ? bannerUrl(r.banner_id) : null,
       bannerX: Number(r.banner_x),
       bannerY: Number(r.banner_y),
@@ -756,14 +774,13 @@ export class Store {
   openRodasFor(userId: string): RodaSummary[] {
     const rows = this.db
       .prepare(
-        `SELECT r.id, r.name, r.description, r.hue,
-           (SELECT COUNT(*) FROM roda_members m WHERE m.roda_id = r.id) AS n
+        `SELECT r.id, (SELECT COUNT(*) FROM roda_members m WHERE m.roda_id = r.id) AS n
          FROM rodas r WHERE r.privacy = 'aberta'
            AND r.id NOT IN (SELECT roda_id FROM roda_members WHERE user_id = ?)
          ORDER BY n DESC, r.created_at`,
       )
-      .all(userId) as { id: string; name: string; description: string; hue: number; n: number }[];
-    return rows.map((r) => ({ id: r.id, name: r.name, description: r.description, hue: Number(r.hue), memberCount: Number(r.n) }));
+      .all(userId) as { id: string }[];
+    return rows.map((r) => toRodaSummary(this.rodaById(r.id)!));
   }
 
   rodaMemberIds(rodaId: string): string[] {
@@ -853,27 +870,30 @@ export class Store {
     return this.rodaById(id);
   }
 
-  /** Troca a capa da roda (null tira); devolve a anterior, para apagar do disco. */
-  setRodaBanner(rodaId: string, banner: { id: string; mime: string } | null): string | null {
+  /** Troca a capa ou a foto da roda (null tira); devolve a anterior, para apagar do disco. */
+  setRodaImage(rodaId: string, kind: "banner" | "icon", image: { id: string; mime: string } | null): string | null {
+    // `kind` é um dos dois nomes fixos acima, nunca texto vindo de fora
     return transaction(this.db, () => {
-      const prev = this.db.prepare("SELECT banner_id FROM rodas WHERE id = ?").get(rodaId) as
-        | { banner_id: string | null }
+      const prev = this.db.prepare(`SELECT ${kind}_id AS id FROM rodas WHERE id = ?`).get(rodaId) as
+        | { id: string | null }
         | undefined;
       this.db
-        .prepare("UPDATE rodas SET banner_id = ?, banner_mime = ? WHERE id = ?")
-        .run(banner?.id ?? null, banner?.mime ?? null, rodaId);
-      return prev?.banner_id ?? null;
+        .prepare(`UPDATE rodas SET ${kind}_id = ?, ${kind}_mime = ? WHERE id = ?`)
+        .run(image?.id ?? null, image?.mime ?? null, rodaId);
+      return prev?.id ?? null;
     });
   }
 
-  /** Apaga a roda com as salas e mensagens; devolve as salas (para derrubar chamadas), os anexos e a capa. */
-  deleteRoda(id: string): { channelIds: string[]; attachmentIds: string[]; bannerId: string | null } {
+  /** Apaga a roda com as salas e mensagens; devolve as salas (para derrubar chamadas), os anexos e as imagens. */
+  deleteRoda(id: string): { channelIds: string[]; attachmentIds: string[]; imageIds: string[] } {
     return transaction(this.db, () => {
       const channelIds = this.listChannels(id).map((c) => c.id);
       const attachmentIds = channelIds.flatMap((c) => this.deleteChannel(c));
-      const bannerId = this.setRodaBanner(id, null);
+      const imageIds = [this.setRodaImage(id, "banner", null), this.setRodaImage(id, "icon", null)].filter(
+        (x): x is string => !!x,
+      );
       this.db.prepare("DELETE FROM rodas WHERE id = ?").run(id);
-      return { channelIds, attachmentIds, bannerId };
+      return { channelIds, attachmentIds, imageIds };
     });
   }
 

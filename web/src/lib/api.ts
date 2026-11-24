@@ -136,6 +136,12 @@ export const api = {
   },
   rodaBannerGif: (id: string, url: string) => request<{ roda: Roda }>("POST", `/api/rodas/${id}/banner/gif`, { url }),
   removeRodaBanner: (id: string) => request<{ roda: Roda }>("DELETE", `/api/rodas/${id}/banner`),
+  uploadRodaIcon: (id: string, image: Blob) => {
+    const form = new FormData();
+    form.append("file", image, image.type === "image/webp" ? "foto.webp" : "foto.png");
+    return request<{ roda: Roda }>("POST", `/api/rodas/${id}/icon`, form);
+  },
+  removeRodaIcon: (id: string) => request<{ roda: Roda }>("DELETE", `/api/rodas/${id}/icon`),
   deleteRoda: (id: string) => request<void>("DELETE", `/api/rodas/${id}`),
   joinRoda: (id: string) => request<void>("POST", `/api/rodas/${id}/join`),
   leaveRoda: (id: string) => request<void>("DELETE", `/api/rodas/${id}/members/me`),

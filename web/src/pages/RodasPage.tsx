@@ -116,7 +116,8 @@ function OpenRodaCard({ roda }: { roda: RodaSummary }) {
     }
   }
   return (
-    <div className="roda-card" style={{ "--roda": rodaColor(roda.hue) } as React.CSSProperties}>
+    <div className="roda-card" data-image={roda.bannerUrl ? true : undefined} style={{ "--roda": rodaColor(roda.hue) } as React.CSSProperties}>
+      {roda.bannerUrl && <img className="roda-card-img" src={roda.bannerUrl} alt="" style={bannerImageStyle(roda)} />}
       <span className="roda-card-top">
         <RodaBadge roda={roda} size={44} />
         <span className="roda-privacy">aberta</span>

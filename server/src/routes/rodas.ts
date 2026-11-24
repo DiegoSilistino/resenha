@@ -17,9 +17,9 @@ import {
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, forbidden, notFound, parse } from "../http.ts";
 import { buildHello } from "../realtime/socket.ts";
-import type { UserRecord } from "../store.ts";
+import { toRodaSummary, type UserRecord } from "../store.ts";
 import { inviteUrl, newInviteCode } from "./admin.ts";
-import { readBannerUpload, writeBanner } from "./avatars.ts";
+import { readBannerUpload, receiveAvatar, writeBanner } from "./avatars.ts";
 import { isInviteUsable } from "./auth.ts";
 
 /** Cores das rodas novas (matiz): sorteia uma para cada. */
@@ -41,16 +41,7 @@ export function publishRoda(ctx: AppContext, rodaId: string) {
   const roda = ctx.store.rodaById(rodaId);
   if (!roda) return;
   ctx.hub.sendToUsers(Object.keys(roda.members), { type: "roda.upsert", roda });
-  if (roda.privacy === "aberta") {
-    const summary = {
-      id: roda.id,
-      name: roda.name,
-      description: roda.description,
-      hue: roda.hue,
-      memberCount: Object.keys(roda.members).length,
-    };
-    ctx.hub.broadcast({ type: "roda.open", roda: summary });
-  }
+  if (roda.privacy === "aberta") ctx.hub.broadcast({ type: "roda.open", roda: toRodaSummary(roda) });
 }
 
 /**
@@ -132,24 +123,24 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
     const roda = rodaFor(req.params.id, user);
     ownerOnly(user, roda.id);
     const members = Object.keys(roda.members);
-    const { channelIds, attachmentIds, bannerId } = store.deleteRoda(roda.id);
+    const { channelIds, attachmentIds, imageIds } = store.deleteRoda(roda.id);
     for (const id of channelIds) {
       const kicked = voice.clearChannel(id);
       watch.removeChannel(id);
       await Promise.all(kicked.map((userId) => gateway.kick(userId, id)));
     }
     await uploads.remove(attachmentIds);
-    if (bannerId) await ctx.avatars.remove([bannerId]);
+    await ctx.avatars.remove(imageIds);
     resync(ctx, members);
     hub.broadcast({ type: "roda.closed", rodaId: roda.id });
     return reply.status(204).send();
   });
 
-  // ---------- capa (só o dono, como o resto da aba Geral) ----------
+  // ---------- capa e foto (só o dono, como o resto da aba Geral) ----------
 
-  /** Troca a capa, apaga a anterior do disco e avisa quem está na roda. */
-  const replaceBanner = async (rodaId: string, banner: { id: string; mime: string } | null) => {
-    const previous = store.setRodaBanner(rodaId, banner);
+  /** Troca a capa ou a foto, apaga a anterior do disco e avisa quem está na roda. */
+  const replaceImage = async (rodaId: string, kind: "banner" | "icon", image: { id: string; mime: string } | null) => {
+    const previous = store.setRodaImage(rodaId, kind, image);
     if (previous) await ctx.avatars.remove([previous]);
     publishRoda(ctx, rodaId);
     return { roda: store.rodaById(rodaId)! };
@@ -165,7 +156,7 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
     { preHandler: requireUser, config: rateLimited(ctx, 10, "10 minutes") },
     async (req) => {
       ownedRoda(req.params.id, currentUser(req));
-      return replaceBanner(req.params.id, await writeBanner(ctx, await readBannerUpload(req)));
+      return replaceImage(req.params.id, "banner", await writeBanner(ctx, await readBannerUpload(req)));
     },
   );
 
@@ -177,13 +168,28 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
       if (!ctx.gifs) throw notFound();
       ownedRoda(req.params.id, currentUser(req));
       const { url } = parse(bannerGifBody, req.body);
-      return replaceBanner(req.params.id, await writeBanner(ctx, await ctx.gifs.download(url, LIMITS.bannerMaxBytes)));
+      return replaceImage(req.params.id, "banner", await writeBanner(ctx, await ctx.gifs.download(url, LIMITS.bannerMaxBytes)));
     },
   );
 
   app.delete<{ Params: { id: string } }>("/api/rodas/:id/banner", { preHandler: requireUser }, async (req) => {
     ownedRoda(req.params.id, currentUser(req));
-    return replaceBanner(req.params.id, null);
+    return replaceImage(req.params.id, "banner", null);
+  });
+
+  // Foto da roda: as mesmas regras da foto de perfil (imagem parada, recortada no navegador).
+  app.post<{ Params: { id: string } }>(
+    "/api/rodas/:id/icon",
+    { preHandler: requireUser, config: rateLimited(ctx, 10, "10 minutes") },
+    async (req) => {
+      ownedRoda(req.params.id, currentUser(req));
+      return replaceImage(req.params.id, "icon", await receiveAvatar(req, ctx));
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>("/api/rodas/:id/icon", { preHandler: requireUser }, async (req) => {
+    ownedRoda(req.params.id, currentUser(req));
+    return replaceImage(req.params.id, "icon", null);
   });
 
   // Roda aberta: qualquer pessoa entra sem convite.

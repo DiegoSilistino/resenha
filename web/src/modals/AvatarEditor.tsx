@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ImagePlus, Trash2 } from "lucide-react";
-import { api } from "../lib/api.ts";
-import { useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
 import { initialCrop, MAX_ZOOM, moveCrop, scaleOf, sourceRect, zoomCrop, type Crop } from "./crop.ts";
 
@@ -33,8 +31,20 @@ async function renderCrop(img: HTMLImageElement, crop: Crop, w: number, h: numbe
   return png;
 }
 
-export function AvatarEditor({ onDone }: { onDone(): void }) {
-  const me = useApp((s) => s.me);
+/** Escolher, recortar e enviar a foto (do perfil ou da roda). `square` mostra o recorte quadrado, como o ícone da roda. */
+export function AvatarEditor({
+  hasImage,
+  upload,
+  remove: removeImage,
+  onDone = () => undefined,
+  square = false,
+}: {
+  hasImage: boolean;
+  upload(image: Blob): Promise<unknown>;
+  remove(): Promise<unknown>;
+  onDone?(): void;
+  square?: boolean;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [crop, setCrop] = useState<Crop | null>(null);
@@ -58,8 +68,6 @@ export function AvatarEditor({ onDone }: { onDone(): void }) {
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [loaded]);
-
-  if (!me) return null;
 
   function pick(file: File | undefined) {
     if (!file) return;
@@ -87,9 +95,7 @@ export function AvatarEditor({ onDone }: { onDone(): void }) {
     if (!loaded || !crop) return;
     setBusy(true);
     try {
-      const blob = await renderCrop(loaded.img, crop, loaded.w, loaded.h);
-      const { me: updated } = await api.uploadAvatar(blob);
-      useApp.getState().setMe(updated);
+      await upload(await renderCrop(loaded.img, crop, loaded.w, loaded.h));
       toast.info("Foto atualizada.");
       setLoaded(null);
       setCrop(null);
@@ -104,9 +110,8 @@ export function AvatarEditor({ onDone }: { onDone(): void }) {
   async function remove() {
     setBusy(true);
     try {
-      const { me: updated } = await api.removeAvatar();
-      useApp.getState().setMe(updated);
-      toast.info("Foto removida. Agora aparecem suas iniciais.");
+      await removeImage();
+      toast.info("Foto removida. Agora aparecem as iniciais.");
     } catch (err) {
       toast.fromError(err);
     } finally {
@@ -162,9 +167,9 @@ export function AvatarEditor({ onDone }: { onDone(): void }) {
       <div className="row-actions">
         {fileInput}
         <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
-          <ImagePlus size={16} aria-hidden="true" /> {me.avatarUrl ? "Trocar foto" : "Enviar foto"}
+          <ImagePlus size={16} aria-hidden="true" /> {hasImage ? "Trocar foto" : "Enviar foto"}
         </button>
-        {me.avatarUrl && (
+        {hasImage && (
           <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void remove()}>
             <Trash2 size={16} aria-hidden="true" /> Remover foto
           </button>
@@ -196,7 +201,7 @@ export function AvatarEditor({ onDone }: { onDone(): void }) {
           draggable={false}
           style={{ width: loaded.w * scale, height: loaded.h * scale, transform: `translate(${crop.x}px, ${crop.y}px)` }}
         />
-        <span className="crop-mask" aria-hidden="true" />
+        <span className="crop-mask" data-square={square || undefined} aria-hidden="true" />
       </div>
       <label className="field">
         <span>Zoom</span>

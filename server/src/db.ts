@@ -233,6 +233,11 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE rodas ADD COLUMN banner_y REAL NOT NULL DEFAULT 50;
   ALTER TABLE rodas ADD COLUMN banner_zoom REAL NOT NULL DEFAULT 1;
   `,
+  // 11: foto da roda (no lugar das iniciais), na pasta das fotos como a do perfil.
+  `
+  ALTER TABLE rodas ADD COLUMN icon_id TEXT;
+  ALTER TABLE rodas ADD COLUMN icon_mime TEXT;
+  `,
 ];
 
 /**
