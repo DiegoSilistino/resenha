@@ -114,7 +114,7 @@ A chave grátis permite 100 buscas por hora para o grupo todo. O servidor guarda
 ## Atualizar depois de mudanças no código
 
 ```bash
-ssh root@SEU_IP
+ssh root@200.141.28.74
 cd /opt/resenha && git pull && bash deploy/setup-vps.sh
 ```
 
