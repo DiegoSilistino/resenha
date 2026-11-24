@@ -47,6 +47,14 @@ describe("cadastro", () => {
     expect(t.ctx.store.inviteByCode("convite-teste")!.uses).toBe(0);
   });
 
+  it("sem convite: qualquer um cria conta, como membro e fora das rodas privadas", async () => {
+    const res = await register({ username: "livre", displayName: "Livre", password: "senha-forte-123" });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().me.role).toBe("member");
+    expect(t.ctx.store.listRodaIdsFor(res.json().me.id)).toEqual([]);
+    expect(res.cookies.some((c) => c.name === "resenha_sid")).toBe(true);
+  });
+
   it("recusa convite expirado ou revogado", async () => {
     t.ctx.store.createInvite({ code: "velho", role: "member", maxUses: 5, expiresAt: Date.now() - 1, createdBy: null });
     t.ctx.store.createInvite({ code: "revogado", role: "member", maxUses: 5, expiresAt: null, createdBy: null });

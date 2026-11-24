@@ -2,8 +2,10 @@ import { useState, type FormEvent } from "react";
 import { APP_NAME } from "@resenha/shared";
 import { api, ApiError } from "../lib/api.ts";
 import { useApp } from "../state/app.ts";
+import { SignupForm } from "./SignupForm.tsx";
 
 export function LoginPage() {
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -27,39 +29,48 @@ export function LoginPage() {
       <section className="auth-card">
         <h1 className="wordmark wordmark-lg">{APP_NAME}</h1>
         <p className="auth-lede">Voz, chat e vídeo para a sua turma.</p>
-        <form onSubmit={submit} className="form">
-          <label className="field">
-            <span>Usuário</span>
-            <input
-              autoFocus
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-          </label>
-          <label className="field">
-            <span>Senha</span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
-          <button className="btn btn-primary" disabled={busy}>
-            {busy ? "Entrando…" : "Entrar"}
+        {mode === "signup" ? (
+          <SignupForm />
+        ) : (
+          <form onSubmit={submit} className="form">
+            <label className="field">
+              <span>Usuário</span>
+              <input
+                autoFocus
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Senha</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </label>
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+            <button className="btn btn-primary" disabled={busy}>
+              {busy ? "Entrando…" : "Entrar"}
+            </button>
+          </form>
+        )}
+        <p className="auth-foot">
+          {mode === "signup" ? "Já tem conta? " : "Ainda não tem conta? "}
+          <button type="button" className="link-btn" onClick={() => setMode(mode === "signup" ? "login" : "signup")}>
+            {mode === "signup" ? "Entrar" : "Criar conta"}
           </button>
-        </form>
-        <p className="auth-foot">Ainda não tem conta? Peça um convite para quem administra o grupo.</p>
+        </p>
       </section>
     </main>
   );

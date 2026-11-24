@@ -95,7 +95,7 @@ No fim, mostra o **link de convite do administrador**. Na primeira vez leva uns 
 ### 6. Entre e convide a turma
 
 1. Abra o link de convite e crie sua conta de administrador.
-2. Em **⚙ Administrar → Convites**, gere um link para cada amigo. Cada um vale para 1 pessoa por padrão e expira em 3 dias.
+2. Mande o endereço do site para a turma: qualquer pessoa cria conta em **Criar conta**, na tela de entrada. Para alguém já cair dentro de uma roda privada, gere um convite em **Ajustes da roda → Convites**.
 
 O primeiro acesso pode demorar até 1 minuto enquanto o certificado HTTPS é emitido.
 

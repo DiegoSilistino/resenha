@@ -80,7 +80,8 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.post("/api/auth/register", { config: rateLimited(ctx, 10, "15 minutes") }, async (req, reply) => {
     const body = parse(registerBody, req.body);
-    if (!isInviteUsable(store.inviteByCode(body.code))) {
+    // Cadastro aberto: o convite é opcional. Quem vem por um link inválido é avisado, em vez de entrar sem a roda.
+    if (body.code !== undefined && !isInviteUsable(store.inviteByCode(body.code))) {
       throw badRequest("Convite inválido, expirado ou já usado");
     }
     if (store.userByUsername(body.username)) {
@@ -88,16 +89,18 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     const passwordHash = await hashPassword(body.password);
 
-    // Consome o convite e cria a conta juntos: ou acontecem os dois, ou nenhum.
+    // Consome o convite (se veio um) e cria a conta juntos: ou acontecem os dois, ou nenhum.
     const user = transaction(store.db, () => {
-      const invite = store.inviteByCode(body.code)!;
-      if (!store.consumeInvite(body.code)) throw badRequest("Convite inválido, expirado ou já usado");
+      const invite = body.code === undefined ? null : store.inviteByCode(body.code);
+      if (body.code !== undefined && (!invite || !store.consumeInvite(body.code))) {
+        throw badRequest("Convite inválido, expirado ou já usado");
+      }
       try {
         return store.createUser({
           username: body.username,
           displayName: body.displayName,
           passwordHash,
-          role: invite.role,
+          role: invite?.role ?? "member",
           avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]!,
         });
       } catch (err) {
@@ -109,8 +112,9 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
     });
 
     hub.broadcast({ type: "user.upsert", user: toPublicUser(user) });
-    // a conta nasce já dentro da roda do convite (ou com o pedido feito, se precisa de aprovação)
-    const invite = store.inviteByCode(body.code);
+    // com convite, a conta nasce já dentro da roda dele (ou com o pedido feito, se precisa de aprovação);
+    // sem convite, a pessoa entra nas rodas abertas ou espera alguém chamar
+    const invite = body.code === undefined ? null : store.inviteByCode(body.code);
     if (invite) joinViaInvite(ctx, user, invite);
     const { token } = createSession(store, user.id, req.headers["user-agent"] ?? null);
     setSessionCookie(ctx, reply, token);

@@ -2,7 +2,7 @@
 
 Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Discord. Inspirado no VoiceClub, com a arquitetura pensada para rodar inteira num servidor pequeno.
 
-- **Contas só por convite.** O admin gera links de uso único ou limitado, com validade. Em ⚙ Administrar → Membros ele também desativa (reversível) ou remove de vez uma conta, por exemplo uma duplicada: a pessoa sai na hora, o nome de usuário fica livre e as mensagens antigas ficam assinadas como "Ex-membro".
+- **Cadastro aberto.** Qualquer pessoa cria conta em "Criar conta", na tela de entrada, e entra nas rodas abertas. Links de convite (uso único ou limitado, com validade) levam direto para uma roda, e o de admin cria contas de administração. Em ⚙ Administrar → Membros ele também desativa (reversível) ou remove de vez uma conta, por exemplo uma duplicada: a pessoa sai na hora, o nome de usuário fica livre e as mensagens antigas ficam assinadas como "Ex-membro".
 - **Canais de texto** em tempo real:
   - anexos (imagens e vídeos aparecem na conversa);
   - reações com emoji (barra rápida e seletor com busca em português);

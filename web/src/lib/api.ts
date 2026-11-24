@@ -62,7 +62,7 @@ export const api = {
     request<{ me: Me }>("POST", "/api/auth/login", { username, password }),
   logout: () => request<void>("POST", "/api/auth/logout"),
   inviteInfo: (code: string) => request<InviteInfo>("GET", `/api/invites/${encodeURIComponent(code)}`),
-  register: (b: { code: string; username: string; displayName: string; password: string }) =>
+  register: (b: { code?: string; username: string; displayName: string; password: string }) =>
     request<{ me: Me }>("POST", "/api/auth/register", b),
 
   updateMe: (b: Partial<Pick<Me, "displayName" | "avatarColor" | "status" | "activity" | "note" | "look">>) =>

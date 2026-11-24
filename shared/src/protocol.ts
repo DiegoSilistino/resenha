@@ -51,7 +51,8 @@ export const loginBody = z.object({
 });
 
 export const registerBody = z.object({
-  code: id,
+  /** Convite (opcional): dá o cargo dele e já põe a pessoa na roda do convite. Sem convite, a conta nasce como membro. */
+  code: id.optional(),
   username: usernameSchema,
   displayName: displayNameSchema,
   password: passwordSchema,
