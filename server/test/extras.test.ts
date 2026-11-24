@@ -89,6 +89,14 @@ describe("painel de erros", () => {
     expect((await report(ana, { kind: "voz", message: "x".repeat(501) })).statusCode).toBe(400);
   });
 
+  it("feedback da tela inicial cai no mesmo painel e pode ser mais longo que um erro", async () => {
+    const long = `Sugestão: ${"a".repeat(900)}`;
+    expect((await report(ana, { kind: "feedback", message: long })).statusCode).toBe(204);
+    expect((await report(ana, { kind: "feedback", message: "x".repeat(1_100) })).statusCode).toBe(400);
+    const list = await t.app.inject({ method: "GET", url: "/api/admin/errors", headers: { cookie: admin.cookie } });
+    expect(list.json().errors[0]).toMatchObject({ kind: "feedback", userId: ana.id, message: long });
+  });
+
   it("o hello do admin traz o último erro (acende o aviso); o do membro não", async () => {
     const port = await listen(t);
     await report(ana, { kind: "tela", message: "Falhou ao transmitir" });

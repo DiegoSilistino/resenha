@@ -61,6 +61,9 @@ export const api = {
   login: (username: string, password: string) =>
     request<{ me: Me }>("POST", "/api/auth/login", { username, password }),
   logout: () => request<void>("POST", "/api/auth/logout"),
+  /** Feedback da tela inicial: vai para o painel do admin, junto com os erros (com navegador e página). */
+  sendFeedback: (message: string) =>
+    request<void>("POST", "/api/client-errors", { kind: "feedback", message, context: { pagina: location.pathname.slice(0, 80) } }),
   inviteInfo: (code: string) => request<InviteInfo>("GET", `/api/invites/${encodeURIComponent(code)}`),
   register: (b: { code?: string; username: string; displayName: string; password: string }) =>
     request<{ me: Me }>("POST", "/api/auth/register", b),

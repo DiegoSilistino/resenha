@@ -15,7 +15,7 @@ const TABS = [
   { id: "invites", label: "Convites" },
   { id: "members", label: "Membros" },
   { id: "backup", label: "Backup" },
-  { id: "errors", label: "Erros" },
+  { id: "errors", label: "Erros e feedback" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -376,6 +376,7 @@ const KIND_LABEL: Record<ClientErrorKind, string> = {
   tela: "Tela",
   ruido: "Redução de ruído",
   inesperado: "Erro do app",
+  feedback: "Feedback",
 };
 
 const CONTEXT_LABEL: Record<string, string> = {
@@ -467,7 +468,7 @@ function ErrorsTab() {
     <div className="form errors-tab">
       <div className="errors-head">
         <span className="muted">
-          {errors.length === 1 ? "1 erro" : `${errors.length} erros`} (os mais recentes primeiro; ficam os últimos 500)
+          {errors.length === 1 ? "1 registro" : `${errors.length} registros`} (os mais recentes primeiro; ficam os últimos 500)
         </span>
         <button type="button" className="btn btn-small btn-ghost" onClick={() => void clear()}>
           <Trash2 size={14} aria-hidden="true" /> Limpar

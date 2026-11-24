@@ -1,12 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { APP_NAME, type Channel } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Nick } from "../components/Nick.tsx";
+import { api } from "../lib/api.ts";
 import { statusLine } from "../lib/look.ts";
 import { openConversationWith } from "../lib/social.ts";
 import guarana from "../assets/mascote/guarana.webp";
 import { useApp } from "../state/app.ts";
+import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { preloadVoice } from "../voice/controller.ts";
 
@@ -113,8 +115,72 @@ export function HomePage() {
           <img src={guarana} alt="" width={485} height={640} decoding="async" />
         </figure>
         </div>
+
+        <FeedbackCard />
       </div>
     </main>
+  );
+}
+
+const FEEDBACK_KINDS = ["Sugestão", "Problema", "Elogio"] as const;
+const FEEDBACK_MAX = 1_000;
+
+/** Feedback: vai direto para o painel do admin (Erros e feedback), com o aviso de novidade. */
+function FeedbackCard() {
+  const [kind, setKind] = useState<(typeof FEEDBACK_KINDS)[number]>("Sugestão");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    const message = text.trim();
+    if (!message) return;
+    setBusy(true);
+    try {
+      await api.sendFeedback(`${kind}: ${message}`);
+      setText("");
+      toast.info("Valeu! Seu feedback chegou para quem administra o Resenha.");
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="page-section" aria-labelledby="feedback-title">
+      <div className="section-head">
+        <h2 id="feedback-title" className="section-title">
+          Feedback
+        </h2>
+      </div>
+      <form className="card feedback-card form" onSubmit={send}>
+        <p className="muted">Achou um problema ou tem uma ideia? Conta aqui: vai direto para quem administra o {APP_NAME}.</p>
+        <div className="choice-row" role="group" aria-label="Tipo de feedback">
+          {FEEDBACK_KINDS.map((k) => (
+            <button key={k} type="button" className="choice" aria-pressed={kind === k} onClick={() => setKind(k)}>
+              {k}
+            </button>
+          ))}
+        </div>
+        <textarea
+          rows={3}
+          maxLength={FEEDBACK_MAX}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={kind === "Problema" ? "O que aconteceu? O que você estava fazendo?" : "Escreva aqui…"}
+          aria-label="Seu feedback"
+        />
+        <div className="feedback-foot">
+          <small className="muted">
+            {text.length}/{FEEDBACK_MAX}
+          </small>
+          <button className="btn btn-primary" disabled={busy || !text.trim()}>
+            {busy ? "Enviando…" : "Enviar"}
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 

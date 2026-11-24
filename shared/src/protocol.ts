@@ -303,15 +303,18 @@ export interface InviteInfo {
   roda: { id: string; name: string; hue: number; iconUrl: string | null; memberCount: number; approval: boolean } | null;
 }
 
-export const clientErrorBody = z.object({
-  kind: z.enum(["voz", "microfone", "tela", "ruido", "inesperado"]),
-  message: z.string().trim().min(1).max(500),
-  detail: z.string().max(2_000).default(""),
-  context: z
-    .record(z.string().max(40), z.union([z.string().max(200), z.number(), z.boolean()]))
-    .refine((c) => Object.keys(c).length <= 20, "Contexto grande demais")
-    .default({}),
-});
+export const clientErrorBody = z
+  .object({
+    kind: z.enum(["voz", "microfone", "tela", "ruido", "inesperado", "feedback"]),
+    message: z.string().trim().min(1).max(1_020),
+    detail: z.string().max(2_000).default(""),
+    context: z
+      .record(z.string().max(40), z.union([z.string().max(200), z.number(), z.boolean()]))
+      .refine((c) => Object.keys(c).length <= 20, "Contexto grande demais")
+      .default({}),
+  })
+  // feedback é escrito pela pessoa e pode ser mais longo; erro automático continua curto
+  .refine((b) => b.kind === "feedback" || b.message.length <= 500, { message: "Máximo de 500 caracteres", path: ["message"] });
 
 export const searchQuery = z.object({
   q: z.string().trim().min(2, "Digite pelo menos 2 letras").max(100),

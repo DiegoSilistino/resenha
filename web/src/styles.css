@@ -4587,6 +4587,25 @@ a.roda-card:hover {
 .error-item[data-kind="tela"] {
   border-left-color: var(--accent);
 }
+.error-item[data-kind="feedback"] {
+  border-left-color: var(--online);
+}
+.error-item[data-kind="feedback"] .error-message {
+  white-space: pre-wrap;
+}
+/* feedback na tela inicial */
+.feedback-card {
+  padding: 16px;
+}
+.feedback-card textarea {
+  resize: vertical;
+}
+.feedback-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 .error-top {
   display: flex;
   align-items: center;

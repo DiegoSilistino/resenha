@@ -268,7 +268,8 @@ export interface BackupInfo {
 }
 
 /** Tipo de falha que o navegador reporta para o painel de erros do admin. */
-export type ClientErrorKind = "voz" | "microfone" | "tela" | "ruido" | "inesperado";
+/** Tipos do painel do admin: erros reportados pelo navegador e o feedback escrito pela pessoa. */
+export type ClientErrorKind = "voz" | "microfone" | "tela" | "ruido" | "inesperado" | "feedback";
 
 export interface ClientErrorEntry {
   id: number;
