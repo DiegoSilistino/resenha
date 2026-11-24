@@ -1,11 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { Copy, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, Trash2 } from "lucide-react";
 import { LIMITS, PERMISSIONS, type Invite, type Permission, type Roda, type RodaRole } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
+import { BannerEditor, BannerPicker, type BannerPos, type PendingBanner } from "../components/Banner.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { Nick } from "../components/Nick.tsx";
 import { api } from "../lib/api.ts";
+import { moveRoom } from "../lib/rodas.ts";
 import { isRodaOwner, rodaColor, rodaPerms, roleOf, useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi, type RodaSettingsTab } from "../state/ui.ts";
@@ -82,11 +84,26 @@ function GeneralTab({ roda, onDeleted }: { roda: Roda; onDeleted(): void }) {
   const [description, setDescription] = useState(roda.description);
   const [hue, setHue] = useState(roda.hue);
   const [privacy, setPrivacy] = useState(roda.privacy);
+  const [pos, setPos] = useState<BannerPos>({ bannerX: roda.bannerX, bannerY: roda.bannerY, bannerZoom: roda.bannerZoom });
+  const [pendingBanner, setPendingBanner] = useState<PendingBanner | null>(null);
+  const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
+  // a prévia de um arquivo usa uma URL local, que precisa ser liberada quando sai de cena
+  useEffect(() => () => void (pendingBanner?.kind === "file" && URL.revokeObjectURL(pendingBanner.url)), [pendingBanner]);
+  const bannerSrc = pendingBanner?.url ?? roda.bannerUrl;
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    await run(() => api.updateRoda(roda.id, { name: name.trim(), description: description.trim(), hue, privacy }), "Roda salva.");
+    setBusy(true);
+    // a capa nova sobe primeiro; posição e zoom vão junto com o resto
+    await run(async () => {
+      if (pendingBanner) {
+        await (pendingBanner.kind === "gif" ? api.rodaBannerGif(roda.id, pendingBanner.url) : api.uploadRodaBanner(roda.id, pendingBanner.file));
+        setPendingBanner(null);
+      }
+      await api.updateRoda(roda.id, { name: name.trim(), description: description.trim(), hue, privacy, ...pos });
+    }, "Roda salva.");
+    setBusy(false);
   }
 
   async function remove() {
@@ -117,6 +134,31 @@ function GeneralTab({ roda, onDeleted }: { roda: Roda; onDeleted(): void }) {
         </div>
       </fieldset>
       <fieldset className="field">
+        <legend>Capa</legend>
+        <BannerPicker
+          hasSaved={!!roda.bannerUrl}
+          pending={!!pendingBanner}
+          onPick={(p) => {
+            setPendingBanner(p);
+            setPos({ bannerX: 50, bannerY: 50, bannerZoom: 1 }); // imagem nova começa centralizada
+          }}
+          onDiscard={() => {
+            setPendingBanner(null);
+            setPos({ bannerX: roda.bannerX, bannerY: roda.bannerY, bannerZoom: roda.bannerZoom });
+          }}
+          onRemove={() => api.removeRodaBanner(roda.id)}
+        />
+        {bannerSrc && (
+          <BannerEditor
+            src={bannerSrc}
+            pos={pos}
+            onChange={(p) => setPos((cur) => ({ ...cur, ...p }))}
+            hint="Arraste para escolher o pedaço que aparece e use o zoom. Vale ao salvar a roda; sem capa, a faixa usa a cor."
+            wide
+          />
+        )}
+      </fieldset>
+      <fieldset className="field">
         <legend>Quem entra</legend>
         <div className="choice-row">
           <button type="button" className="choice" aria-pressed={privacy === "privada"} onClick={() => setPrivacy("privada")}>
@@ -127,7 +169,9 @@ function GeneralTab({ roda, onDeleted }: { roda: Roda; onDeleted(): void }) {
           </button>
         </div>
       </fieldset>
-      <button className="btn btn-primary">Salvar</button>
+      <button className="btn btn-primary" disabled={busy}>
+        Salvar
+      </button>
       <hr />
       <button type="button" className="btn btn-danger" onClick={() => void remove()}>
         Apagar a roda
@@ -413,28 +457,54 @@ function InvitesTab({ roda }: { roda: Roda }) {
 }
 
 function RoomsTab({ roda }: { roda: Roda }) {
-  const channels = useApp((s) => s.channels).filter((c) => c.rodaId === roda.id);
+  const all = useApp((s) => s.channels).filter((c) => c.rodaId === roda.id);
+  // texto primeiro, depois voz, como na lateral; as setinhas só trocam dentro do mesmo grupo
+  const channels = [...all.filter((c) => c.kind === "text"), ...all.filter((c) => c.kind === "voice")];
   return (
     <div className="form">
       <ul className="admin-list">
-        {channels.map((c) => (
-          <li key={c.id} className="admin-row">
-            <span className="channel-hash" aria-hidden="true">
-              {c.kind === "text" ? "#" : "♪"}
-            </span>
-            <RoomName id={c.id} name={c.name} />
-            <button
-              type="button"
-              className="icon-btn"
-              data-danger
-              aria-label={`Apagar ${c.name}`}
-              title="Apagar sala"
-              onClick={() => confirm(`Apagar ${c.name} com todas as mensagens?`) && void run(() => api.deleteChannel(c.id), "Sala apagada.")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </li>
-        ))}
+        {channels.map((c, i) => {
+          const prev = channels[i - 1]?.kind === c.kind ? channels[i - 1] : undefined;
+          const next = channels[i + 1]?.kind === c.kind ? channels[i + 1] : undefined;
+          return (
+            <li key={c.id} className="admin-row">
+              <span className="channel-hash" aria-hidden="true">
+                {c.kind === "text" ? "#" : "♪"}
+              </span>
+              <RoomName id={c.id} name={c.name} />
+              <button
+                type="button"
+                className="icon-btn"
+                disabled={!prev}
+                aria-label={`Subir ${c.name}`}
+                title="Subir"
+                onClick={() => prev && void moveRoom(roda.id, c.id, prev.id, false)}
+              >
+                <ChevronUp size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                disabled={!next}
+                aria-label={`Descer ${c.name}`}
+                title="Descer"
+                onClick={() => next && void moveRoom(roda.id, c.id, next.id, true)}
+              >
+                <ChevronDown size={16} />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                data-danger
+                aria-label={`Apagar ${c.name}`}
+                title="Apagar sala"
+                onClick={() => confirm(`Apagar ${c.name} com todas as mensagens?`) && void run(() => api.deleteChannel(c.id), "Sala apagada.")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </li>
+          );
+        })}
       </ul>
       <div className="row-actions">
         <button type="button" className="btn btn-outline" onClick={() => useUi.getState().setNewRoom({ rodaId: roda.id, kind: "text" })}>

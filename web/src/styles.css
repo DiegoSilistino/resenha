@@ -967,6 +967,43 @@ input[type="range"] {
   background: var(--roda, var(--accent));
   color: #0b0b0d;
 }
+/* faixa com capa: a imagem fica atrás, escurecida embaixo para o texto (agora branco) aparecer */
+.roda-banner[data-image] {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: #fff;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.45);
+}
+.roda-banner-img,
+.roda-card-img {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.roda-banner[data-image]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.2), rgb(0 0 0 / 0.7));
+}
+.roda-banner[data-image] .roda-desc {
+  color: rgb(255 255 255 / 0.82);
+}
+.roda-banner[data-image] .roda-privacy {
+  background: rgb(0 0 0 / 0.4);
+}
+.roda-banner[data-image] .btn-on-banner {
+  border-color: rgb(255 255 255 / 0.35);
+  color: #fff;
+}
+.roda-banner[data-image] .btn-on-banner:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.12);
+}
 .roda-banner-top {
   display: flex;
   justify-content: space-between;
@@ -2504,6 +2541,52 @@ input[type="range"] {
 .voice-channel > .channel-link {
   padding-right: 34px;
 }
+/* engrenagem de editar a sala (só para quem pode mexer nas salas) */
+.channel-item {
+  position: relative;
+}
+.room-edit {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  opacity: 0;
+}
+.voice-channel .room-edit {
+  top: 3px;
+  right: 32px;
+}
+.channel-item:hover .room-edit,
+.room-edit:focus-visible {
+  opacity: 1;
+}
+.channel-item[data-editable] > .channel-link {
+  padding-right: 34px;
+}
+.voice-channel[data-editable] > .channel-link {
+  padding-right: 62px;
+}
+/* arrastando para reordenar: a sala some um pouco e uma linha mostra onde ela vai cair */
+.channel-item[data-dragging] {
+  opacity: 0.4;
+}
+.channel-item[data-drop]::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.channel-item[data-drop="before"]::after {
+  top: -2px;
+}
+.channel-item[data-drop="after"]::after {
+  bottom: -2px;
+}
 
 .join-card {
   flex: 1;
@@ -3368,6 +3451,10 @@ input[type="range"] {
   touch-action: none;
   user-select: none;
 }
+/* capa da roda: formato da faixa no topo da página da roda */
+.banner-editor[data-wide] {
+  aspect-ratio: 4 / 1;
+}
 .banner-editor:active {
   cursor: grabbing;
 }
@@ -3831,6 +3918,19 @@ input[type="range"] {
   background: linear-gradient(180deg, color-mix(in oklch, var(--roda) 16%, var(--night)), var(--night) 70%);
   color: var(--text);
   text-decoration: none;
+}
+/* cartão com capa: a imagem no fundo, sumindo no escuro para o texto continuar legível */
+.roda-card[data-image] {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.roda-card[data-image]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.25), var(--night) 92%);
 }
 a.roda-card:hover {
   border-color: #3a3a42;

@@ -125,6 +125,11 @@ export const updateChannelBody = z
   })
   .refine((b) => b.name !== undefined || b.position !== undefined, "Nada para alterar");
 
+/** Nova ordem das salas da roda: todas elas, na ordem desejada. */
+export const reorderChannelsBody = z.object({
+  ids: z.array(z.string()).min(1).max(1000),
+});
+
 export const createMessageBody = z
   .object({
     content: z.string().max(LIMITS.messageMax).default(""),
@@ -264,6 +269,9 @@ export const updateRodaBody = z
     description: rodaDescription.optional(),
     hue: z.number().int().min(0).max(359).optional(),
     privacy: z.enum(["privada", "aberta"]).optional(),
+    bannerX: z.number().min(0).max(100).optional(),
+    bannerY: z.number().min(0).max(100).optional(),
+    bannerZoom: z.number().min(1).max(3).optional(),
   })
   .refine((b) => Object.values(b).some((v) => v !== undefined), "Nada para alterar");
 

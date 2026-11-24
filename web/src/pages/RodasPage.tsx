@@ -4,6 +4,7 @@ import type { Roda, RodaSummary } from "@resenha/shared";
 import { RodaBadge } from "../layout/Sidebar.tsx";
 import { api } from "../lib/api.ts";
 import { waitForRoda } from "../lib/rodas.ts";
+import { bannerImageStyle } from "../lib/look.ts";
 import { rodaColor, useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
@@ -85,7 +86,13 @@ function RodaCard({ roda }: { roda: Roda }) {
     .filter(Boolean)
     .join(" · ");
   return (
-    <Link to={`/r/${roda.id}`} className="roda-card" style={{ "--roda": rodaColor(roda.hue) } as React.CSSProperties}>
+    <Link
+      to={`/r/${roda.id}`}
+      className="roda-card"
+      data-image={roda.bannerUrl ? true : undefined}
+      style={{ "--roda": rodaColor(roda.hue) } as React.CSSProperties}
+    >
+      {roda.bannerUrl && <img className="roda-card-img" src={roda.bannerUrl} alt="" style={bannerImageStyle(roda)} />}
       <span className="roda-card-top">
         <RodaBadge roda={roda} size={44} />
         <span className="roda-privacy">{roda.privacy === "aberta" ? "aberta" : "privada"}</span>

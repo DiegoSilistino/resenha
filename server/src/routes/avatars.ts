@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { bannerGifBody, LIMITS } from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, HttpError, notFound, parse } from "../http.ts";
@@ -9,6 +9,36 @@ import { bannerInfo, imageInfo } from "../uploads/image.ts";
 
 const UUID = /^[0-9a-f-]{36}$/;
 const tooLarge = () => new HttpError(413, `A foto pode ter no máximo ${LIMITS.avatarMaxBytes / 1024 / 1024} MB`);
+
+/** Lê a capa enviada pelo formulário (perfil ou roda), recusando o que passar do limite. */
+export async function readBannerUpload(req: FastifyRequest): Promise<Buffer> {
+  const tooBig = () => new HttpError(413, `A capa pode ter no máximo ${LIMITS.bannerMaxBytes / 1024 / 1024} MB`);
+  const file = await req.file({ limits: { fileSize: LIMITS.bannerMaxBytes, files: 1 } });
+  if (!file) throw badRequest("Nenhuma imagem enviada");
+  let data: Buffer;
+  try {
+    data = await file.toBuffer();
+  } catch (err) {
+    if ((err as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") throw tooBig();
+    throw err;
+  }
+  if (file.file.truncated) throw tooBig();
+  return data;
+}
+
+/** Confere que a capa é imagem ou GIF de tamanho aceito e grava na pasta das fotos. */
+export async function writeBanner(ctx: AppContext, data: Buffer): Promise<{ id: string; mime: string }> {
+  // O tipo vem dos bytes, nunca do nome nem do que o navegador diz.
+  const info = bannerInfo(data);
+  if (!info) throw badRequest("Envie uma imagem PNG, JPEG, WebP ou GIF");
+  const max = LIMITS.bannerMaxSide;
+  if (info.width < 1 || info.height < 1 || info.width > max || info.height > max) {
+    throw badRequest(`A capa pode ter no máximo ${max} pixels de lado`);
+  }
+  const id = randomUUID();
+  await writeFile(ctx.avatars.pathFor(id), data, { flag: "wx" });
+  return { id, mime: info.mime };
+}
 
 export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
   const { store, hub, avatars } = ctx;
@@ -68,20 +98,7 @@ export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post(
     "/api/me/banner",
     { preHandler: requireUser, config: rateLimited(ctx, 10, "10 minutes") },
-    async (req) => {
-      const tooBig = () => new HttpError(413, `A capa pode ter no máximo ${LIMITS.bannerMaxBytes / 1024 / 1024} MB`);
-      const file = await req.file({ limits: { fileSize: LIMITS.bannerMaxBytes, files: 1 } });
-      if (!file) throw badRequest("Nenhuma imagem enviada");
-      let data: Buffer;
-      try {
-        data = await file.toBuffer();
-      } catch (err) {
-        if ((err as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") throw tooBig();
-        throw err;
-      }
-      if (file.file.truncated) throw tooBig();
-      return saveBanner(currentUser(req).id, data);
-    },
+    async (req) => saveBanner(currentUser(req).id, await readBannerUpload(req)),
   );
 
   // Capa escolhida no seletor de GIFs: o servidor baixa do GIPHY e guarda como se fosse enviada.
@@ -96,15 +113,7 @@ export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
   );
 
   async function saveBanner(userId: string, data: Buffer) {
-    const info = bannerInfo(data);
-    if (!info) throw badRequest("Envie uma imagem PNG, JPEG, WebP ou GIF");
-    const max = LIMITS.bannerMaxSide;
-    if (info.width < 1 || info.height < 1 || info.width > max || info.height > max) {
-      throw badRequest(`A capa pode ter no máximo ${max} pixels de lado`);
-    }
-    const id = randomUUID();
-    await writeFile(avatars.pathFor(id), data, { flag: "wx" });
-    const previous = store.setBanner(userId, { id, mime: info.mime });
+    const previous = store.setBanner(userId, await writeBanner(ctx, data));
     if (previous) await avatars.remove([previous]);
     // quem escolhe uma capa quer vê-la: liga "Imagem ou GIF" sem depender do "Salvar perfil"
     const { look } = store.userById(userId)!;

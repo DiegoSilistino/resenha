@@ -127,8 +127,15 @@ export const api = {
   // rodas
   createRoda: (b: { name: string; description: string; privacy: Roda["privacy"]; template: string }) =>
     request<{ roda: Roda }>("POST", "/api/rodas", b),
-  updateRoda: (id: string, b: Partial<Pick<Roda, "name" | "description" | "hue" | "privacy">>) =>
+  updateRoda: (id: string, b: Partial<Pick<Roda, "name" | "description" | "hue" | "privacy" | "bannerX" | "bannerY" | "bannerZoom">>) =>
     request<{ roda: Roda }>("PATCH", `/api/rodas/${id}`, b),
+  uploadRodaBanner: (id: string, image: File) => {
+    const form = new FormData();
+    form.append("file", image, image.name);
+    return request<{ roda: Roda }>("POST", `/api/rodas/${id}/banner`, form);
+  },
+  rodaBannerGif: (id: string, url: string) => request<{ roda: Roda }>("POST", `/api/rodas/${id}/banner/gif`, { url }),
+  removeRodaBanner: (id: string) => request<{ roda: Roda }>("DELETE", `/api/rodas/${id}/banner`),
   deleteRoda: (id: string) => request<void>("DELETE", `/api/rodas/${id}`),
   joinRoda: (id: string) => request<void>("POST", `/api/rodas/${id}/join`),
   leaveRoda: (id: string) => request<void>("DELETE", `/api/rodas/${id}/members/me`),
@@ -149,6 +156,7 @@ export const api = {
   denyRequest: (id: string, userId: string) => request<void>("DELETE", `/api/rodas/${id}/requests/${userId}`),
   createRoom: (id: string, name: string, kind: ChannelKind) =>
     request<{ channel: Channel }>("POST", `/api/rodas/${id}/channels`, { name, kind }),
+  reorderRooms: (id: string, ids: string[]) => request<{ channels: Channel[] }>("PUT", `/api/rodas/${id}/channels/order`, { ids }),
   joinInvite: (code: string) =>
     request<{ status: "joined" | "requested" | "already"; rodaId: string }>("POST", `/api/invites/${encodeURIComponent(code)}/join`),
 

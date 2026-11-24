@@ -1,8 +1,10 @@
+import { useState, type DragEvent } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
 import { MessageSquare, MicOff, HeadphoneOff, Plus, Settings2, ShieldAlert, Video } from "lucide-react";
-import type { Channel, Me, Roda, VoiceMember } from "@resenha/shared";
+import type { Channel, ChannelKind, Me, Roda, VoiceMember } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { initials } from "../lib/format.ts";
+import { moveRoom } from "../lib/rodas.ts";
 import { isRodaOwner, rodaColor, rodaPerms, useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { useUi } from "../state/ui.ts";
@@ -40,6 +42,7 @@ export function Sidebar({ rodaId }: { rodaId: string }) {
   const me = useApp((s) => s.me);
   const channels = useApp((s) => s.channels).filter((c) => c.rodaId === rodaId);
   const { isAdmin, newErrors } = useAdminBadge();
+  const roomDrag = useRoomDrag(rodaId);
   if (!roda) return null;
   const canRooms = rodaPerms(roda, me).has("salas");
   const text = channels.filter((c) => c.kind === "text");
@@ -85,7 +88,7 @@ export function Sidebar({ rodaId }: { rodaId: string }) {
           <GroupTitle title="texto" add={canRooms ? { rodaId: roda.id, kind: "text" } : null} />
           <ul className="channel-list">
             {text.map((c) => (
-              <TextChannelItem key={c.id} channel={c} />
+              <TextChannelItem key={c.id} channel={c} canEdit={canRooms} drag={canRooms ? roomDrag(c) : undefined} />
             ))}
           </ul>
         </section>
@@ -93,7 +96,7 @@ export function Sidebar({ rodaId }: { rodaId: string }) {
           <GroupTitle title="voz" add={canRooms ? { rodaId: roda.id, kind: "voice" } : null} />
           <ul className="channel-list">
             {voice.map((c) => (
-              <VoiceChannelItem key={c.id} channel={c} />
+              <VoiceChannelItem key={c.id} channel={c} canEdit={canRooms} drag={canRooms ? roomDrag(c) : undefined} />
             ))}
           </ul>
         </section>
@@ -133,11 +136,55 @@ export function VoiceBars({ on }: { on: boolean }) {
   );
 }
 
-function TextChannelItem({ channel }: { channel: Channel }) {
+/** Segurar e arrastar uma sala para outro lugar do mesmo grupo (texto com texto, voz com voz), como no Discord. */
+function useRoomDrag(rodaId: string) {
+  const [drag, setDrag] = useState<{ id: string; kind: ChannelKind; over?: string; after?: boolean } | null>(null);
+  return (c: Channel) => ({
+    draggable: true,
+    "data-dragging": drag?.id === c.id || undefined,
+    "data-drop": drag?.over === c.id && drag.id !== c.id ? (drag.after ? "after" : "before") : undefined,
+    onDragStart: (e: DragEvent<HTMLLIElement>) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", c.name);
+      setDrag({ id: c.id, kind: c.kind });
+    },
+    onDragOver: (e: DragEvent<HTMLLIElement>) => {
+      if (drag?.kind !== c.kind) return;
+      e.preventDefault();
+      const box = e.currentTarget.getBoundingClientRect();
+      const after = e.clientY > box.top + box.height / 2;
+      if (drag.over !== c.id || drag.after !== after) setDrag({ ...drag, over: c.id, after });
+    },
+    onDrop: (e: DragEvent<HTMLLIElement>) => {
+      e.preventDefault();
+      if (drag?.over) void moveRoom(rodaId, drag.id, drag.over, !!drag.after);
+      setDrag(null);
+    },
+    onDragEnd: () => setDrag(null),
+  });
+}
+type RoomDragProps = ReturnType<ReturnType<typeof useRoomDrag>>;
+
+/** Engrenagem que aparece ao passar o mouse: abre os Ajustes da roda direto em Salas (renomear/apagar). */
+function EditRoomButton({ channel }: { channel: Channel }) {
+  return (
+    <button
+      type="button"
+      className="icon-btn room-edit"
+      aria-label={`Editar ${channel.name}`}
+      title="Editar sala"
+      onClick={() => useUi.getState().openRodaSettings(channel.rodaId!, "salas")}
+    >
+      <Settings2 size={15} />
+    </button>
+  );
+}
+
+function TextChannelItem({ channel, canEdit, drag }: { channel: Channel; canEdit: boolean; drag?: RoomDragProps }) {
   const unread = useApp((s) => !!s.unread[channel.id]);
   const mentions = useApp((s) => s.mentions[channel.id] ?? 0);
   return (
-    <li>
+    <li className="channel-item" data-editable={canEdit || undefined} {...drag}>
       <NavLink to={`/c/${channel.id}`} className="channel-link" data-unread={unread || undefined}>
         <span className="channel-hash" aria-hidden="true">
           #
@@ -151,11 +198,12 @@ function TextChannelItem({ channel }: { channel: Channel }) {
           unread && <span className="unread-dot" aria-label="mensagens novas" />
         )}
       </NavLink>
+      {canEdit && <EditRoomButton channel={channel} />}
     </li>
   );
 }
 
-function VoiceChannelItem({ channel }: { channel: Channel }) {
+function VoiceChannelItem({ channel, canEdit, drag }: { channel: Channel; canEdit: boolean; drag?: RoomDragProps }) {
   const members = useApp((s) => s.voice[channel.id]) ?? [];
   const navigate = useNavigate();
   const connectedHere = useVoice((s) => s.channelId === channel.id && s.status !== "idle");
@@ -163,7 +211,7 @@ function VoiceChannelItem({ channel }: { channel: Channel }) {
   const mentions = useApp((s) => s.mentions[channel.id] ?? 0);
 
   return (
-    <li className="voice-channel">
+    <li className="voice-channel channel-item" data-editable={canEdit || undefined} {...drag}>
       <NavLink
         to={`/c/${channel.id}`}
         className="channel-link"
@@ -202,6 +250,7 @@ function VoiceChannelItem({ channel }: { channel: Channel }) {
       >
         <MessageSquare size={15} />
       </button>
+      {canEdit && <EditRoomButton channel={channel} />}
       {members.length > 0 && (
         <ul className="voice-members" aria-label={`Pessoas em ${channel.name}`}>
           {members.map((m) => (

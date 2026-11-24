@@ -86,6 +86,12 @@ export interface Roda {
   /** Matiz da cor da roda (faixa, ícone). */
   hue: number;
   privacy: "privada" | "aberta";
+  /** Capa (imagem ou GIF); sem ela, a faixa usa a cor da roda. */
+  bannerUrl: string | null;
+  /** Ponto da capa que fica à vista (0–100%) e zoom, como na capa do perfil. */
+  bannerX: number;
+  bannerY: number;
+  bannerZoom: number;
   roles: RodaRole[];
   /** Quem faz parte: pessoa -> cargo. */
   members: Record<string, string>;

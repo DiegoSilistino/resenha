@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import {
+  bannerGifBody,
   createChannelBody,
   createRodaBody,
+  LIMITS,
   memberRoleBody,
+  reorderChannelsBody,
   roleBody,
   rodaInviteBody,
   transferOwnerBody,
@@ -16,6 +19,7 @@ import { badRequest, currentUser, forbidden, notFound, parse } from "../http.ts"
 import { buildHello } from "../realtime/socket.ts";
 import type { UserRecord } from "../store.ts";
 import { inviteUrl, newInviteCode } from "./admin.ts";
+import { readBannerUpload, writeBanner } from "./avatars.ts";
 import { isInviteUsable } from "./auth.ts";
 
 /** Cores das rodas novas (matiz): sorteia uma para cada. */
@@ -128,16 +132,58 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
     const roda = rodaFor(req.params.id, user);
     ownerOnly(user, roda.id);
     const members = Object.keys(roda.members);
-    const { channelIds, attachmentIds } = store.deleteRoda(roda.id);
+    const { channelIds, attachmentIds, bannerId } = store.deleteRoda(roda.id);
     for (const id of channelIds) {
       const kicked = voice.clearChannel(id);
       watch.removeChannel(id);
       await Promise.all(kicked.map((userId) => gateway.kick(userId, id)));
     }
     await uploads.remove(attachmentIds);
+    if (bannerId) await ctx.avatars.remove([bannerId]);
     resync(ctx, members);
     hub.broadcast({ type: "roda.closed", rodaId: roda.id });
     return reply.status(204).send();
+  });
+
+  // ---------- capa (só o dono, como o resto da aba Geral) ----------
+
+  /** Troca a capa, apaga a anterior do disco e avisa quem está na roda. */
+  const replaceBanner = async (rodaId: string, banner: { id: string; mime: string } | null) => {
+    const previous = store.setRodaBanner(rodaId, banner);
+    if (previous) await ctx.avatars.remove([previous]);
+    publishRoda(ctx, rodaId);
+    return { roda: store.rodaById(rodaId)! };
+  };
+  /** Confere antes de ler o arquivo: quem não pode nem chega a mandar os bytes para o disco. */
+  const ownedRoda = (rodaId: string, user: UserRecord) => {
+    rodaFor(rodaId, user);
+    ownerOnly(user, rodaId);
+  };
+
+  app.post<{ Params: { id: string } }>(
+    "/api/rodas/:id/banner",
+    { preHandler: requireUser, config: rateLimited(ctx, 10, "10 minutes") },
+    async (req) => {
+      ownedRoda(req.params.id, currentUser(req));
+      return replaceBanner(req.params.id, await writeBanner(ctx, await readBannerUpload(req)));
+    },
+  );
+
+  // GIF escolhido no seletor: o servidor baixa do GIPHY e guarda como se fosse enviado.
+  app.post<{ Params: { id: string } }>(
+    "/api/rodas/:id/banner/gif",
+    { preHandler: requireUser, config: rateLimited(ctx, 10, "10 minutes") },
+    async (req) => {
+      if (!ctx.gifs) throw notFound();
+      ownedRoda(req.params.id, currentUser(req));
+      const { url } = parse(bannerGifBody, req.body);
+      return replaceBanner(req.params.id, await writeBanner(ctx, await ctx.gifs.download(url, LIMITS.bannerMaxBytes)));
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>("/api/rodas/:id/banner", { preHandler: requireUser }, async (req) => {
+    ownedRoda(req.params.id, currentUser(req));
+    return replaceBanner(req.params.id, null);
   });
 
   // Roda aberta: qualquer pessoa entra sem convite.
@@ -346,5 +392,20 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
     const channel = store.createChannel(body.name, body.kind, req.params.id);
     hub.publish(store.channelAudience(channel.id), { type: "channel.upsert", channel });
     return reply.status(201).send({ channel });
+  });
+
+  /** Reordenar (arrastar na lateral ou setinhas nos ajustes): recebe a lista inteira, de uma vez. */
+  app.put<{ Params: { id: string } }>("/api/rodas/:id/channels/order", { preHandler: requireUser }, async (req) => {
+    const user = currentUser(req);
+    rodaFor(req.params.id, user);
+    need(user, req.params.id, "salas", "Seu cargo não pode mexer nas salas");
+    const { ids } = parse(reorderChannelsBody, req.body);
+    const current = new Set(store.listChannels(req.params.id).map((c) => c.id));
+    if (ids.length !== current.size || new Set(ids).size !== ids.length || !ids.every((id) => current.has(id))) {
+      throw badRequest("As salas mudaram enquanto você arrumava; tente de novo");
+    }
+    const channels = store.reorderChannels(ids);
+    for (const channel of channels) hub.publish(store.channelAudience(channel.id), { type: "channel.upsert", channel });
+    return { channels };
   });
 }

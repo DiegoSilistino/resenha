@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ZoomIn, ZoomOut } from "lucide-react";
 import { AVATAR_COLORS, DEFAULT_LOOK, LIMITS, PROFILE_COLORS, type ProfileLook } from "@resenha/shared";
-import { GifPicker } from "../chat/GifPicker.tsx";
+import { BannerEditor, BannerPicker, type PendingBanner } from "../components/Banner.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { api, ApiError } from "../lib/api.ts";
-import { bannerImageStyle } from "../lib/look.ts";
 import { ACCENTS, accentColor, BGS, WALLS } from "../lib/theme.ts";
 import { notifyPermission, requestNotifyPermission, type NotifyPermission } from "../lib/notify.ts";
 import { logout } from "../lib/session.ts";
@@ -201,9 +199,17 @@ function ProfileTab() {
               setPendingBanner(null);
               patch({ bannerX: me.look.bannerX, bannerY: me.look.bannerY, bannerZoom: me.look.bannerZoom });
             }}
+            onRemove={async () => useApp.getState().setMe((await api.removeBanner()).me)}
           />
         )}
-        {look.banner === "imagem" && bannerSrc && <BannerEditor src={bannerSrc} look={look} onChange={patch} />}
+        {look.banner === "imagem" && bannerSrc && (
+          <BannerEditor
+            src={bannerSrc}
+            pos={look}
+            onChange={patch}
+            hint="Arraste para escolher o pedaço que aparece e use o zoom. A prévia mostra como fica; vale ao salvar o perfil."
+          />
+        )}
         <Choice label="Moldura do avatar" value={look.frame} options={FRAMES} onChange={(frame) => patch({ frame })} />
         <Choice label="Estilo do nick" value={look.nickStyle} options={NICK_STYLES} onChange={(nickStyle) => patch({ nickStyle })} />
         <Choice label="Fonte do nick" value={look.font} options={FONTS} onChange={(font) => patch({ font })} />
@@ -261,167 +267,6 @@ function Choice<T extends string>({
         ))}
       </div>
     </fieldset>
-  );
-}
-
-/** Capa escolhida mas ainda não salva: um GIF do GIPHY ou um arquivo do computador. */
-type PendingBanner = { kind: "gif"; url: string } | { kind: "file"; file: File; url: string };
-
-/**
- * Botões da capa. Escolher só põe a imagem na prévia (dá para ajustar antes);
- * ela vai para o perfil no "Salvar perfil". "Tirar a imagem" apaga a capa salva na hora.
- */
-function BannerPicker({
-  hasSaved,
-  pending,
-  onPick,
-  onDiscard,
-}: {
-  hasSaved: boolean;
-  pending: boolean;
-  onPick(p: PendingBanner): void;
-  onDiscard(): void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [gifAnchor, setGifAnchor] = useState<HTMLElement | null>(null);
-  const gifs = useApp((s) => s.features.gifs);
-  const maxMb = LIMITS.bannerMaxBytes / 1024 / 1024;
-
-  async function remove() {
-    setBusy(true);
-    try {
-      const { me } = await api.removeBanner();
-      useApp.getState().setMe(me);
-    } catch (err) {
-      toast.fromError(err);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="row-actions">
-      {gifs && (
-        <button
-          type="button"
-          className="btn btn-small btn-primary"
-          aria-expanded={!!gifAnchor}
-          onClick={(e) => setGifAnchor(gifAnchor ? null : e.currentTarget)}
-        >
-          Escolher GIF
-        </button>
-      )}
-      <label className="btn btn-small btn-outline">
-        {gifs ? "Enviar do computador" : "Escolher imagem ou GIF"}
-        <input
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          hidden
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            if (file.size > LIMITS.bannerMaxBytes) return toast.error(`A capa pode ter no máximo ${maxMb} MB.`);
-            onPick({ kind: "file", file, url: URL.createObjectURL(file) });
-          }}
-        />
-      </label>
-      {pending ? (
-        <button type="button" className="btn btn-small btn-ghost" onClick={onDiscard}>
-          Descartar
-        </button>
-      ) : (
-        hasSaved && (
-          <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => void remove()}>
-            Tirar a imagem
-          </button>
-        )
-      )}
-      <small className="muted">
-        {gifs && "Escolha um GIF ou envie "}PNG, JPEG, WebP ou GIF, até {maxMb} MB.
-      </small>
-      {gifAnchor && (
-        <GifPicker
-          anchor={gifAnchor}
-          onClose={() => setGifAnchor(null)}
-          onPick={(g) => {
-            setGifAnchor(null);
-            onPick({ kind: "gif", url: g.imageUrl });
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-const clampPct = (v: number) => Math.round(Math.min(100, Math.max(0, v)) * 10) / 10;
-/** Setas no editor da capa: movem a imagem para aquele lado. */
-const ARROW_STEP: Record<string, [number, number]> = { ArrowLeft: [2, 0], ArrowRight: [-2, 0], ArrowUp: [0, 2], ArrowDown: [0, -2] };
-
-/** Quadro da capa: arrastar escolhe o pedaço que aparece; o zoom aproxima a partir dele. */
-function BannerEditor({ src, look, onChange }: { src: string; look: ProfileLook; onChange(p: Partial<ProfileLook>): void }) {
-  const natural = useRef({ w: 0, h: 0 });
-  const drag = useRef<{ x0: number; y0: number; bx: number; by: number } | null>(null);
-
-  function dragTo(el: HTMLElement, dx: number, dy: number, from: { bx: number; by: number }) {
-    const { w, h } = natural.current;
-    if (!w || !h) return;
-    const scale = Math.max(el.clientWidth / w, el.clientHeight / h) * look.bannerZoom;
-    // a sobra da imagem fora do quadro: arrastar a sobra inteira leva de uma borda à outra (100% a 0%)
-    const slackX = w * scale - el.clientWidth;
-    const slackY = h * scale - el.clientHeight;
-    onChange({
-      bannerX: slackX > 1 ? clampPct(from.bx - (dx / slackX) * 100) : from.bx,
-      bannerY: slackY > 1 ? clampPct(from.by - (dy / slackY) * 100) : from.by,
-    });
-  }
-
-  return (
-    <div className="field">
-      <div
-        className="banner-editor"
-        tabIndex={0}
-        aria-label="Posição da capa: arraste ou use as setas"
-        onPointerDown={(e) => {
-          e.currentTarget.setPointerCapture(e.pointerId);
-          drag.current = { x0: e.clientX, y0: e.clientY, bx: look.bannerX, by: look.bannerY };
-        }}
-        onPointerMove={(e) => {
-          const d = drag.current;
-          if (d) dragTo(e.currentTarget, e.clientX - d.x0, e.clientY - d.y0, d);
-        }}
-        onPointerUp={() => (drag.current = null)}
-        onPointerCancel={() => (drag.current = null)}
-        onKeyDown={(e) => {
-          const step = ARROW_STEP[e.key];
-          if (!step) return;
-          e.preventDefault();
-          onChange({ bannerX: clampPct(look.bannerX + step[0]), bannerY: clampPct(look.bannerY + step[1]) });
-        }}
-      >
-        <img
-          src={src}
-          alt=""
-          draggable={false}
-          style={bannerImageStyle(look)}
-          onLoad={(e) => (natural.current = { w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-        />
-      </div>
-      <label className="banner-zoom">
-        <ZoomOut size={16} aria-hidden="true" />
-        <input
-          type="range"
-          min={1}
-          max={3}
-          step={0.05}
-          value={look.bannerZoom}
-          aria-label="Zoom da capa"
-          onChange={(e) => onChange({ bannerZoom: Number(e.target.value) })}
-        />
-        <ZoomIn size={16} aria-hidden="true" />
-      </label>
-      <small>Arraste para escolher o pedaço que aparece e use o zoom. A prévia mostra como fica; vale ao salvar o perfil.</small>
-    </div>
   );
 }
 

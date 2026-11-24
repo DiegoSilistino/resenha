@@ -363,10 +363,11 @@ export class Store {
     });
   }
 
+  /** Capa de perfil ou de roda (as duas são servidas por /api/banners/:id). */
   bannerById(id: string): { mime: string } | null {
-    const r = this.db.prepare("SELECT banner_mime FROM users WHERE banner_id = ?").get(id) as
-      | { banner_mime: string | null }
-      | undefined;
+    const r = this.db
+      .prepare("SELECT banner_mime FROM users WHERE banner_id = ? UNION ALL SELECT banner_mime FROM rodas WHERE banner_id = ?")
+      .get(id, id) as { banner_mime: string | null } | undefined;
     return r?.banner_mime ? { mime: r.banner_mime } : null;
   }
 
@@ -400,7 +401,8 @@ export class Store {
     const rows = this.db
       .prepare(
         `SELECT avatar_id AS id FROM users WHERE avatar_id IS NOT NULL
-         UNION SELECT banner_id FROM users WHERE banner_id IS NOT NULL`,
+         UNION SELECT banner_id FROM users WHERE banner_id IS NOT NULL
+         UNION SELECT banner_id FROM rodas WHERE banner_id IS NOT NULL`,
       )
       .all() as { id: string }[];
     return new Set(rows.map((r) => r.id));
@@ -690,7 +692,18 @@ export class Store {
 
   rodaById(id: string): Roda | null {
     const r = this.db.prepare("SELECT * FROM rodas WHERE id = ?").get(id) as
-      | { id: string; name: string; description: string; hue: number; privacy: Roda["privacy"]; created_at: number }
+      | {
+          id: string;
+          name: string;
+          description: string;
+          hue: number;
+          privacy: Roda["privacy"];
+          banner_id: string | null;
+          banner_x: number;
+          banner_y: number;
+          banner_zoom: number;
+          created_at: number;
+        }
       | undefined;
     if (!r) return null;
     const members = this.db
@@ -705,6 +718,10 @@ export class Store {
       description: r.description,
       hue: Number(r.hue),
       privacy: r.privacy,
+      bannerUrl: r.banner_id ? bannerUrl(r.banner_id) : null,
+      bannerX: Number(r.banner_x),
+      bannerY: Number(r.banner_y),
+      bannerZoom: Number(r.banner_zoom),
       roles: this.rolesOf(id),
       members: Object.fromEntries(members.map((m) => [m.user_id, m.role_id])),
       requests: requests.map((x) => x.user_id),
@@ -813,23 +830,50 @@ export class Store {
     });
   }
 
-  updateRoda(id: string, p: { name?: string; description?: string; hue?: number; privacy?: Roda["privacy"] }): Roda | null {
+  updateRoda(
+    id: string,
+    p: Partial<Pick<Roda, "name" | "description" | "hue" | "privacy" | "bannerX" | "bannerY" | "bannerZoom">>,
+  ): Roda | null {
     this.db
       .prepare(
         `UPDATE rodas SET name = COALESCE(?, name), description = COALESCE(?, description),
-           hue = COALESCE(?, hue), privacy = COALESCE(?, privacy) WHERE id = ?`,
+           hue = COALESCE(?, hue), privacy = COALESCE(?, privacy), banner_x = COALESCE(?, banner_x),
+           banner_y = COALESCE(?, banner_y), banner_zoom = COALESCE(?, banner_zoom) WHERE id = ?`,
       )
-      .run(p.name ?? null, p.description ?? null, p.hue ?? null, p.privacy ?? null, id);
+      .run(
+        p.name ?? null,
+        p.description ?? null,
+        p.hue ?? null,
+        p.privacy ?? null,
+        p.bannerX ?? null,
+        p.bannerY ?? null,
+        p.bannerZoom ?? null,
+        id,
+      );
     return this.rodaById(id);
   }
 
-  /** Apaga a roda com as salas e mensagens; devolve as salas (para derrubar chamadas) e os anexos. */
-  deleteRoda(id: string): { channelIds: string[]; attachmentIds: string[] } {
+  /** Troca a capa da roda (null tira); devolve a anterior, para apagar do disco. */
+  setRodaBanner(rodaId: string, banner: { id: string; mime: string } | null): string | null {
+    return transaction(this.db, () => {
+      const prev = this.db.prepare("SELECT banner_id FROM rodas WHERE id = ?").get(rodaId) as
+        | { banner_id: string | null }
+        | undefined;
+      this.db
+        .prepare("UPDATE rodas SET banner_id = ?, banner_mime = ? WHERE id = ?")
+        .run(banner?.id ?? null, banner?.mime ?? null, rodaId);
+      return prev?.banner_id ?? null;
+    });
+  }
+
+  /** Apaga a roda com as salas e mensagens; devolve as salas (para derrubar chamadas), os anexos e a capa. */
+  deleteRoda(id: string): { channelIds: string[]; attachmentIds: string[]; bannerId: string | null } {
     return transaction(this.db, () => {
       const channelIds = this.listChannels(id).map((c) => c.id);
       const attachmentIds = channelIds.flatMap((c) => this.deleteChannel(c));
+      const bannerId = this.setRodaBanner(id, null);
       this.db.prepare("DELETE FROM rodas WHERE id = ?").run(id);
-      return { channelIds, attachmentIds };
+      return { channelIds, attachmentIds, bannerId };
     });
   }
 
@@ -1151,6 +1195,15 @@ export class Store {
       .prepare("UPDATE channels SET name = COALESCE(?, name), position = COALESCE(?, position) WHERE id = ?")
       .run(p.name ?? null, p.position ?? null, id);
     return this.channelById(id);
+  }
+
+  /** Grava as posições na ordem dada (quem chama confere que são todas as salas da roda). */
+  reorderChannels(ids: string[]): Channel[] {
+    transaction(this.db, () => {
+      const update = this.db.prepare("UPDATE channels SET position = ? WHERE id = ?");
+      ids.forEach((id, position) => update.run(position, id));
+    });
+    return ids.map((id) => this.channelById(id)!);
   }
 
   /** Apaga o canal e devolve os IDs dos anexos que precisam sair do disco. */

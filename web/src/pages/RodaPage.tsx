@@ -7,6 +7,7 @@ import { plainText } from "../chat/plain.ts";
 import { MemberList } from "../layout/MemberList.tsx";
 import { canManageRoda, VoiceBars } from "../layout/Sidebar.tsx";
 import { api } from "../lib/api.ts";
+import { bannerImageStyle } from "../lib/look.ts";
 import { displayNameOf, isRodaOwner, rodaColor, rodaPerms, useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
@@ -47,7 +48,12 @@ export function RodaPage() {
   return (
     <main className="page">
       <div className="page-inner page-inner-tight">
-        <header className="roda-banner" style={{ "--roda": rodaColor(roda.hue) } as React.CSSProperties}>
+        <header
+          className="roda-banner"
+          data-image={roda.bannerUrl ? true : undefined}
+          style={{ "--roda": rodaColor(roda.hue) } as React.CSSProperties}
+        >
+          {roda.bannerUrl && <img className="roda-banner-img" src={roda.bannerUrl} alt="" style={bannerImageStyle(roda)} />}
           <div className="roda-banner-top">
             <Link to="/rodas" className="btn btn-small btn-on-banner">
               ‹ Rodas

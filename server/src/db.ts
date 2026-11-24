@@ -225,6 +225,14 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN tag TEXT NOT NULL DEFAULT '0000';
   UPDATE users SET tag = printf('%04d', abs(random()) % 10000);
   `,
+  // 10: capa da roda (imagem ou GIF, na pasta das fotos), com posição e zoom como a do perfil.
+  `
+  ALTER TABLE rodas ADD COLUMN banner_id TEXT;
+  ALTER TABLE rodas ADD COLUMN banner_mime TEXT;
+  ALTER TABLE rodas ADD COLUMN banner_x REAL NOT NULL DEFAULT 50;
+  ALTER TABLE rodas ADD COLUMN banner_y REAL NOT NULL DEFAULT 50;
+  ALTER TABLE rodas ADD COLUMN banner_zoom REAL NOT NULL DEFAULT 1;
+  `,
 ];
 
 /**

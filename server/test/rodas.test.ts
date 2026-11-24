@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MIGRATIONS, openDatabase } from "../src/db.ts";
 import { createTestApp, listen, registerUser, TestSocket, type TestApp, type TestUser } from "./helpers.ts";
+import { multipart, png } from "./images.ts";
 
 let t: TestApp;
 let dono: TestUser;
@@ -21,7 +22,7 @@ afterEach(async () => {
   await t.close();
 });
 
-const req = (user: TestUser, method: "GET" | "POST" | "PATCH" | "DELETE", url: string, payload?: object) =>
+const req = (user: TestUser, method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, payload?: object) =>
   t.app.inject({ method, url, headers: { cookie: user.cookie }, ...(payload ? { payload } : {}) });
 
 async function newRoda(owner: TestUser, body: object = {}) {
@@ -93,6 +94,56 @@ describe("rodas", () => {
     // ninguém vira dono por aqui
     const owner = roda.roles.find((r) => r.owner)!;
     expect((await req(bob, "PATCH", `/api/rodas/${roda.id}/members/${carol.id}`, { roleId: owner.id })).statusCode).toBe(400);
+  });
+
+  it("reordenar salas: grava a lista inteira; Membro não pode; lista desatualizada é recusada", async () => {
+    const roda = await newRoda(bob);
+    const order = () => t.ctx.store.listChannels(roda.id).map((c) => c.name);
+    const ids = t.ctx.store.listChannels(roda.id).map((c) => c.id); // geral, clipes, Ranked, Casual
+    const url = `/api/rodas/${roda.id}/channels/order`;
+
+    const res = await req(bob, "PUT", url, { ids: [ids[1], ids[0], ids[3], ids[2]] });
+    expect(res.statusCode).toBe(200);
+    expect(order()).toEqual(["clipes", "geral", "Casual", "Ranked"]);
+
+    expect((await req(bob, "PUT", url, { ids: ids.slice(1) })).statusCode).toBe(400);
+    expect((await req(bob, "PUT", url, { ids: [ids[0], ids[0], ids[1], ids[2]] })).statusCode).toBe(400);
+    expect(order()).toEqual(["clipes", "geral", "Casual", "Ranked"]);
+
+    const invite = (await req(bob, "POST", `/api/rodas/${roda.id}/invites`, {})).json().invite;
+    await req(carol, "POST", `/api/invites/${invite.code}/join`);
+    expect((await req(carol, "PUT", url, { ids })).statusCode).toBe(403);
+  });
+
+  it("capa da roda: só o dono troca, quem está na roda vê, e o arquivo sai junto ao tirar a capa ou apagar a roda", async () => {
+    const roda = await newRoda(bob);
+    const invite = (await req(bob, "POST", `/api/rodas/${roda.id}/invites`, {})).json().invite;
+    await req(carol, "POST", `/api/invites/${invite.code}/join`);
+    const send = (user: TestUser) => {
+      const { payload, headers } = multipart("capa.png", png(600, 200));
+      return t.app.inject({ method: "POST", url: `/api/rodas/${roda.id}/banner`, headers: { ...headers, cookie: user.cookie }, payload });
+    };
+    const fileOf = (res: { json(): { roda: { bannerUrl: string } } }) => res.json().roda.bannerUrl.split("/").pop()!;
+
+    expect((await send(carol)).statusCode).toBe(403);
+    const first = await send(bob);
+    expect(first.statusCode).toBe(200);
+    const id = fileOf(first);
+    expect(t.ctx.store.allAvatarIds().has(id)).toBe(true); // a limpeza de arquivos soltos não apaga
+    const image = await req(carol, "GET", `/api/banners/${id}`);
+    expect(image.statusCode).toBe(200);
+    expect(image.headers["content-type"]).toBe("image/png");
+
+    const moved = await req(bob, "PATCH", `/api/rodas/${roda.id}`, { bannerX: 20, bannerY: 80, bannerZoom: 1.5 });
+    expect(moved.json().roda).toMatchObject({ bannerX: 20, bannerY: 80, bannerZoom: 1.5 });
+
+    expect((await req(carol, "DELETE", `/api/rodas/${roda.id}/banner`)).statusCode).toBe(403);
+    expect((await req(bob, "DELETE", `/api/rodas/${roda.id}/banner`)).json().roda.bannerUrl).toBeNull();
+    expect(existsSync(t.ctx.avatars.pathFor(id))).toBe(false);
+
+    const second = fileOf(await send(bob));
+    expect((await req(bob, "DELETE", `/api/rodas/${roda.id}`)).statusCode).toBe(204);
+    expect(existsSync(t.ctx.avatars.pathFor(second))).toBe(false);
   });
 
   it("expulsar tira o acesso; o dono não sai nem é expulso", async () => {
