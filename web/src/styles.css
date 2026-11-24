@@ -1680,6 +1680,30 @@ img.roda-badge {
 .member[data-offline] {
   opacity: 0.45;
 }
+/* capa do perfil no fundo da linha: escura do lado do nome, aparecendo mais à direita */
+.member[data-banner] {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.member-banner {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.member[data-banner]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(90deg, rgb(10 10 12 / 0.88) 0%, rgb(10 10 12 / 0.6) 55%, rgb(10 10 12 / 0.25) 100%);
+}
+.member[data-banner]:hover::before {
+  background: linear-gradient(90deg, rgb(10 10 12 / 0.8) 0%, rgb(10 10 12 / 0.45) 55%, rgb(10 10 12 / 0.1) 100%);
+}
 .member .presence-dot {
   border-color: var(--night);
 }
@@ -2065,6 +2089,69 @@ img.roda-badge {
 }
 .attachment-file:hover {
   border-color: var(--muted);
+}
+/* áudio no chat: nome, baixar e um tocador com posição e volume */
+.audio-attachment {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, 100%);
+  padding: 10px 12px 8px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+.audio-head,
+.audio-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.audio-time {
+  font: 500 12px var(--font-mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.audio-seek {
+  flex: 1;
+  min-width: 50px;
+  accent-color: var(--accent);
+}
+.audio-volume {
+  width: 72px;
+  accent-color: var(--accent);
+}
+/* foto ampliada (clique numa imagem do chat) */
+.modal[data-bare]:has(> .lightbox) {
+  width: auto;
+  max-width: calc(100vw - 32px);
+}
+.lightbox {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.lightbox img {
+  display: block;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 96px);
+  object-fit: contain;
+  border-radius: var(--r-md);
+}
+.lightbox figcaption {
+  display: flex;
+  gap: 18px;
+  font-size: 13.5px;
+}
+.lightbox figcaption a,
+.lightbox figcaption .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
 }
 .attachment-file-name {
   flex: 1;
@@ -4087,6 +4174,63 @@ a.roda-card:hover {
 }
 .invite-form-card {
   padding: 16px;
+}
+/* janela "Convidar para a roda" */
+.invite-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--well);
+  color: var(--muted);
+}
+.invite-search input {
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 10px 0;
+}
+.invite-friends {
+  max-height: 320px;
+  overflow-y: auto;
+}
+.invite-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.invite-link-row .invite-code {
+  flex: 1;
+  min-width: 0;
+}
+/* convite de roda dentro de uma mensagem (como o cartão de convite do Discord) */
+.invite-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, 100%);
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+.invite-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.invite-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.invite-card-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .room-name-input {
   flex: 1;

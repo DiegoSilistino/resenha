@@ -300,7 +300,7 @@ export const rodaInviteBody = z.object({
 /** O que a página de convite mostra antes de entrar. */
 export interface InviteInfo {
   role: "admin" | "member";
-  roda: { name: string; hue: number; memberCount: number; approval: boolean } | null;
+  roda: { id: string; name: string; hue: number; iconUrl: string | null; memberCount: number; approval: boolean } | null;
 }
 
 export const clientErrorBody = z.object({

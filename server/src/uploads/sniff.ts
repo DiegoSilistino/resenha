@@ -1,9 +1,10 @@
 /**
  * Descobre o tipo REAL do arquivo pelos primeiros bytes (não confiamos na extensão
- * nem no tipo informado pelo navegador). Só imagens e vídeos reconhecidos são
+ * nem no tipo informado pelo navegador). Só imagens, vídeos e áudios reconhecidos são
  * exibidos inline; todo o resto vira download (application/octet-stream), o que
  * impede que um HTML/SVG enviado execute script no domínio do app.
  */
+import { audioMime } from "./audio.ts";
 export interface Sniffed {
   mime: string;
   inline: boolean;
@@ -23,8 +24,12 @@ export function sniffMime(head: Buffer): Sniffed {
   if (ascii(head, 4, 8) === "ftyp") {
     const brand = ascii(head, 8, 12);
     if (brand === "qt  ") return { mime: "video/quicktime", inline: false };
+    if (brand === "M4A ") return { mime: "audio/mp4", inline: true }; // áudio do celular/iTunes
     return { mime: "video/mp4", inline: true };
   }
+  // áudio (mp3, ogg, wav, flac) toca no próprio chat; webm e m4a já caíram nos casos acima
+  const audio = audioMime(head);
+  if (audio) return { mime: audio, inline: true };
   return { mime: "application/octet-stream", inline: false };
 }
 

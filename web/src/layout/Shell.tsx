@@ -28,6 +28,7 @@ const VoiceView = lazyChunk(() => loadVoiceView().then((m) => m.VoiceView));
 const SettingsModal = lazyChunk(() => loadSettings().then((m) => m.SettingsModal));
 const AdminModal = lazyChunk(() => loadAdmin().then((m) => m.AdminModal));
 const RodaSettingsModal = lazyChunk(() => import("../modals/RodaSettingsModal.tsx").then((m) => m.RodaSettingsModal));
+const InviteFriendsDialog = lazyChunk(() => import("../modals/InviteFriendsDialog.tsx").then((m) => m.InviteFriendsDialog));
 const NewRodaModal = lazyChunk(() => import("../modals/RodaModals.tsx").then((m) => m.NewRodaModal));
 const NewRoomModal = lazyChunk(() => import("../modals/RodaModals.tsx").then((m) => m.NewRoomModal));
 const NewGroupModal = lazyChunk(() => import("../modals/NewGroupModal.tsx").then((m) => m.NewGroupModal));
@@ -62,6 +63,7 @@ export function Shell() {
   const rodaSettings = useUi((s) => s.rodaSettings);
   const newRodaOpen = useUi((s) => s.newRodaOpen);
   const newRoom = useUi((s) => s.newRoom);
+  const inviteRodaId = useUi((s) => s.inviteRodaId);
   const navigate = useNavigate();
   useDocumentTitle();
   useIdlePreload(ready);
@@ -116,6 +118,7 @@ export function Shell() {
         {rodaSettings && <RodaSettingsModal key={rodaSettings.rodaId + rodaSettings.tab} />}
         {newRodaOpen && <NewRodaModal />}
         {newRoom && <NewRoomModal key={newRoom.rodaId + newRoom.kind} />}
+        {inviteRodaId && <InviteFriendsDialog key={inviteRodaId} />}
       </Suspense>
     </div>
   );

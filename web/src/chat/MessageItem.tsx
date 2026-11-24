@@ -12,10 +12,12 @@ import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { useVoice } from "../voice/controller.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
+import { InviteCard } from "./InviteCard.tsx";
+import { AudioAttachment, ImageAttachment } from "./Media.tsx";
 import { emojiName, QUICK_REACTIONS } from "./emojis.ts";
 import { renderMessage, youTubeLinks } from "./markdown.tsx";
 import { mentionsUser as mentionsUserIn } from "./mentions.ts";
-import { parseGifMessage, plainText } from "./plain.ts";
+import { inviteCodes, parseGifMessage, plainText } from "./plain.ts";
 import { ReactionBar, toggleReaction } from "./Reactions.tsx";
 
 export const MessageItem = memo(function MessageItem({ message, grouped }: { message: Message; grouped: boolean }) {
@@ -36,6 +38,7 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
   const knownUser = (username: string) => Object.values(users).some((u) => u.username === username);
   const ytLinks = voiceChannelId ? youTubeLinks(message.content) : [];
   const gif = parseGifMessage(message.content);
+  const invites = gif ? [] : inviteCodes(message.content);
   const openAuthor = () => author && !author.removed && useUi.getState().openProfile(author.id);
 
   async function remove() {
@@ -96,6 +99,7 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
             </div>
           )
         )}
+        {!editing && invites.map((code) => <InviteCard key={code} code={code} />)}
         {message.attachments.length > 0 && (
           <div className="attachments">
             {message.attachments.map((a) => (
@@ -294,16 +298,11 @@ function EditBox({ message, onDone }: { message: Message; onDone(): void }) {
 }
 
 function AttachmentView({ attachment: a }: { attachment: Attachment }) {
-  if (a.inline && a.mime.startsWith("image/")) {
-    return (
-      <a href={a.url} target="_blank" rel="noreferrer" className="attachment-image">
-        <img src={a.url} alt={a.filename} loading="lazy" />
-      </a>
-    );
-  }
+  if (a.inline && a.mime.startsWith("image/")) return <ImageAttachment a={a} />;
   if (a.inline && a.mime.startsWith("video/")) {
     return <video className="attachment-video" src={a.url} controls preload="metadata" />;
   }
+  if (a.inline && a.mime.startsWith("audio/")) return <AudioAttachment a={a} />;
   return (
     <a href={a.url} download={a.filename} className="attachment-file">
       <FileText size={22} aria-hidden="true" />

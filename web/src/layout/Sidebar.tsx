@@ -1,6 +1,6 @@
 import { useState, type DragEvent } from "react";
 import { Link, NavLink, useNavigate } from "react-router";
-import { MessageSquare, MicOff, HeadphoneOff, Plus, Settings2, ShieldAlert, Video } from "lucide-react";
+import { MessageSquare, MicOff, HeadphoneOff, Plus, Settings2, ShieldAlert, UserPlus, Video } from "lucide-react";
 import type { Channel, ChannelKind, Me, Roda, VoiceMember } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { initials } from "../lib/format.ts";
@@ -67,6 +67,17 @@ export function Sidebar({ rodaId }: { rodaId: string }) {
             <span className="mono-label">ver a roda</span>
           </span>
         </Link>
+        {rodaPerms(roda, me).has("convidar") && (
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => useUi.getState().setInviteRoda(roda.id)}
+            aria-label={`Convidar amigos para ${roda.name}`}
+            title="Convidar amigos"
+          >
+            <UserPlus size={18} />
+          </button>
+        )}
         {canManageRoda(roda, me) && (
           <button
             type="button"

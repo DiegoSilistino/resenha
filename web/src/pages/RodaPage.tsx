@@ -84,7 +84,7 @@ export function RodaPage() {
                 </button>
               )}
               {perms.has("convidar") && (
-                <button type="button" className="btn btn-ink" onClick={() => useUi.getState().openRodaSettings(roda.id, "convites")}>
+                <button type="button" className="btn btn-ink" onClick={() => useUi.getState().setInviteRoda(roda.id)}>
                   Convidar
                 </button>
               )}

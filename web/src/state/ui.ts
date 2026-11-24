@@ -28,6 +28,8 @@ interface UiState {
   newRodaOpen: boolean;
   /** Criando sala nova nesta roda. */
   newRoom: { rodaId: string; kind: "text" | "voice" } | null;
+  /** Janela "Convidar para a roda" (mandar o link no privado de um amigo) aberta para esta roda. */
+  inviteRodaId: string | null;
   shareDialogOpen: boolean;
   /** Painel de busca de mensagens aberto. */
   searchOpen: boolean;
@@ -45,6 +47,7 @@ interface UiState {
   openRodaSettings(rodaId: string | null, tab?: RodaSettingsTab): void;
   setNewRodaOpen(open: boolean): void;
   setNewRoom(room: { rodaId: string; kind: "text" | "voice" } | null): void;
+  setInviteRoda(rodaId: string | null): void;
   setShareDialogOpen(open: boolean): void;
   setSearchOpen(open: boolean): void;
   setPageTitle(title: string): void;
@@ -65,6 +68,7 @@ export const useUi = create<UiState>()((set) => ({
   rodaSettings: null,
   newRodaOpen: false,
   newRoom: null,
+  inviteRodaId: null,
   shareDialogOpen: false,
   searchOpen: false,
   pageTitle: "Resenha",
@@ -78,6 +82,7 @@ export const useUi = create<UiState>()((set) => ({
   openRodaSettings: (rodaId, tab = "geral") => set({ rodaSettings: rodaId ? { rodaId, tab } : null }),
   setNewRodaOpen: (newRodaOpen) => set({ newRodaOpen }),
   setNewRoom: (newRoom) => set({ newRoom }),
+  setInviteRoda: (inviteRodaId) => set({ inviteRodaId }),
   setShareDialogOpen: (shareDialogOpen) => set({ shareDialogOpen }),
   setSearchOpen: (searchOpen) => set({ searchOpen }),
   setPageTitle: (pageTitle) => set({ pageTitle }),

@@ -71,7 +71,14 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
       const info: InviteInfo = {
         role: invite.role,
         roda: roda
-          ? { name: roda.name, hue: roda.hue, memberCount: Object.keys(roda.members).length, approval: invite.approval }
+          ? {
+              id: roda.id,
+              name: roda.name,
+              hue: roda.hue,
+              iconUrl: roda.iconUrl,
+              memberCount: Object.keys(roda.members).length,
+              approval: invite.approval,
+            }
           : null,
       };
       return info;

@@ -13,6 +13,13 @@ export function parseGifMessage(content: string): { src: string; width: number; 
   return { src: src!, width: w && w > 0 ? w : 480, height: h && h > 0 ? h : 270 };
 }
 
+/** Códigos dos links de convite de roda deste servidor numa mensagem (sem repetir, no máximo 3). */
+export function inviteCodes(content: string, origin = location.origin): string[] {
+  const escaped = origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const codes = [...content.matchAll(new RegExp(`${escaped}/convite/([A-Za-z0-9_-]+)`, "g"))].map((m) => m[1]!);
+  return [...new Set(codes)].slice(0, 3);
+}
+
 export function plainText(content: string): string {
   if (parseGifMessage(content)) return "GIF";
   return content
