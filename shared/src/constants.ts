@@ -40,6 +40,7 @@ export const LIMITS = {
   bannerMaxSide: 4096,
   /** Grupo privado: pessoas, contando quem criou. */
   groupMax: 10,
+  rodaNameMax: 40,
 } as const;
 
 /** Cores do perfil (cartão, molduras, nick colorido): mesmo brilho, matizes diferentes. */

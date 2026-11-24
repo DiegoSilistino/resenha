@@ -1,4 +1,4 @@
-import { AccessToken, RoomServiceClient } from "livekit-server-sdk";
+import { AccessToken, RoomServiceClient, TrackSource } from "livekit-server-sdk";
 import { LIVEKIT_ROOM_PREFIX } from "@resenha/shared";
 import type { Config } from "../config.ts";
 import type { UserRecord } from "../store.ts";
@@ -11,7 +11,8 @@ export type VoiceHealth =
   | { ok: false; problem: "unreachable" | "unauthorized" | "error"; detail: string };
 
 export interface VoiceGateway {
-  createToken(user: UserRecord, channelId: string): Promise<string>;
+  /** `screen: false` = o token não deixa transmitir a tela (só microfone e câmera). */
+  createToken(user: UserRecord, channelId: string, opts?: { screen?: boolean }): Promise<string>;
   /** URL que o navegador usa; sem configuração explícita, é o próprio domínio do app. */
   publicUrl(requestProtocol: string, requestHost: string): string;
   /** Tira alguém da sala (conta desativada, canal apagado). Falhas são ignoradas. */
@@ -37,7 +38,7 @@ export class LiveKitGateway implements VoiceGateway {
     });
   }
 
-  async createToken(user: UserRecord, channelId: string): Promise<string> {
+  async createToken(user: UserRecord, channelId: string, opts: { screen?: boolean } = {}): Promise<string> {
     const at = new AccessToken(this.cfg.apiKey, this.cfg.apiSecret, {
       identity: user.id,
       name: user.displayName,
@@ -52,6 +53,7 @@ export class LiveKitGateway implements VoiceGateway {
       canSubscribe: true,
       canPublishData: true,
       canUpdateOwnMetadata: false,
+      ...(opts.screen === false ? { canPublishSources: [TrackSource.MICROPHONE, TrackSource.CAMERA] } : {}),
     });
     return at.toJwt();
   }

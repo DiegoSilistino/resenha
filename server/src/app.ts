@@ -18,6 +18,7 @@ import { BackupService } from "./backup/service.ts";
 import { registerAdminRoutes } from "./routes/admin.ts";
 import { registerAvatarRoutes } from "./routes/avatars.ts";
 import { registerSocialRoutes } from "./routes/social.ts";
+import { registerRodaRoutes } from "./routes/rodas.ts";
 import { registerBackupRoutes } from "./routes/backup.ts";
 import { registerGifRoutes } from "./routes/gifs.ts";
 import { registerDiagnosticsRoutes } from "./routes/diagnostics.ts";
@@ -193,6 +194,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   registerSoundRoutes(app, ctx);
   registerVoiceRoutes(app, ctx);
   registerSocialRoutes(app, ctx);
+  registerRodaRoutes(app, ctx);
   registerSocket(app, ctx);
 
   await registerFrontend(app, config);

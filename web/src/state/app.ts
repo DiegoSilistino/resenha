@@ -4,6 +4,9 @@ import type {
   Conversation,
   FriendEntry,
   HelloEvent,
+  Permission,
+  Roda,
+  RodaSummary,
   Me,
   Message,
   MessageReference,
@@ -14,6 +17,7 @@ import type {
   VoiceMember,
   WatchState,
 } from "@resenha/shared";
+import { PERMISSIONS } from "@resenha/shared";
 import { mentionsUser } from "../chat/mentions.ts";
 
 export interface ChannelMessages {
@@ -57,6 +61,10 @@ interface AppState {
   conversations: Record<string, Conversation>;
   /** Amigos e pedidos, pela pessoa do outro lado. */
   friends: Record<string, FriendEntry>;
+  /** Rodas de que você faz parte. */
+  rodas: Record<string, Roda>;
+  /** Rodas abertas em que você ainda não está. */
+  openRodas: RodaSummary[];
 
   setMe(me: Me | false): void;
   setConnection(status: ConnectionStatus): void;
@@ -95,6 +103,8 @@ const initial = {
   latestErrorId: 0,
   conversations: {} as Record<string, Conversation>,
   friends: {} as Record<string, FriendEntry>,
+  rodas: {} as Record<string, Roda>,
+  openRodas: [] as RodaSummary[],
 };
 
 /** A pessoa está olhando para o app agora? */
@@ -274,6 +284,8 @@ export const useApp = create<AppState>()((set, get) => ({
         const reads = { ...conv.reads, [event.userId]: Math.max(conv.reads[event.userId] ?? 0, event.messageId) };
         return set({ conversations: { ...s.conversations, [conv.id]: { ...conv, reads } } });
       }
+      case "roda.upsert":
+        return set({ rodas: { ...s.rodas, [event.roda.id]: event.roda } });
       case "friend.upsert":
         return set({ friends: { ...s.friends, [event.friend.userId]: event.friend } });
       case "friend.remove": {
@@ -304,6 +316,8 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
     latestErrorId: e.latestErrorId ?? 0,
     conversations: Object.fromEntries((e.conversations ?? []).map((c) => [c.id, c])),
     friends: Object.fromEntries((e.friends ?? []).map((f) => [f.userId, f])),
+    rodas: Object.fromEntries((e.rodas ?? []).map((r) => [r.id, r])),
+    openRodas: e.openRodas ?? [],
     // não lidas das conversas vêm do servidor (ele guarda até onde você leu)
     unread: { ...useApp.getState().unread, ...(e.conversationUnread ?? {}) },
   };
@@ -393,4 +407,33 @@ export function conversationTitle(c: Conversation, users: Record<string, PublicU
 /** A conversa como canal, para o chat (mensagens, anexos, chamada) funcionar igual. */
 export function conversationChannel(c: Conversation, users: Record<string, PublicUser>, meId: string | undefined): Channel {
   return { id: c.id, name: conversationTitle(c, users, meId), kind: "text", position: 0, conversation: c.type };
+}
+
+// ---------- rodas ----------
+
+/** Cor da roda (faixa, ícone) a partir do matiz. */
+export const rodaColor = (hue: number) => `oklch(0.8 0.13 ${hue})`;
+
+/** O cargo de alguém na roda. */
+export const roleOf = (roda: Roda, userId: string) => roda.roles.find((r) => r.id === roda.members[userId]);
+
+/** O que você pode fazer na roda (admin do servidor pode tudo onde está). */
+export function rodaPerms(roda: Roda | undefined, me: Me | null | false): Set<Permission> {
+  if (!roda || !me || !(me.id in roda.members)) return new Set();
+  if (me.role === "admin") return new Set(PERMISSIONS);
+  return new Set(roleOf(roda, me.id)?.perms ?? []);
+}
+
+/** Dono (ou admin do servidor): mexe em nome, cargos e quem tem qual cargo. */
+export const isRodaOwner = (roda: Roda | undefined, me: Me | null | false) =>
+  !!roda && !!me && (me.role === "admin" || !!roleOf(roda, me.id)?.owner);
+
+/** Você pode isto neste canal? Na conversa, o básico (sem moderar); na sala, o que seu cargo permite. */
+export function useChannelPerm(channelId: string | null, perm: Permission): boolean {
+  return useApp((s) => {
+    if (!channelId) return false;
+    if (s.conversations[channelId]) return perm !== "convidar" && perm !== "salas" && perm !== "expulsar";
+    const c = s.channels.find((x) => x.id === channelId);
+    return !!c?.rodaId && rodaPerms(s.rodas[c.rodaId], s.me).has(perm);
+  });
 }

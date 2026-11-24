@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
-import { clientMessage, LIMITS, WS_CLOSE_UNAUTHORIZED, type ClientMessage } from "@resenha/shared";
+import { clientMessage, LIMITS, WS_CLOSE_UNAUTHORIZED, type ClientMessage, type ServerEvent } from "@resenha/shared";
 import type { AppContext } from "../app.ts";
 import { isSameOrigin } from "../app.ts";
-import { toPublicUser } from "../store.ts";
+import { toPublicUser, type UserRecord } from "../store.ts";
 import { WatchError } from "../watch/service.ts";
 import type { Connection } from "./hub.ts";
 
@@ -15,10 +15,36 @@ const MAX_MESSAGES_PER_SECOND = 20;
 /** Mesa de sons: um som a cada 1,5 s por pessoa (dá para brincar sem virar metralhadora). */
 const SOUNDBOARD_INTERVAL_MS = LIMITS.soundboardCooldownMs;
 
+/**
+ * Tudo que a pessoa vê, de uma vez: ao conectar e quando o que ela pode ver muda (entrou ou saiu
+ * de uma roda, mudou de cargo). Salas, chamadas e vídeos de rodas e conversas alheias ficam de fora.
+ */
+export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
+  const { hub, store, voice, watch } = ctx;
+  const visible = <T,>(byChannel: Record<string, T>) =>
+    Object.fromEntries(Object.entries(byChannel).filter(([channelId]) => store.canAccess(user.id, channelId)));
+  return {
+    type: "hello",
+    me: toPublicUser(user),
+    users: store.listUsers().map(toPublicUser),
+    channels: store.listChannelsFor(user),
+    online: hub.onlineUserIds(),
+    voice: visible(voice.snapshot()),
+    watch: visible(watch.snapshot()),
+    conversations: store.listConversations(user.id),
+    conversationUnread: store.conversationUnread(user.id),
+    friends: store.listFriends(user.id),
+    rodas: store.listRodasFor(user.id),
+    openRodas: store.openRodasFor(user.id),
+    serverTime: Date.now(),
+    features: { gifs: !!ctx.gifs },
+    sounds: store.listSounds(),
+    ...(user.role === "admin" ? { latestErrorId: store.latestClientErrorId() } : {}),
+  };
+}
+
 export function registerSocket(app: FastifyInstance, ctx: AppContext) {
   const { hub, store, voice, watch } = ctx;
-  const visibleTo = <T,>(userId: string, byChannel: Record<string, T>) =>
-    Object.fromEntries(Object.entries(byChannel).filter(([channelId]) => store.canAccess(userId, channelId)));
   const lastSound = new Map<string, number>();
 
   app.get("/ws", { websocket: true }, (socket: WebSocket, req) => {
@@ -68,23 +94,7 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
     });
 
     hub.add(conn);
-    hub.send(conn, {
-      type: "hello",
-      me: toPublicUser(req.auth.user),
-      users: store.listUsers().map(toPublicUser),
-      channels: store.listChannels(),
-      online: hub.onlineUserIds(),
-      // chamadas e vídeos de conversas alheias ficam de fora
-      voice: visibleTo(req.auth.user.id, voice.snapshot()),
-      watch: visibleTo(req.auth.user.id, watch.snapshot()),
-      conversations: store.listConversations(req.auth.user.id),
-      conversationUnread: store.conversationUnread(req.auth.user.id),
-      friends: store.listFriends(req.auth.user.id),
-      serverTime: Date.now(),
-      features: { gifs: !!ctx.gifs },
-      sounds: store.listSounds(),
-      ...(req.auth.user.role === "admin" ? { latestErrorId: store.latestClientErrorId() } : {}),
-    });
+    hub.send(conn, buildHello(ctx, req.auth.user));
   });
 
   async function handle(conn: Connection, msg: ClientMessage): Promise<void> {

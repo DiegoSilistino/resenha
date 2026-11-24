@@ -43,9 +43,11 @@ export function registerVoiceRoutes(app: FastifyInstance, ctx: AppContext) {
       if (!channel || !store.canAccess(currentUser(req).id, channel.id)) throw notFound("Canal não encontrado");
       if (!store.canCall(currentUser(req).id, channel.id)) throw badRequest("Esse canal não é de voz");
       await ensureVoiceServer(req);
+      // sem permissão de tela, o próprio LiveKit recusa a transmissão (não só o botão some)
+      const screen = store.channelPerms(currentUser(req), channel.id).has("tela");
       return {
         url: gateway.publicUrl(req.protocol, req.host),
-        token: await gateway.createToken(currentUser(req), channel.id),
+        token: await gateway.createToken(currentUser(req), channel.id, { screen }),
       };
     },
   );

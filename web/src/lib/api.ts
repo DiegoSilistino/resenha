@@ -7,10 +7,14 @@ import type {
   ChannelKind,
   GifResult,
   Invite,
+  InviteInfo,
   Me,
   Message,
   Conversation,
   FriendEntry,
+  Permission,
+  Roda,
+  RodaRole,
   PublicUser,
   Role,
   SearchResult,
@@ -56,7 +60,7 @@ export const api = {
   login: (username: string, password: string) =>
     request<{ me: Me }>("POST", "/api/auth/login", { username, password }),
   logout: () => request<void>("POST", "/api/auth/logout"),
-  inviteInfo: (code: string) => request<{ role: Role }>("GET", `/api/invites/${encodeURIComponent(code)}`),
+  inviteInfo: (code: string) => request<InviteInfo>("GET", `/api/invites/${encodeURIComponent(code)}`),
   register: (b: { code: string; username: string; displayName: string; password: string }) =>
     request<{ me: Me }>("POST", "/api/auth/register", b),
 
@@ -112,6 +116,33 @@ export const api = {
   markConversationRead: (id: string, messageId: number) =>
     request<void>("POST", `/api/conversations/${id}/read`, { messageId }),
   leaveConversation: (id: string) => request<void>("DELETE", `/api/conversations/${id}/members/me`),
+
+  // rodas
+  createRoda: (b: { name: string; description: string; privacy: Roda["privacy"]; template: string }) =>
+    request<{ roda: Roda }>("POST", "/api/rodas", b),
+  updateRoda: (id: string, b: Partial<Pick<Roda, "name" | "description" | "hue" | "privacy">>) =>
+    request<{ roda: Roda }>("PATCH", `/api/rodas/${id}`, b),
+  deleteRoda: (id: string) => request<void>("DELETE", `/api/rodas/${id}`),
+  joinRoda: (id: string) => request<void>("POST", `/api/rodas/${id}/join`),
+  leaveRoda: (id: string) => request<void>("DELETE", `/api/rodas/${id}/members/me`),
+  kickMember: (id: string, userId: string) => request<void>("DELETE", `/api/rodas/${id}/members/${userId}`),
+  setMemberRole: (id: string, userId: string, roleId: string) =>
+    request<{ roda: Roda }>("PATCH", `/api/rodas/${id}/members/${userId}`, { roleId }),
+  createRole: (id: string, b: { name: string; color: string; perms: Permission[] }) =>
+    request<{ role: RodaRole }>("POST", `/api/rodas/${id}/roles`, b),
+  updateRole: (id: string, roleId: string, b: { name: string; color: string; perms: Permission[] }) =>
+    request<{ roda: Roda }>("PATCH", `/api/rodas/${id}/roles/${roleId}`, b),
+  deleteRole: (id: string, roleId: string) => request<void>("DELETE", `/api/rodas/${id}/roles/${roleId}`),
+  rodaInvites: (id: string) => request<{ invites: (Invite & { url: string })[] }>("GET", `/api/rodas/${id}/invites`),
+  createRodaInvite: (id: string, b: { expiresInMinutes: number | null; maxUses: number; approval: boolean }) =>
+    request<{ invite: Invite & { url: string } }>("POST", `/api/rodas/${id}/invites`, b),
+  revokeRodaInvite: (id: string, code: string) => request<void>("DELETE", `/api/rodas/${id}/invites/${code}`),
+  approveRequest: (id: string, userId: string) => request<void>("POST", `/api/rodas/${id}/requests/${userId}/approve`),
+  denyRequest: (id: string, userId: string) => request<void>("DELETE", `/api/rodas/${id}/requests/${userId}`),
+  createRoom: (id: string, name: string, kind: ChannelKind) =>
+    request<{ channel: Channel }>("POST", `/api/rodas/${id}/channels`, { name, kind }),
+  joinInvite: (code: string) =>
+    request<{ status: "joined" | "requested" | "already"; rodaId: string }>("POST", `/api/invites/${encodeURIComponent(code)}/join`),
 
   createChannel: (name: string, kind: ChannelKind) => request<{ channel: Channel }>("POST", "/api/channels", { name, kind }),
   updateChannel: (id: string, b: { name?: string; position?: number }) =>

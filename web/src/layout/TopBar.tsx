@@ -15,8 +15,9 @@ function Tabs({ className }: { className: string }) {
   const mentions = useMentionTotal();
   const conversations = useApp(unreadConversations);
   const requests = useApp((s) => Object.values(s.friends).filter((f) => f.status === "incoming").length);
-  // Dentro de um canal você está "na roda" (por enquanto só existe uma).
-  const inRoda = useLocation().pathname.startsWith("/c/");
+  // Dentro de uma sala ou da página de uma roda, a aba Rodas fica acesa.
+  const path = useLocation().pathname;
+  const inRoda = path.startsWith("/c/") || path.startsWith("/r/");
   return (
     <nav className={className} aria-label="Seções">
       <NavLink to="/" end className="tab-pill">
@@ -38,7 +39,7 @@ function Tabs({ className }: { className: string }) {
           </span>
         )}
       </NavLink>
-      <NavLink to="/roda" className={({ isActive }) => `tab-pill${isActive || inRoda ? " active" : ""}`}>
+      <NavLink to="/rodas" className={({ isActive }) => `tab-pill${isActive || inRoda ? " active" : ""}`}>
         Rodas
         {mentions > 0 && (
           <span className="tab-badge" aria-label={`${mentions} ${mentions === 1 ? "menção" : "menções"} a você`}>

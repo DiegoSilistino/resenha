@@ -9,7 +9,8 @@ export interface JumpRequest {
 }
 
 /** Abas do painel do admin (a ordem e os nomes ficam no AdminModal). */
-export type AdminTab = "invites" | "channels" | "members" | "backup" | "errors";
+export type AdminTab = "invites" | "members" | "backup" | "errors";
+export type RodaSettingsTab = "geral" | "cargos" | "membros" | "convites" | "salas";
 export type SettingsTab = "profile" | "appearance" | "audio" | "notifications" | "captions" | "account";
 
 interface UiState {
@@ -22,6 +23,11 @@ interface UiState {
   /** Cartão de perfil aberto (id da pessoa). */
   profileId: string | null;
   newGroupOpen: boolean;
+  /** Ajustes de uma roda abertos (e em qual aba). */
+  rodaSettings: { rodaId: string; tab: RodaSettingsTab } | null;
+  newRodaOpen: boolean;
+  /** Criando sala nova nesta roda. */
+  newRoom: { rodaId: string; kind: "text" | "voice" } | null;
   shareDialogOpen: boolean;
   /** Painel de busca de mensagens aberto. */
   searchOpen: boolean;
@@ -36,6 +42,9 @@ interface UiState {
   setAdminOpen(open: boolean, tab?: AdminTab): void;
   openProfile(userId: string | null): void;
   setNewGroupOpen(open: boolean): void;
+  openRodaSettings(rodaId: string | null, tab?: RodaSettingsTab): void;
+  setNewRodaOpen(open: boolean): void;
+  setNewRoom(room: { rodaId: string; kind: "text" | "voice" } | null): void;
   setShareDialogOpen(open: boolean): void;
   setSearchOpen(open: boolean): void;
   setPageTitle(title: string): void;
@@ -53,6 +62,9 @@ export const useUi = create<UiState>()((set) => ({
   settingsTab: null,
   profileId: null,
   newGroupOpen: false,
+  rodaSettings: null,
+  newRodaOpen: false,
+  newRoom: null,
   shareDialogOpen: false,
   searchOpen: false,
   pageTitle: "Resenha",
@@ -63,6 +75,9 @@ export const useUi = create<UiState>()((set) => ({
   setAdminOpen: (adminOpen, tab) => set({ adminOpen, adminTab: tab ?? null }),
   openProfile: (profileId) => set({ profileId }),
   setNewGroupOpen: (newGroupOpen) => set({ newGroupOpen }),
+  openRodaSettings: (rodaId, tab = "geral") => set({ rodaSettings: rodaId ? { rodaId, tab } : null }),
+  setNewRodaOpen: (newRodaOpen) => set({ newRodaOpen }),
+  setNewRoom: (newRoom) => set({ newRoom }),
   setShareDialogOpen: (shareDialogOpen) => set({ shareDialogOpen }),
   setSearchOpen: (searchOpen) => set({ searchOpen }),
   setPageTitle: (pageTitle) => set({ pageTitle }),

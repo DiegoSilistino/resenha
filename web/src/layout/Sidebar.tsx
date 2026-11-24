@@ -1,9 +1,9 @@
 import { Link, NavLink, useNavigate } from "react-router";
-import { MessageSquare, MicOff, HeadphoneOff, Plus, Settings2, Video } from "lucide-react";
-import { APP_NAME, type Channel, type VoiceMember } from "@resenha/shared";
+import { MessageSquare, MicOff, HeadphoneOff, Plus, Settings2, ShieldAlert, Video } from "lucide-react";
+import type { Channel, Me, Roda, VoiceMember } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { initials } from "../lib/format.ts";
-import { useApp } from "../state/app.ts";
+import { isRodaOwner, rodaColor, rodaPerms, useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { useUi } from "../state/ui.ts";
 import { joinVoice, preloadVoice, useVoice } from "../voice/controller.ts";
@@ -15,42 +15,74 @@ export function useAdminBadge() {
   return { isAdmin, newErrors: isAdmin && newErrors };
 }
 
+/** Ícone da roda: quadradinho na cor dela com as iniciais. */
+export function RodaBadge({ roda, size = 38 }: { roda: Pick<Roda, "name" | "hue">; size?: number }) {
+  return (
+    <span
+      className="roda-badge"
+      style={{ background: rodaColor(roda.hue), width: size, height: size, lineHeight: `${size}px`, fontSize: size * 0.32 }}
+      aria-hidden="true"
+    >
+      {initials(roda.name)}
+    </span>
+  );
+}
+
+/** Quem pode abrir os Ajustes da roda: o dono e quem convida, expulsa ou mexe nas salas. */
+export function canManageRoda(roda: Roda | undefined, me: Me | null | false): boolean {
+  const perms = rodaPerms(roda, me);
+  return isRodaOwner(roda, me) || perms.has("convidar") || perms.has("expulsar") || perms.has("salas");
+}
+
 /** Painel das salas da roda, ao lado da conversa ou da chamada (no celular, a página da roda faz esse papel). */
-export function Sidebar() {
-  const channels = useApp((s) => s.channels);
+export function Sidebar({ rodaId }: { rodaId: string }) {
+  const roda = useApp((s) => s.rodas[rodaId]);
+  const me = useApp((s) => s.me);
+  const channels = useApp((s) => s.channels).filter((c) => c.rodaId === rodaId);
   const { isAdmin, newErrors } = useAdminBadge();
+  if (!roda) return null;
+  const canRooms = rodaPerms(roda, me).has("salas");
   const text = channels.filter((c) => c.kind === "text");
   const voice = channels.filter((c) => c.kind === "voice");
 
   return (
-    <nav className="sidebar" aria-label="Salas">
+    <nav className="sidebar" aria-label={`Salas de ${roda.name}`}>
       <header className="sidebar-header">
-        <Link to="/roda" className="roda-link">
-          <span className="roda-badge" aria-hidden="true">
-            {initials(APP_NAME)}
-          </span>
+        <Link to={`/r/${roda.id}`} className="roda-link">
+          <RodaBadge roda={roda} />
           <span className="roda-link-names">
-            <span className="roda-link-name">{APP_NAME}</span>
+            <span className="roda-link-name">{roda.name}</span>
             <span className="mono-label">ver a roda</span>
           </span>
         </Link>
-        {isAdmin && (
+        {canManageRoda(roda, me) && (
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => useUi.getState().openRodaSettings(roda.id)}
+            aria-label={`Ajustes de ${roda.name}`}
+            title="Ajustes da roda"
+          >
+            <Settings2 size={18} />
+          </button>
+        )}
+        {isAdmin && newErrors && (
           <button
             type="button"
             className="icon-btn admin-btn"
-            data-badge={newErrors || undefined}
+            data-badge
             onClick={() => useUi.getState().setAdminOpen(true)}
-            aria-label={newErrors ? "Administrar grupo (tem erro novo no painel)" : "Administrar grupo"}
-            title={newErrors ? "Administrar grupo: tem erro novo no painel" : "Administrar grupo"}
+            aria-label="Painel do servidor (tem erro novo)"
+            title="Painel do servidor: tem erro novo"
           >
-            <Settings2 size={18} />
+            <ShieldAlert size={18} />
           </button>
         )}
       </header>
 
       <div className="channel-groups">
         <section>
-          <GroupTitle title="texto" add={isAdmin ? "Nova sala de texto" : null} />
+          <GroupTitle title="texto" add={canRooms ? { rodaId: roda.id, kind: "text" } : null} />
           <ul className="channel-list">
             {text.map((c) => (
               <TextChannelItem key={c.id} channel={c} />
@@ -58,7 +90,7 @@ export function Sidebar() {
           </ul>
         </section>
         <section>
-          <GroupTitle title="voz" add={isAdmin ? "Nova sala de voz" : null} />
+          <GroupTitle title="voz" add={canRooms ? { rodaId: roda.id, kind: "voice" } : null} />
           <ul className="channel-list">
             {voice.map((c) => (
               <VoiceChannelItem key={c.id} channel={c} />
@@ -70,7 +102,8 @@ export function Sidebar() {
   );
 }
 
-function GroupTitle({ title, add }: { title: string; add: string | null }) {
+function GroupTitle({ title, add }: { title: string; add: { rodaId: string; kind: "text" | "voice" } | null }) {
+  const label = add?.kind === "voice" ? "Nova sala de voz" : "Nova sala de texto";
   return (
     <div className="group-head">
       <h2 className="mono-label">{title}</h2>
@@ -78,9 +111,9 @@ function GroupTitle({ title, add }: { title: string; add: string | null }) {
         <button
           type="button"
           className="icon-btn icon-btn-round"
-          onClick={() => useUi.getState().setAdminOpen(true, "channels")}
-          aria-label={add}
-          title={add}
+          onClick={() => useUi.getState().setNewRoom(add)}
+          aria-label={label}
+          title={label}
         >
           <Plus size={16} />
         </button>

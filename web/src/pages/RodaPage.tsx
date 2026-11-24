@@ -1,62 +1,88 @@
 import { useEffect } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { Settings2 } from "lucide-react";
-import { APP_NAME, type Channel } from "@resenha/shared";
+import type { Channel } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { plainText } from "../chat/plain.ts";
 import { MemberList } from "../layout/MemberList.tsx";
-import { useAdminBadge, VoiceBars } from "../layout/Sidebar.tsx";
-import { displayNameOf, useApp } from "../state/app.ts";
+import { canManageRoda, VoiceBars } from "../layout/Sidebar.tsx";
+import { api } from "../lib/api.ts";
+import { displayNameOf, isRodaOwner, rodaColor, rodaPerms, useApp } from "../state/app.ts";
+import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { joinVoice, preloadVoice, useVoice } from "../voice/controller.ts";
 
 /** A página da roda: as salas de texto e de voz e quem faz parte. No celular é por aqui que se troca de sala. */
 export function RodaPage() {
-  const channels = useApp((s) => s.channels);
+  const { rodaId = "" } = useParams();
+  const roda = useApp((s) => s.rodas[rodaId]);
+  const me = useApp((s) => s.me);
+  const channels = useApp((s) => s.channels).filter((c) => c.rodaId === rodaId);
   const users = useApp((s) => s.users);
-  const { isAdmin, newErrors } = useAdminBadge();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    useUi.getState().setPageTitle(APP_NAME);
-  }, []);
+    if (roda) useUi.getState().setPageTitle(roda.name);
+  }, [roda?.name]);
 
+  // saiu, foi tirado ou a roda acabou: volta para a lista
+  if (!roda) return <Navigate to="/rodas" replace />;
+
+  const perms = rodaPerms(roda, me);
+  const owner = isRodaOwner(roda, me);
   const text = channels.filter((c) => c.kind === "text");
   const voice = channels.filter((c) => c.kind === "voice");
-  const members = Object.values(users).filter((u) => !u.disabled && !u.removed);
+  const members = Object.keys(roda.members).filter((id) => users[id] && !users[id].removed);
+
+  async function leave() {
+    if (!confirm(`Sair de ${roda!.name}? Para voltar, vai precisar de um convite.`)) return;
+    try {
+      await api.leaveRoda(roda!.id);
+      void navigate("/rodas", { replace: true });
+    } catch (err) {
+      toast.fromError(err);
+    }
+  }
 
   return (
     <main className="page">
       <div className="page-inner page-inner-tight">
-        <header className="roda-banner">
+        <header className="roda-banner" style={{ "--roda": rodaColor(roda.hue) } as React.CSSProperties}>
           <div className="roda-banner-top">
-            <span className="roda-privacy">privada</span>
+            <Link to="/rodas" className="btn btn-small btn-on-banner">
+              ‹ Rodas
+            </Link>
+            <span className="roda-privacy">{roda.privacy === "aberta" ? "aberta" : "privada"}</span>
           </div>
-          <h1 className="roda-title">{APP_NAME}</h1>
+          <h1 className="roda-title">{roda.name}</h1>
+          {roda.description && <p className="roda-desc">{roda.description}</p>}
           <div className="roda-banner-foot">
             <span className="roda-faces">
-              {members.slice(0, 5).map((u) => (
-                <Avatar key={u.id} user={u} size={32} />
+              {members.slice(0, 5).map((id) => (
+                <Avatar key={id} user={users[id]} size={32} plain />
               ))}
             </span>
             <span className="roda-count">
               {members.length} {members.length === 1 ? "membro" : "membros"}
             </span>
-            {isAdmin && (
-              <span className="roda-actions">
-                <button
-                  type="button"
-                  className="btn btn-on-banner admin-btn"
-                  data-badge={newErrors || undefined}
-                  onClick={() => useUi.getState().setAdminOpen(true)}
-                  title={newErrors ? "Tem erro novo no painel" : undefined}
-                >
-                  <Settings2 size={16} aria-hidden="true" /> Ajustes
+            <span className="roda-actions">
+              {!owner && (
+                <button type="button" className="btn btn-on-banner" onClick={() => void leave()}>
+                  Sair
                 </button>
-                <button type="button" className="btn btn-ink" onClick={() => useUi.getState().setAdminOpen(true, "invites")}>
+              )}
+              {canManageRoda(roda, me) && (
+                <button type="button" className="btn btn-on-banner" onClick={() => useUi.getState().openRodaSettings(roda.id)}>
+                  <Settings2 size={16} aria-hidden="true" /> Ajustes
+                  {roda.requests.length > 0 && perms.has("convidar") && <span className="tab-badge">{roda.requests.length}</span>}
+                </button>
+              )}
+              {perms.has("convidar") && (
+                <button type="button" className="btn btn-ink" onClick={() => useUi.getState().openRodaSettings(roda.id, "convites")}>
                   Convidar
                 </button>
-              </span>
-            )}
+              )}
+            </span>
           </div>
         </header>
 
@@ -68,13 +94,17 @@ export function RodaPage() {
                   Salas de texto
                 </h2>
                 <span className="mono-label">{text.length}</span>
-                {isAdmin && <AddRoom label="+ Texto" />}
+                {perms.has("salas") && <AddRoom rodaId={roda.id} kind="text" />}
               </div>
-              <ul className="room-list card">
-                {text.map((c) => (
-                  <TextRoomRow key={c.id} channel={c} />
-                ))}
-              </ul>
+              {text.length > 0 ? (
+                <ul className="room-list card">
+                  {text.map((c) => (
+                    <TextRoomRow key={c.id} channel={c} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="empty-card">Nenhuma sala de texto.</p>
+              )}
             </section>
 
             <section className="page-section" aria-labelledby="voice-rooms">
@@ -83,26 +113,30 @@ export function RodaPage() {
                   Salas de voz
                 </h2>
                 <span className="mono-label">{voice.length}</span>
-                {isAdmin && <AddRoom label="+ Voz" />}
+                {perms.has("salas") && <AddRoom rodaId={roda.id} kind="voice" />}
               </div>
-              <div className="voice-cards">
-                {voice.map((c) => (
-                  <VoiceRoomCard key={c.id} channel={c} />
-                ))}
-              </div>
+              {voice.length > 0 ? (
+                <div className="voice-cards">
+                  {voice.map((c) => (
+                    <VoiceRoomCard key={c.id} channel={c} canTalk={perms.has("voz")} />
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-card">Nenhuma sala de voz.</p>
+              )}
             </section>
           </div>
-          <MemberList />
+          <MemberList rodaId={roda.id} />
         </div>
       </div>
     </main>
   );
 }
 
-function AddRoom({ label }: { label: string }) {
+function AddRoom({ rodaId, kind }: { rodaId: string; kind: "text" | "voice" }) {
   return (
-    <button type="button" className="btn btn-small btn-outline section-action" onClick={() => useUi.getState().setAdminOpen(true, "channels")}>
-      {label}
+    <button type="button" className="btn btn-small btn-outline section-action" onClick={() => useUi.getState().setNewRoom({ rodaId, kind })}>
+      {kind === "text" ? "+ Texto" : "+ Voz"}
     </button>
   );
 }
@@ -137,7 +171,7 @@ function TextRoomRow({ channel }: { channel: Channel }) {
   );
 }
 
-function VoiceRoomCard({ channel }: { channel: Channel }) {
+function VoiceRoomCard({ channel, canTalk }: { channel: Channel; canTalk: boolean }) {
   const members = useApp((s) => s.voice[channel.id]) ?? [];
   const users = useApp((s) => s.users);
   const here = useVoice((s) => s.channelId === channel.id && s.status !== "idle");
@@ -168,13 +202,13 @@ function VoiceRoomCard({ channel }: { channel: Channel }) {
       )}
       <button
         type="button"
-        className={here ? "btn" : "btn btn-primary"}
+        className={here || !canTalk ? "btn" : "btn btn-primary"}
         onClick={() => {
           navigate(`/c/${channel.id}`);
-          if (!here) void joinVoice(channel.id);
+          if (!here && canTalk) void joinVoice(channel.id);
         }}
       >
-        {here ? "Abrir sala" : "Entrar"}
+        {here ? "Abrir sala" : canTalk ? "Entrar" : "Ver sala"}
       </button>
     </div>
   );

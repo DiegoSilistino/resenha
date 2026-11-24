@@ -1,15 +1,18 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
-import { APP_NAME, LIMITS, type Role } from "@resenha/shared";
+import { APP_NAME, LIMITS, type InviteInfo } from "@resenha/shared";
 import { api, ApiError } from "../lib/api.ts";
+import { waitForRoda } from "../lib/rodas.ts";
 import { logout } from "../lib/session.ts";
 import { useApp } from "../state/app.ts";
+import { toast } from "../state/toasts.ts";
 
 export function InvitePage() {
   const { code = "" } = useParams();
   const me = useApp((s) => s.me);
   const navigate = useNavigate();
-  const [role, setRole] = useState<Role | null>(null);
+  const [info, setInfo] = useState<InviteInfo | null>(null);
+  const [requested, setRequested] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
   const [form, setForm] = useState({ username: "", displayName: "", password: "", confirm: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -18,7 +21,7 @@ export function InvitePage() {
   useEffect(() => {
     api
       .inviteInfo(code)
-      .then((r) => setRole(r.role))
+      .then(setInfo)
       .catch((err) => setInvalid(err instanceof ApiError ? err.message : "Convite inválido"));
   }, [code]);
 
@@ -49,20 +52,67 @@ export function InvitePage() {
     }
   }
 
+  // Já tem conta: entra na roda do convite (ou manda o pedido, se precisa de aprovação).
+  async function join() {
+    setBusy(true);
+    try {
+      const r = await api.joinInvite(code);
+      if (r.status === "requested") {
+        setRequested(true);
+        setBusy(false);
+        return;
+      }
+      await waitForRoda(r.rodaId);
+      navigate(`/r/${r.rodaId}`, { replace: true });
+    } catch (err) {
+      toast.fromError(err);
+      setBusy(false);
+    }
+  }
+
+  const rodaName = info?.roda?.name;
   let body;
-  if (me) {
+  if (me && invalid) {
+    body = (
+      <>
+        <p className="auth-lede" role="alert">
+          {invalid}. Peça um link novo para quem te convidou.
+        </p>
+        <button className="btn" onClick={() => navigate("/")}>
+          Voltar para o app
+        </button>
+      </>
+    );
+  } else if (me && requested) {
     body = (
       <>
         <p className="auth-lede">
-          Você já está conectado como <strong>{me.displayName}</strong>. Para criar outra conta com este convite, saia
-          primeiro.
+          Pedido enviado. Quando alguém de <strong>{rodaName}</strong> aprovar, a roda aparece para você.
+        </p>
+        <button className="btn" onClick={() => navigate("/")}>
+          Voltar para o app
+        </button>
+      </>
+    );
+  } else if (me) {
+    body = (
+      <>
+        <p className="auth-lede">
+          {rodaName ? (
+            <>
+              Você foi chamado para <strong>{rodaName}</strong>
+              {info?.roda ? ` (${info.roda.memberCount} ${info.roda.memberCount === 1 ? "membro" : "membros"})` : ""}.
+            </>
+          ) : (
+            "Verificando convite…"
+          )}
         </p>
         <div className="row-actions">
-          <button className="btn" onClick={() => navigate("/")}>
-            Voltar para o app
+          <button className="btn btn-primary" disabled={busy || !info} onClick={() => void join()}>
+            {info?.roda?.approval ? "Pedir para entrar" : "Entrar na roda"}
           </button>
-          <button className="btn btn-primary" onClick={() => void logout()}>
-            Sair e usar o convite
+          <button className="btn btn-ghost" onClick={() => void logout()}>
+            Usar com outra conta
           </button>
         </div>
       </>
@@ -73,15 +123,17 @@ export function InvitePage() {
         {invalid}. Peça um link novo para quem te convidou.
       </p>
     );
-  } else if (!role) {
+  } else if (!info) {
     body = <p className="auth-lede">Verificando convite…</p>;
   } else {
     body = (
       <>
         <p className="auth-lede">
-          {role === "admin"
-            ? "Você vai criar a conta de administração do grupo."
-            : "Você foi convidado. Crie sua conta para entrar."}
+          {info.role === "admin"
+            ? "Você vai criar a conta de administração."
+            : rodaName
+              ? <>Você foi chamado para <strong>{rodaName}</strong>. Crie sua conta para entrar.</>
+              : "Você foi convidado. Crie sua conta para entrar."}
         </p>
         <form onSubmit={submit} className="form" noValidate>
           <Field label="Seu nome" hint="Como a turma vai te ver" error={errors.displayName}>

@@ -15,11 +15,11 @@ import {
 } from "lucide-react";
 import { Track } from "livekit-client";
 import { useLocation } from "react-router";
-import { APP_NAME, type Channel } from "@resenha/shared";
+import type { Channel } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { ChatPanel } from "../chat/ChatPanel.tsx";
 import { BackToRoda } from "../layout/BackToRoda.tsx";
-import { useApp } from "../state/app.ts";
+import { useApp, useChannelPerm } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { SearchButton } from "../search/SearchButton.tsx";
 import { useUi } from "../state/ui.ts";
@@ -57,6 +57,7 @@ export function VoiceView({ channel }: { channel: Channel }) {
   const toggleChat = () => (narrow ? setNarrowOpen(!chatOpen) : useSettings.getState().set({ voiceChatOpen: !chatOpen }));
   const unread = useApp((s) => (s.unread[channel.id] ?? 0) > 0);
   const inCall = useApp((s) => s.voice[channel.id]?.length ?? 0);
+  const rodaName = useApp((s) => (channel.rodaId ? s.rodas[channel.rodaId]?.name : undefined)) ?? "";
 
   useEffect(() => {
     useUi.getState().setPageTitle(channel.name);
@@ -74,9 +75,9 @@ export function VoiceView({ channel }: { channel: Channel }) {
   return (
     <main className="main voice-view">
       <header className="main-header">
-        {channel.conversation ? <BackToRoda to="/conversas" label="Voltar para as conversas" /> : <BackToRoda />}
+        {channel.conversation ? <BackToRoda to="/conversas" label="Voltar para as conversas" /> : <BackToRoda to={channel.rodaId ? `/r/${channel.rodaId}` : "/rodas"} />}
         <div className="main-titles">
-          <span className="mono-label">{channel.conversation ? "chamada privada" : `sala de voz · ${APP_NAME}`}</span>
+          <span className="mono-label">{channel.conversation ? "chamada privada" : `sala de voz · ${rodaName}`}</span>
           <h1 className="main-title">{channel.name}</h1>
         </div>
         <span className="mono-label voice-count">{inCall > 0 ? `${inCall} na call` : "ninguém na call"}</span>
@@ -112,6 +113,7 @@ function JoinCard({ channel }: { channel: Channel }) {
   const users = useApp((s) => s.users);
   const status = useVoice((s) => s.status);
   const currentVoiceId = useVoice((s) => (s.status !== "idle" ? s.channelId : null));
+  const canTalk = useChannelPerm(channel.id, "voz");
   const otherChannel = useApp((s) =>
     currentVoiceId && currentVoiceId !== channel.id ? s.channels.find((c) => c.id === currentVoiceId) : undefined,
   );
@@ -138,10 +140,10 @@ function JoinCard({ channel }: { channel: Channel }) {
       <button
         type="button"
         className="btn btn-primary btn-lg"
-        disabled={status === "connecting"}
+        disabled={status === "connecting" || !canTalk}
         onClick={() => void joinVoice(channel.id)}
       >
-        {status === "connecting" ? "Conectando…" : "Entrar na call"}
+        {status === "connecting" ? "Conectando…" : canTalk ? "Entrar na call" : "Seu cargo não entra nas calls daqui"}
       </button>
     </div>
   );
@@ -277,6 +279,7 @@ function watchButtonLabel(watch: WatchVisibility): string {
 }
 
 function ControlBar({ channelId, watch }: { channelId: string; watch: WatchVisibility }) {
+  const canScreen = useChannelPerm(channelId, "tela");
   const muted = useVoice((s) => s.muted);
   const deafened = useVoice((s) => s.deafened);
   const sharing = useVoice((s) => s.screenSharing);
@@ -298,14 +301,16 @@ function ControlBar({ channelId, watch }: { channelId: string; watch: WatchVisib
       <ControlButton label={deafened ? "Voltar a ouvir" : "Ensurdecer"} danger={deafened} onClick={toggleDeafen}>
         {deafened ? <HeadphoneOff /> : <Headphones />}
       </ControlButton>
-      <ControlButton
-        label={sharing ? "Parar de compartilhar a tela" : "Compartilhar a tela"}
-        active={sharing}
-        disabled={!connected}
-        onClick={() => void toggleScreenShare()}
-      >
-        {sharing ? <MonitorOff /> : <Monitor />}
-      </ControlButton>
+      {canScreen && (
+        <ControlButton
+          label={sharing ? "Parar de compartilhar a tela" : "Compartilhar a tela"}
+          active={sharing}
+          disabled={!connected}
+          onClick={() => void toggleScreenShare()}
+        >
+          {sharing ? <MonitorOff /> : <Monitor />}
+        </ControlButton>
+      )}
       <ControlButton
         label={camera ? "Desligar câmera" : "Ligar câmera"}
         active={camera}

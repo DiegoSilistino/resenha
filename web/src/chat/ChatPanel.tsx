@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { Channel } from "@resenha/shared";
 import { api } from "../lib/api.ts";
-import { useApp, windowFocused } from "../state/app.ts";
+import { useApp, useChannelPerm, windowFocused } from "../state/app.ts";
 import { Composer, type ComposerHandle } from "./Composer.tsx";
 import { MessageList } from "./MessageList.tsx";
 import { TypingIndicator } from "./TypingIndicator.tsx";
@@ -29,7 +29,9 @@ export function ChatPanel({ channel }: { channel: Channel }) {
     api.markConversationRead(channel.id, lastId).catch(() => undefined);
   }, [channel.id, channel.conversation, lastId, myRead, awayUnread]);
 
-  const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes("Files");
+  const canSend = useChannelPerm(channel.id, "enviar");
+  const canAttach = useChannelPerm(channel.id, "anexar");
+  const hasFiles = (e: DragEvent) => canAttach && e.dataTransfer.types.includes("Files");
   const where = channel.kind === "voice" ? `no chat de ${channel.name}` : `em #${channel.name}`;
 
   return (
@@ -52,7 +54,11 @@ export function ChatPanel({ channel }: { channel: Channel }) {
     >
       <MessageList channel={channel} />
       <div className="chat-bottom">
-        <Composer ref={composer} channel={channel} />
+        {canSend ? (
+          <Composer ref={composer} channel={channel} canAttach={canAttach} />
+        ) : (
+          <p className="composer-blocked">Seu cargo nesta roda não manda mensagens aqui.</p>
+        )}
         <TypingIndicator channelId={channel.id} />
       </div>
       {dragging && <div className="drop-hint">Solte para anexar {where}</div>}

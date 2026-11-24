@@ -6,7 +6,13 @@ import {
   DEFAULT_LOOK,
   LIMITS,
   lookSchema,
+  PERMISSIONS,
+  RODA_TEMPLATES,
   userStatusSchema,
+  type Permission,
+  type Roda,
+  type RodaRole,
+  type RodaSummary,
   type Attachment,
   type Channel,
   type ChannelKind,
@@ -95,7 +101,51 @@ interface ChannelRow {
   kind: ChannelKind;
   position: number;
   conversation: "dm" | "group" | null;
+  roda_id: string | null;
 }
+
+interface RoleRow {
+  id: string;
+  roda_id: string;
+  name: string;
+  color: string;
+  perms: string;
+  position: number;
+  is_owner: number;
+  is_default: number;
+}
+
+const ALL_PERMS: Permission[] = [...PERMISSIONS];
+
+const toRole = (r: RoleRow): RodaRole => {
+  let perms: Permission[] = [];
+  try {
+    perms = (JSON.parse(r.perms) as string[]).filter((p): p is Permission => (PERMISSIONS as readonly string[]).includes(p));
+  } catch {
+    // perms inválidas no banco: o cargo fica sem poderes (nunca com todos)
+  }
+  return {
+    id: r.id,
+    name: r.name,
+    color: r.color,
+    perms: r.is_owner ? ALL_PERMS : perms,
+    position: r.position,
+    owner: !!r.is_owner,
+    isDefault: !!r.is_default,
+  };
+};
+
+/** Salas e cargos que cada modelo de roda já traz. */
+const RODA_TEMPLATE_CHANNELS: Record<(typeof RODA_TEMPLATES)[number], { text: string[]; voice: string[] }> = {
+  amigos: { text: ["geral", "clipes"], voice: ["Resenha"] },
+  estudos: { text: ["avisos", "dúvidas"], voice: ["Estudo junto", "Sala 2"] },
+  jogos: { text: ["geral", "clipes"], voice: ["Ranked", "Casual"] },
+};
+const DEFAULT_ROLES: { name: string; color: string; perms: Permission[]; owner?: boolean; isDefault?: boolean }[] = [
+  { name: "Dono", color: "#ffb27a", perms: ALL_PERMS, owner: true },
+  { name: "Moderação", color: "#7cc4ff", perms: ALL_PERMS.filter((p) => p !== "salas") },
+  { name: "Membro", color: "#b4b4bc", perms: ["ver", "enviar", "anexar", "voz", "tela"], isDefault: true },
+];
 
 interface MessageRow {
   id: number;
@@ -129,6 +179,8 @@ export interface AttachmentRecord extends Attachment {
 
 interface InviteRow {
   code: string;
+  roda_id: string | null;
+  approval: number;
   role: Role;
   max_uses: number;
   uses: number;
@@ -190,6 +242,7 @@ const toChannel = (r: ChannelRow): Channel => ({
   kind: r.kind,
   position: r.position,
   ...(r.conversation ? { conversation: r.conversation } : {}),
+  ...(r.roda_id ? { rodaId: r.roda_id } : {}),
 });
 
 export const attachmentUrl = (id: string, filename: string) =>
@@ -218,6 +271,8 @@ const publicAttachment = (a: AttachmentRecord): Attachment => ({
 
 const toInvite = (r: InviteRow): Invite => ({
   code: r.code,
+  rodaId: r.roda_id,
+  approval: !!r.approval,
   role: r.role,
   maxUses: r.max_uses,
   uses: r.uses,
@@ -387,6 +442,8 @@ export class Store {
       ).map((r) => r.id);
       this.db.prepare("DELETE FROM attachments WHERE uploader_id = ? AND message_id IS NULL").run(id);
       this.db.prepare("DELETE FROM friendships WHERE user_id = ? OR friend_id = ?").run(id, id);
+      this.db.prepare("DELETE FROM roda_members WHERE user_id = ?").run(id);
+      this.db.prepare("DELETE FROM roda_requests WHERE user_id = ?").run(id);
       return { user: this.userById(id)!, avatarId: before.avatarId, bannerId: before.bannerId, orphanAttachmentIds: orphans };
     });
   }
@@ -450,20 +507,44 @@ export class Store {
 
   // ---------- convites ----------
 
+  /** Sem roda: entra na roda principal (a mais antiga). */
   createInvite(i: {
     code: string;
     role: Role;
     maxUses: number;
     expiresAt: number | null;
     createdBy: string | null;
+    rodaId?: string | null;
+    approval?: boolean;
   }): Invite {
     this.db
       .prepare(
-        `INSERT INTO invites (code, role, max_uses, expires_at, created_at, created_by)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO invites (code, role, max_uses, expires_at, created_at, created_by, roda_id, approval)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(i.code, i.role, i.maxUses, i.expiresAt, Date.now(), i.createdBy);
+      .run(
+        i.code,
+        i.role,
+        i.maxUses,
+        i.expiresAt,
+        Date.now(),
+        i.createdBy,
+        i.rodaId ?? this.defaultRodaId(),
+        i.approval ? 1 : 0,
+      );
     return this.inviteByCode(i.code)!;
+  }
+
+  /** Convites ainda válidos de uma roda. */
+  listRodaInvites(rodaId: string): Invite[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM invites WHERE roda_id = ? AND revoked_at IS NULL AND uses < max_uses
+           AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC`,
+        )
+        .all(rodaId, Date.now()) as unknown as InviteRow[]
+    ).map(toInvite);
   }
 
   inviteByCode(code: string): Invite | null {
@@ -511,33 +592,46 @@ export class Store {
 
   // ---------- canais ----------
 
-  /** Salas da roda (as conversas privadas ficam de fora). */
-  listChannels(): Channel[] {
-    return (
-      this.db
-        .prepare(
-          "SELECT id, name, kind, position, conversation FROM channels WHERE conversation IS NULL ORDER BY position, created_at",
-        )
-        .all() as unknown as ChannelRow[]
-    ).map(toChannel);
+  /** Salas das rodas (as conversas privadas ficam de fora); com `rodaId`, só as daquela roda. */
+  listChannels(rodaId?: string): Channel[] {
+    const cols = "id, name, kind, position, conversation, roda_id";
+    const rows = rodaId
+      ? this.db
+          .prepare(`SELECT ${cols} FROM channels WHERE roda_id = ? ORDER BY position, created_at`)
+          .all(rodaId)
+      : this.db
+          .prepare(`SELECT ${cols} FROM channels WHERE conversation IS NULL ORDER BY position, created_at`)
+          .all();
+    return (rows as unknown as ChannelRow[]).map(toChannel);
   }
 
-  /** Sala da roda ou conversa privada (confira o acesso com canAccess antes de mostrar). */
+  /** As salas que a pessoa vê: das rodas em que ela está, com permissão de ver. */
+  listChannelsFor(user: UserRecord): Channel[] {
+    return this.listRodaIdsFor(user.id)
+      .filter((rodaId) => this.permsOf(user, rodaId).has("ver"))
+      .flatMap((rodaId) => this.listChannels(rodaId));
+  }
+
+  /** Sala de roda ou conversa privada (confira o acesso com canAccess antes de mostrar). */
   channelById(id: string): Channel | null {
-    const r = this.db.prepare("SELECT id, name, kind, position, conversation FROM channels WHERE id = ?").get(id) as
-      | ChannelRow
-      | undefined;
+    const r = this.db
+      .prepare("SELECT id, name, kind, position, conversation, roda_id FROM channels WHERE id = ?")
+      .get(id) as ChannelRow | undefined;
     return r ? toChannel(r) : null;
   }
 
-  /** Quem pode ver o canal: null = todo mundo (sala da roda); senão, os membros da conversa. */
+  /**
+   * Quem pode ver o canal: os membros da roda com permissão de ver (sala) ou da conversa.
+   * Canal sem dono conhecido não aparece para ninguém (na dúvida, nunca para todos).
+   */
   channelAudience(channelId: string): string[] | null {
-    const r = this.db.prepare("SELECT conversation FROM channels WHERE id = ?").get(channelId) as
-      | { conversation: string | null }
+    const r = this.db.prepare("SELECT conversation, roda_id FROM channels WHERE id = ?").get(channelId) as
+      | { conversation: string | null; roda_id: string | null }
       | undefined;
     if (!r) return [];
-    if (!r.conversation) return null;
-    return this.memberIds(channelId);
+    if (r.conversation) return this.memberIds(channelId);
+    if (r.roda_id) return this.rodaViewers(r.roda_id);
+    return [];
   }
 
   canAccess(userId: string, channelId: string): boolean {
@@ -545,10 +639,23 @@ export class Store {
     return audience === null || audience.includes(userId);
   }
 
-  /** Dá para ligar aqui: sala de voz da roda ou conversa privada de que a pessoa participa. */
+  /**
+   * O que a pessoa pode fazer neste canal: na conversa privada, o básico (sem moderar os outros);
+   * na sala de roda, o que o cargo dela permite. Sem acesso: nada.
+   */
+  channelPerms(user: Pick<UserRecord, "id" | "role">, channelId: string): Set<Permission> {
+    const c = this.channelById(channelId);
+    if (!c || !this.canAccess(user.id, channelId)) return new Set();
+    if (c.conversation) return new Set<Permission>(["ver", "enviar", "anexar", "voz", "tela"]);
+    return c.rodaId ? this.permsOf(user, c.rodaId) : new Set();
+  }
+
+  /** Dá para ligar aqui: sala de voz (com permissão de voz) ou conversa privada de que a pessoa participa. */
   canCall(userId: string, channelId: string): boolean {
     const c = this.channelById(channelId);
-    return !!c && (c.kind === "voice" || !!c.conversation) && this.canAccess(userId, channelId);
+    const user = this.userById(userId);
+    if (!c || !user || (c.kind !== "voice" && !c.conversation)) return false;
+    return this.channelPerms(user, channelId).has("voz");
   }
 
   private memberIds(channelId: string): string[] {
@@ -557,6 +664,240 @@ export class Store {
         user_id: string;
       }[]
     ).map((r) => r.user_id);
+  }
+
+  // ---------- rodas ----------
+
+  /** A roda principal (a mais antiga): para onde vão convites e salas sem roda indicada. */
+  defaultRodaId(): string | null {
+    const r = this.db.prepare("SELECT id FROM rodas ORDER BY created_at, id LIMIT 1").get() as { id: string } | undefined;
+    return r?.id ?? null;
+  }
+
+  private rolesOf(rodaId: string): RodaRole[] {
+    return (
+      this.db.prepare("SELECT * FROM roda_roles WHERE roda_id = ? ORDER BY position, id").all(rodaId) as unknown as RoleRow[]
+    ).map(toRole);
+  }
+
+  roleById(roleId: string): (RodaRole & { rodaId: string }) | null {
+    const r = this.db.prepare("SELECT * FROM roda_roles WHERE id = ?").get(roleId) as RoleRow | undefined;
+    return r ? { ...toRole(r), rodaId: r.roda_id } : null;
+  }
+
+  rodaById(id: string): Roda | null {
+    const r = this.db.prepare("SELECT * FROM rodas WHERE id = ?").get(id) as
+      | { id: string; name: string; description: string; hue: number; privacy: Roda["privacy"]; created_at: number }
+      | undefined;
+    if (!r) return null;
+    const members = this.db
+      .prepare("SELECT user_id, role_id FROM roda_members WHERE roda_id = ? ORDER BY joined_at")
+      .all(id) as { user_id: string; role_id: string }[];
+    const requests = this.db
+      .prepare("SELECT user_id FROM roda_requests WHERE roda_id = ? ORDER BY created_at")
+      .all(id) as { user_id: string }[];
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      hue: Number(r.hue),
+      privacy: r.privacy,
+      roles: this.rolesOf(id),
+      members: Object.fromEntries(members.map((m) => [m.user_id, m.role_id])),
+      requests: requests.map((x) => x.user_id),
+      createdAt: r.created_at,
+    };
+  }
+
+  listRodaIdsFor(userId: string): string[] {
+    return (
+      this.db.prepare("SELECT roda_id FROM roda_members WHERE user_id = ? ORDER BY joined_at").all(userId) as {
+        roda_id: string;
+      }[]
+    ).map((r) => r.roda_id);
+  }
+
+  listRodasFor(userId: string): Roda[] {
+    return this.listRodaIdsFor(userId)
+      .map((id) => this.rodaById(id))
+      .filter((r): r is Roda => !!r);
+  }
+
+  /** Rodas abertas de que a pessoa ainda não faz parte. */
+  openRodasFor(userId: string): RodaSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT r.id, r.name, r.description, r.hue,
+           (SELECT COUNT(*) FROM roda_members m WHERE m.roda_id = r.id) AS n
+         FROM rodas r WHERE r.privacy = 'aberta'
+           AND r.id NOT IN (SELECT roda_id FROM roda_members WHERE user_id = ?)
+         ORDER BY n DESC, r.created_at`,
+      )
+      .all(userId) as { id: string; name: string; description: string; hue: number; n: number }[];
+    return rows.map((r) => ({ id: r.id, name: r.name, description: r.description, hue: Number(r.hue), memberCount: Number(r.n) }));
+  }
+
+  rodaMemberIds(rodaId: string): string[] {
+    return (
+      this.db.prepare("SELECT user_id FROM roda_members WHERE roda_id = ?").all(rodaId) as { user_id: string }[]
+    ).map((r) => r.user_id);
+  }
+
+  memberRole(rodaId: string, userId: string): RodaRole | null {
+    const r = this.db
+      .prepare(
+        `SELECT r.* FROM roda_members m JOIN roda_roles r ON r.id = m.role_id WHERE m.roda_id = ? AND m.user_id = ?`,
+      )
+      .get(rodaId, userId) as RoleRow | undefined;
+    return r ? toRole(r) : null;
+  }
+
+  /** O que a pessoa pode fazer na roda (nada, se não faz parte). Admin do servidor pode tudo onde está. */
+  permsOf(user: Pick<UserRecord, "id" | "role">, rodaId: string): Set<Permission> {
+    const role = this.memberRole(rodaId, user.id);
+    if (!role) return new Set();
+    return new Set(user.role === "admin" ? ALL_PERMS : role.perms);
+  }
+
+  /** Quem vê as salas da roda: membros com permissão de ver (e admins do servidor que fazem parte). */
+  private rodaViewers(rodaId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT m.user_id, r.*, u.role AS user_role FROM roda_members m
+         JOIN roda_roles r ON r.id = m.role_id JOIN users u ON u.id = m.user_id WHERE m.roda_id = ?`,
+      )
+      .all(rodaId) as unknown as (RoleRow & { user_id: string; user_role: Role })[];
+    return rows.filter((r) => r.user_role === "admin" || toRole(r).perms.includes("ver")).map((r) => r.user_id);
+  }
+
+  createRoda(
+    input: { name: string; description: string; privacy: Roda["privacy"]; hue: number },
+    ownerId: string,
+    template: (typeof RODA_TEMPLATES)[number],
+  ): Roda {
+    return transaction(this.db, () => {
+      const id = randomUUID();
+      const now = Date.now();
+      this.db
+        .prepare("INSERT INTO rodas (id, name, description, hue, privacy, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(id, input.name, input.description, input.hue, input.privacy, now);
+      const insertRole = this.db.prepare(
+        `INSERT INTO roda_roles (id, roda_id, name, color, perms, position, is_owner, is_default)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      let ownerRole = "";
+      DEFAULT_ROLES.forEach((r, i) => {
+        const roleId = randomUUID();
+        if (r.owner) ownerRole = roleId;
+        insertRole.run(roleId, id, r.name, r.color, JSON.stringify(r.perms), i, r.owner ? 1 : 0, r.isDefault ? 1 : 0);
+      });
+      this.db
+        .prepare("INSERT INTO roda_members (roda_id, user_id, role_id, joined_at) VALUES (?, ?, ?, ?)")
+        .run(id, ownerId, ownerRole, now);
+      const t = RODA_TEMPLATE_CHANNELS[template];
+      for (const name of t.text) this.createChannel(name, "text", id);
+      for (const name of t.voice) this.createChannel(name, "voice", id);
+      return this.rodaById(id)!;
+    });
+  }
+
+  updateRoda(id: string, p: { name?: string; description?: string; hue?: number; privacy?: Roda["privacy"] }): Roda | null {
+    this.db
+      .prepare(
+        `UPDATE rodas SET name = COALESCE(?, name), description = COALESCE(?, description),
+           hue = COALESCE(?, hue), privacy = COALESCE(?, privacy) WHERE id = ?`,
+      )
+      .run(p.name ?? null, p.description ?? null, p.hue ?? null, p.privacy ?? null, id);
+    return this.rodaById(id);
+  }
+
+  /** Apaga a roda com as salas e mensagens; devolve as salas (para derrubar chamadas) e os anexos. */
+  deleteRoda(id: string): { channelIds: string[]; attachmentIds: string[] } {
+    return transaction(this.db, () => {
+      const channelIds = this.listChannels(id).map((c) => c.id);
+      const attachmentIds = channelIds.flatMap((c) => this.deleteChannel(c));
+      this.db.prepare("DELETE FROM rodas WHERE id = ?").run(id);
+      return { channelIds, attachmentIds };
+    });
+  }
+
+  /**
+   * Coloca a pessoa na roda com o cargo padrão. Roda sem dono (instalação nova) passa a ter
+   * como dono o primeiro admin do servidor que entrar.
+   */
+  addMember(rodaId: string, userId: string, isServerAdmin = false): void {
+    transaction(this.db, () => {
+      if (this.memberRole(rodaId, userId)) return;
+      const roles = this.rolesOf(rodaId);
+      const owner = roles.find((r) => r.owner);
+      const hasOwner =
+        !!owner && !!this.db.prepare("SELECT 1 FROM roda_members WHERE roda_id = ? AND role_id = ?").get(rodaId, owner.id);
+      const role = !hasOwner && isServerAdmin && owner ? owner : (roles.find((r) => r.isDefault) ?? roles.at(-1));
+      if (!role) throw new Error("roda sem cargos");
+      this.db
+        .prepare("INSERT INTO roda_members (roda_id, user_id, role_id, joined_at) VALUES (?, ?, ?, ?)")
+        .run(rodaId, userId, role.id, Date.now());
+      this.db.prepare("DELETE FROM roda_requests WHERE roda_id = ? AND user_id = ?").run(rodaId, userId);
+    });
+  }
+
+  removeMember(rodaId: string, userId: string): boolean {
+    const res = this.db.prepare("DELETE FROM roda_members WHERE roda_id = ? AND user_id = ?").run(rodaId, userId);
+    return Number(res.changes) > 0;
+  }
+
+  /** Troca o cargo (nunca para Dono: a posse não se passa por aqui). */
+  setMemberRole(rodaId: string, userId: string, roleId: string): boolean {
+    const role = this.roleById(roleId);
+    if (!role || role.rodaId !== rodaId || role.owner) return false;
+    const res = this.db
+      .prepare("UPDATE roda_members SET role_id = ? WHERE roda_id = ? AND user_id = ?")
+      .run(roleId, rodaId, userId);
+    return Number(res.changes) > 0;
+  }
+
+  createRole(rodaId: string, r: { name: string; color: string; perms: Permission[] }): RodaRole {
+    const id = randomUUID();
+    const { next } = this.db
+      .prepare("SELECT COALESCE(MAX(position), -1) + 1 AS next FROM roda_roles WHERE roda_id = ?")
+      .get(rodaId) as { next: number };
+    this.db
+      .prepare(
+        "INSERT INTO roda_roles (id, roda_id, name, color, perms, position, is_owner, is_default) VALUES (?, ?, ?, ?, ?, ?, 0, 0)",
+      )
+      .run(id, rodaId, r.name, r.color, JSON.stringify([...new Set(r.perms)]), next);
+    return this.roleById(id)!;
+  }
+
+  /** Dono: só nome e cor mudam (os poderes são todos, sempre). */
+  updateRole(roleId: string, r: { name: string; color: string; perms: Permission[] }): void {
+    this.db
+      .prepare("UPDATE roda_roles SET name = ?, color = ?, perms = CASE WHEN is_owner = 1 THEN perms ELSE ? END WHERE id = ?")
+      .run(r.name, r.color, JSON.stringify([...new Set(r.perms)]), roleId);
+  }
+
+  /** Apaga o cargo (não o de Dono nem o padrão); quem tinha volta para o cargo padrão. */
+  deleteRole(roleId: string): boolean {
+    return transaction(this.db, () => {
+      const role = this.roleById(roleId);
+      if (!role || role.owner || role.isDefault) return false;
+      const fallback = this.rolesOf(role.rodaId).find((r) => r.isDefault);
+      if (!fallback) return false;
+      this.db.prepare("UPDATE roda_members SET role_id = ? WHERE role_id = ?").run(fallback.id, roleId);
+      this.db.prepare("DELETE FROM roda_roles WHERE id = ?").run(roleId);
+      return true;
+    });
+  }
+
+  addRequest(rodaId: string, userId: string): void {
+    this.db
+      .prepare("INSERT OR IGNORE INTO roda_requests (roda_id, user_id, created_at) VALUES (?, ?, ?)")
+      .run(rodaId, userId, Date.now());
+  }
+
+  removeRequest(rodaId: string, userId: string): boolean {
+    const res = this.db.prepare("DELETE FROM roda_requests WHERE roda_id = ? AND user_id = ?").run(rodaId, userId);
+    return Number(res.changes) > 0;
   }
 
   // ---------- conversas privadas ----------
@@ -733,14 +1074,16 @@ export class Store {
     return r ? toUser(r) : null;
   }
 
-  createChannel(name: string, kind: ChannelKind): Channel {
+  /** Sala nova no fim da roda (sem roda: na roda principal). */
+  createChannel(name: string, kind: ChannelKind, rodaId?: string): Channel {
     const id = randomUUID();
+    const roda = rodaId ?? this.defaultRodaId();
     const { next } = this.db
-      .prepare("SELECT COALESCE(MAX(position), -1) + 1 AS next FROM channels")
-      .get() as { next: number };
+      .prepare("SELECT COALESCE(MAX(position), -1) + 1 AS next FROM channels WHERE roda_id IS ?")
+      .get(roda) as { next: number };
     this.db
-      .prepare("INSERT INTO channels (id, name, kind, position, created_at) VALUES (?, ?, ?, ?, ?)")
-      .run(id, name, kind, next, Date.now());
+      .prepare("INSERT INTO channels (id, name, kind, position, created_at, roda_id) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(id, name, kind, next, Date.now(), roda);
     return this.channelById(id)!;
   }
 
@@ -924,13 +1267,14 @@ export class Store {
   search(opts: { terms: string[]; userId: string; channelId?: string; before?: number; limit: number }): SearchResult[] {
     const { terms, userId, channelId, before, limit } = opts;
     this.ftsAvailable ??= !!this.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'messages_fts'").get();
-    // salas da roda e só as conversas de que a pessoa participa
+    // só salas que a pessoa vê e conversas de que participa
+    const visible = this.listChannelsFor(this.userById(userId)!).map((c) => c.id);
     const filters = [
       "m.content NOT LIKE 'https://%giphy.com/%'",
-      `m.channel_id IN (SELECT id FROM channels WHERE conversation IS NULL
-                        UNION SELECT channel_id FROM channel_members WHERE user_id = ?)`,
+      `(m.channel_id IN (SELECT value FROM json_each(?))
+        OR m.channel_id IN (SELECT channel_id FROM channel_members WHERE user_id = ?))`,
     ];
-    const params: (string | number)[] = [userId];
+    const params: (string | number)[] = [JSON.stringify(visible), userId];
     if (channelId) {
       filters.push("m.channel_id = ?");
       params.push(channelId);

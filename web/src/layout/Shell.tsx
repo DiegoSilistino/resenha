@@ -14,6 +14,7 @@ import { FriendLinkPage } from "../pages/FriendLinkPage.tsx";
 import { FriendsPage } from "../pages/FriendsPage.tsx";
 import { HomePage } from "../pages/HomePage.tsx";
 import { RodaPage } from "../pages/RodaPage.tsx";
+import { RodasPage } from "../pages/RodasPage.tsx";
 import { preloadVoice } from "../voice/controller.ts";
 import { WatchDock } from "../watch/WatchDock.tsx";
 import { Sidebar } from "./Sidebar.tsx";
@@ -26,6 +27,9 @@ const loadAdmin = () => import("../modals/AdminModal.tsx");
 const VoiceView = lazyChunk(() => loadVoiceView().then((m) => m.VoiceView));
 const SettingsModal = lazyChunk(() => loadSettings().then((m) => m.SettingsModal));
 const AdminModal = lazyChunk(() => loadAdmin().then((m) => m.AdminModal));
+const RodaSettingsModal = lazyChunk(() => import("../modals/RodaSettingsModal.tsx").then((m) => m.RodaSettingsModal));
+const NewRodaModal = lazyChunk(() => import("../modals/RodaModals.tsx").then((m) => m.NewRodaModal));
+const NewRoomModal = lazyChunk(() => import("../modals/RodaModals.tsx").then((m) => m.NewRoomModal));
 const NewGroupModal = lazyChunk(() => import("../modals/NewGroupModal.tsx").then((m) => m.NewGroupModal));
 const ShareDialog = lazyChunk(() => import("../modals/ShareDialog.tsx").then((m) => m.ShareDialog));
 const loadSearch = () => import("../search/SearchPanel.tsx");
@@ -55,6 +59,9 @@ export function Shell() {
   const shareDialogOpen = useUi((s) => s.shareDialogOpen);
   const searchOpen = useUi((s) => s.searchOpen);
   const newGroupOpen = useUi((s) => s.newGroupOpen);
+  const rodaSettings = useUi((s) => s.rodaSettings);
+  const newRodaOpen = useUi((s) => s.newRodaOpen);
+  const newRoom = useUi((s) => s.newRoom);
   const navigate = useNavigate();
   useDocumentTitle();
   useIdlePreload(ready);
@@ -87,7 +94,9 @@ export function Shell() {
       <div className="content">
         <Routes>
           <Route index element={<HomePage />} />
-          <Route path="/roda" element={<RodaPage />} />
+          <Route path="/rodas" element={<RodasPage />} />
+          <Route path="/r/:rodaId" element={<RodaPage />} />
+          <Route path="/roda" element={<Navigate to="/rodas" replace />} />
           <Route path="/conversas/:id?" element={<ConversationsPage />} />
           <Route path="/amigos" element={<FriendsPage />} />
           <Route path="/amigo/:code" element={<FriendLinkPage />} />
@@ -104,6 +113,9 @@ export function Shell() {
         {shareDialogOpen && <ShareDialog />}
         {searchOpen && <SearchPanel />}
         {newGroupOpen && <NewGroupModal />}
+        {rodaSettings && <RodaSettingsModal key={rodaSettings.rodaId + rodaSettings.tab} />}
+        {newRodaOpen && <NewRodaModal />}
+        {newRoom && <NewRoomModal key={newRoom.rodaId + newRoom.kind} />}
       </Suspense>
     </div>
   );
@@ -117,10 +129,10 @@ function ChannelRoute() {
   // Conversa privada (link de notificação ou busca) tem tela própria.
   if (!channel && isConversation) return <Navigate to={`/conversas/${channelId}`} replace />;
   // Sala apagada (ou link velho): volta para a roda.
-  if (!channel) return <Navigate to="/roda" replace />;
+  if (!channel) return <Navigate to="/rodas" replace />;
   return (
     <div className="room-layout">
-      <Sidebar />
+      {channel.rodaId && <Sidebar rodaId={channel.rodaId} />}
       {channel.kind === "voice" ? (
         <Suspense fallback={<main className="main empty-state">Carregando…</main>}>
           <VoiceView key={channel.id} channel={channel} />

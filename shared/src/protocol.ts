@@ -5,12 +5,15 @@
  */
 import { z } from "zod";
 import { AVATAR_COLORS, LIMITS, PROFILE_COLORS, USERNAME_PATTERN } from "./constants.ts";
+import { PERMISSIONS } from "./types.ts";
 import type {
   Channel,
   ClientErrorEntry,
   Conversation,
   FriendEntry,
   Me,
+  Roda,
+  RodaSummary,
   Message,
   PublicUser,
   Reaction,
@@ -205,6 +208,10 @@ export interface HelloEvent {
   conversations: Conversation[];
   conversationUnread: Record<string, number>;
   friends: FriendEntry[];
+  /** Rodas de que você faz parte (os canais delas vêm em `channels`). */
+  rodas: Roda[];
+  /** Rodas abertas em que você ainda não está. */
+  openRodas: RodaSummary[];
 }
 
 export const friendRequestBody = z.object({
@@ -226,6 +233,56 @@ export const createConversationBody = z.object({
 });
 
 export const readConversationBody = z.object({ messageId: z.number().int().positive() });
+
+// ---------- rodas ----------
+
+const rodaName = z.string().trim().min(1, "Dê um nome à roda").max(LIMITS.rodaNameMax);
+const rodaDescription = z.string().trim().max(LIMITS.noteMax);
+
+export const RODA_TEMPLATES = ["amigos", "estudos", "jogos"] as const;
+
+export const createRodaBody = z.object({
+  name: rodaName,
+  description: rodaDescription.default(""),
+  privacy: z.enum(["privada", "aberta"]).default("privada"),
+  template: z.enum(RODA_TEMPLATES).default("amigos"),
+});
+
+export const updateRodaBody = z
+  .object({
+    name: rodaName.optional(),
+    description: rodaDescription.optional(),
+    hue: z.number().int().min(0).max(359).optional(),
+    privacy: z.enum(["privada", "aberta"]).optional(),
+  })
+  .refine((b) => Object.values(b).some((v) => v !== undefined), "Nada para alterar");
+
+export const roleBody = z.object({
+  name: z.string().trim().min(1, "Dê um nome ao cargo").max(24),
+  color: z.string().regex(/^#[0-9a-f]{6}$/i, "Cor inválida"),
+  perms: z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length),
+});
+
+export const memberRoleBody = z.object({ roleId: id });
+
+export const rodaInviteBody = z.object({
+  /** null = não expira */
+  expiresInMinutes: z
+    .number()
+    .int()
+    .min(5)
+    .max(60 * 24 * 90)
+    .nullable()
+    .default(60 * 24 * 7),
+  maxUses: z.number().int().min(1).max(100).default(25),
+  approval: z.boolean().default(false),
+});
+
+/** O que a página de convite mostra antes de entrar. */
+export interface InviteInfo {
+  role: "admin" | "member";
+  roda: { name: string; hue: number; memberCount: number; approval: boolean } | null;
+}
 
 export const clientErrorBody = z.object({
   kind: z.enum(["voz", "microfone", "tela", "ruido", "inesperado"]),
@@ -285,7 +342,9 @@ export type ServerEvent =
   | { type: "conversation.read"; conversationId: string; userId: string; messageId: number }
   /** Só para as duas pessoas envolvidas. */
   | { type: "friend.upsert"; friend: FriendEntry }
-  | { type: "friend.remove"; userId: string };
+  | { type: "friend.remove"; userId: string }
+  /** Só para quem faz parte (quem entra ou sai recebe um "hello" novo). */
+  | { type: "roda.upsert"; roda: Roda };
 
 export interface ApiErrorBody {
   error: string;

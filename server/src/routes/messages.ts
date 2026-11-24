@@ -55,6 +55,9 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
     async (req, reply) => {
       const channel = messageChannel(req.params.id, currentUser(req).id);
       const body = parse(createMessageBody, req.body);
+      const perms = store.channelPerms(currentUser(req), channel.id);
+      if (!perms.has("enviar")) throw forbidden("Seu cargo não pode mandar mensagens aqui");
+      if (body.attachmentIds.length > 0 && !perms.has("anexar")) throw forbidden("Seu cargo não pode mandar arquivos aqui");
       if (body.replyTo !== undefined) {
         const original = store.messageById(body.replyTo);
         if (!original || original.channelId !== channel.id) {
@@ -125,7 +128,8 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
   app.delete<{ Params: { id: string } }>("/api/messages/:id", { preHandler: requireUser }, async (req, reply) => {
     const user = currentUser(req);
     const existing = visibleMessage(req.params.id, user.id);
-    if (existing.authorId !== user.id && user.role !== "admin") {
+    // quem modera a roda (expulsar) também apaga mensagens dos outros
+    if (existing.authorId !== user.id && !store.channelPerms(user, existing.channelId).has("expulsar")) {
       throw forbidden("Você só pode apagar suas mensagens");
     }
     await uploads.remove(store.deleteMessage(existing.id));

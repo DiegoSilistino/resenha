@@ -52,6 +52,49 @@ export interface Channel {
   position: number;
   /** Conversa privada (só no app, para o chat saber como se apresentar); salas da roda não têm. */
   conversation?: Conversation["type"];
+  /** Roda da sala (conversas privadas não têm). */
+  rodaId?: string;
+}
+
+/** O que cada cargo pode fazer numa roda. */
+export const PERMISSIONS = ["ver", "enviar", "anexar", "voz", "tela", "convidar", "salas", "expulsar"] as const;
+export type Permission = (typeof PERMISSIONS)[number];
+
+export interface RodaRole {
+  id: string;
+  name: string;
+  color: string;
+  perms: Permission[];
+  position: number;
+  /** Dono: pode tudo, não se edita nem se atribui. */
+  owner: boolean;
+  /** Cargo de quem entra. */
+  isDefault: boolean;
+}
+
+/** Um grupo de amigos com as salas dele, cargos e quem faz parte. */
+export interface Roda {
+  id: string;
+  name: string;
+  description: string;
+  /** Matiz da cor da roda (faixa, ícone). */
+  hue: number;
+  privacy: "privada" | "aberta";
+  roles: RodaRole[];
+  /** Quem faz parte: pessoa -> cargo. */
+  members: Record<string, string>;
+  /** Pedidos de entrada esperando aprovação (convite com aprovação). */
+  requests: string[];
+  createdAt: number;
+}
+
+/** Roda aberta em que você ainda não está (para encontrar e entrar). */
+export interface RodaSummary {
+  id: string;
+  name: string;
+  description: string;
+  hue: number;
+  memberCount: number;
 }
 
 /**
@@ -176,6 +219,10 @@ export interface WatchState {
 
 export interface Invite {
   code: string;
+  /** Roda em que quem usar o convite entra. */
+  rodaId: string | null;
+  /** Entrar depende de alguém da roda aprovar. */
+  approval: boolean;
   role: Role;
   maxUses: number;
   uses: number;

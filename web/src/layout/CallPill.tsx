@@ -1,5 +1,4 @@
 import { Link } from "react-router";
-import { APP_NAME } from "@resenha/shared";
 import { conversationTitle, useApp } from "../state/app.ts";
 import { keyLabel, useSettings } from "../state/settings.ts";
 import { currentRoom, leaveVoice, toggleMute, toggleScreenShare, unlockAudio, useVoice } from "../voice/controller.ts";
@@ -25,6 +24,7 @@ export function CallPill({ place }: { place: "top" | "bottom" }) {
     const conv = channelId ? s.conversations[channelId] : undefined;
     return conv ? conversationTitle(conv, s.users, s.me ? s.me.id : undefined) : null;
   });
+  const rodaName = useApp((s) => (channel?.rodaId ? s.rodas[channel.rodaId]?.name : undefined));
   useVoice((s) => s.version); // a qualidade muda junto com a sala
   if (status === "idle" || !channelId) return null;
   const quality = currentRoom()?.localParticipant.connectionQuality;
@@ -36,7 +36,7 @@ export function CallPill({ place }: { place: "top" | "bottom" }) {
     <div className="call-pill" data-place={place} data-status={status} role="region" aria-label="Chamada em andamento">
       {connected ? <SignalIcon quality={quality} /> : <span className="call-pill-dot" aria-hidden="true" />}
       <Link to={href} className="call-pill-label" title={`Voltar para ${name}`}>
-        {connected ? (convName ? `call com ${name}` : `${name} · ${APP_NAME}`) : STATUS_TEXT[status]}
+        {connected ? (convName ? `call com ${name}` : rodaName ? `${name} · ${rodaName}` : name) : STATUS_TEXT[status]}
       </Link>
       {audioBlocked && (
         <button type="button" className="call-pill-btn" data-on onClick={() => void unlockAudio()}>

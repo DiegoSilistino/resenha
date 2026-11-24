@@ -20,7 +20,7 @@ describe("primeira execução", () => {
 
     const code = t.adminInviteUrl!.split("/convite/")[1]!;
     const info = await t.app.inject({ method: "GET", url: `/api/invites/${code}` });
-    expect(info.json()).toEqual({ role: "admin" });
+    expect(info.json()).toMatchObject({ role: "admin", roda: { name: "Resenha", approval: false } });
 
     const res = await register({ code, username: "dono", displayName: "Dono", password: "senha-forte-123" });
     expect(res.statusCode).toBe(201);

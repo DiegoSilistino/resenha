@@ -13,7 +13,6 @@ import { useUi } from "../state/ui.ts";
 
 const TABS = [
   { id: "invites", label: "Convites" },
-  { id: "channels", label: "Canais" },
   { id: "members", label: "Membros" },
   { id: "backup", label: "Backup" },
   { id: "errors", label: "Erros" },
@@ -43,7 +42,6 @@ export function AdminModal() {
       </div>
       <div role="tabpanel" className="tab-panel">
         {tab === "invites" && <InvitesTab />}
-        {tab === "channels" && <ChannelsTab />}
         {tab === "members" && <MembersTab />}
         {tab === "backup" && <BackupTab />}
         {tab === "errors" && <ErrorsTab />}
@@ -185,106 +183,6 @@ function InvitesTab() {
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-function ChannelsTab() {
-  const channels = useApp((s) => s.channels);
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<ChannelKind>("text");
-
-  async function create(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await api.createChannel(name, kind);
-      setName("");
-    } catch (err) {
-      toast.fromError(err);
-    }
-  }
-
-  /** Troca a posição com o vizinho (as posições são reescritas em sequência). */
-  async function move(index: number, delta: -1 | 1) {
-    const order = [...channels];
-    const target = index + delta;
-    if (target < 0 || target >= order.length) return;
-    [order[index], order[target]] = [order[target]!, order[index]!];
-    try {
-      await Promise.all(order.map((c, position) => (c.position === position ? null : api.updateChannel(c.id, { position }))));
-    } catch (err) {
-      toast.fromError(err);
-    }
-  }
-
-  return (
-    <div className="form">
-      <form className="invite-form" onSubmit={create}>
-        <label className="field grow">
-          <span>Novo canal</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="nome-do-canal" required />
-        </label>
-        <label className="field">
-          <span>Tipo</span>
-          <select value={kind} onChange={(e) => setKind(e.target.value as ChannelKind)}>
-            <option value="text">Texto</option>
-            <option value="voice">Voz</option>
-          </select>
-        </label>
-        <button className="btn btn-primary">Criar</button>
-      </form>
-      <ul className="admin-list">
-        {channels.map((c, i) => (
-          <li key={c.id}>
-            {c.kind === "text" ? <Hash size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />}
-            <input
-              className="inline-input"
-              defaultValue={c.name}
-              aria-label={`Nome do canal ${c.name}`}
-              onBlur={(e) => {
-                const value = e.target.value.trim();
-                if (value && value !== c.name) {
-                  api.updateChannel(c.id, { name: value }).catch((err) => {
-                    e.target.value = c.name;
-                    toast.fromError(err);
-                  });
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-              }}
-            />
-            <button type="button" className="icon-btn" disabled={i === 0} onClick={() => void move(i, -1)} aria-label="Subir">
-              <ArrowUp size={16} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              disabled={i === channels.length - 1}
-              onClick={() => void move(i, 1)}
-              aria-label="Descer"
-            >
-              <ArrowDown size={16} />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              data-danger
-              aria-label={`Apagar ${c.name}`}
-              onClick={async () => {
-                if (!confirm(`Apagar "${c.name}" e todas as mensagens dele? Não dá para desfazer.`)) return;
-                try {
-                  await api.deleteChannel(c.id);
-                } catch (err) {
-                  toast.fromError(err);
-                }
-              }}
-            >
-              <Trash2 size={16} />
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

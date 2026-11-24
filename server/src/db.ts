@@ -155,6 +155,71 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN friend_code TEXT;
   CREATE UNIQUE INDEX users_friend_code ON users (friend_code);
   `,
+  // 8: rodas (grupos com salas, cargos e membros). O grupo que já existia vira a roda "Resenha":
+  // o admin mais antigo é o Dono, os outros admins ficam na Moderação e o resto como Membro.
+  `
+  CREATE TABLE rodas (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    hue         INTEGER NOT NULL,
+    privacy     TEXT NOT NULL CHECK (privacy IN ('privada', 'aberta')),
+    created_at  INTEGER NOT NULL
+  );
+
+  CREATE TABLE roda_roles (
+    id         TEXT PRIMARY KEY,
+    roda_id    TEXT NOT NULL REFERENCES rodas(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    color      TEXT NOT NULL,
+    perms      TEXT NOT NULL,
+    position   INTEGER NOT NULL,
+    is_owner   INTEGER NOT NULL DEFAULT 0,
+    is_default INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX roda_roles_roda ON roda_roles (roda_id);
+
+  CREATE TABLE roda_members (
+    roda_id   TEXT NOT NULL REFERENCES rodas(id) ON DELETE CASCADE,
+    user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id   TEXT NOT NULL REFERENCES roda_roles(id),
+    joined_at INTEGER NOT NULL,
+    PRIMARY KEY (roda_id, user_id)
+  );
+  CREATE INDEX roda_members_user ON roda_members (user_id);
+
+  CREATE TABLE roda_requests (
+    roda_id    TEXT NOT NULL REFERENCES rodas(id) ON DELETE CASCADE,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (roda_id, user_id)
+  );
+
+  ALTER TABLE channels ADD COLUMN roda_id TEXT REFERENCES rodas(id) ON DELETE CASCADE;
+  ALTER TABLE invites ADD COLUMN roda_id TEXT REFERENCES rodas(id) ON DELETE CASCADE;
+  ALTER TABLE invites ADD COLUMN approval INTEGER NOT NULL DEFAULT 0;
+
+  INSERT INTO rodas (id, name, description, hue, privacy, created_at)
+    VALUES ('resenha', 'Resenha', '', 122, 'privada', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+  INSERT INTO roda_roles (id, roda_id, name, color, perms, position, is_owner, is_default) VALUES
+    ('resenha-dono', 'resenha', 'Dono', '#ffb27a',
+     '["ver","enviar","anexar","voz","tela","convidar","salas","expulsar"]', 0, 1, 0),
+    ('resenha-mod', 'resenha', 'Moderação', '#7cc4ff',
+     '["ver","enviar","anexar","voz","tela","convidar","expulsar"]', 1, 0, 0),
+    ('resenha-membro', 'resenha', 'Membro', '#b4b4bc', '["ver","enviar","anexar","voz","tela"]', 2, 0, 1);
+  INSERT INTO roda_members (roda_id, user_id, role_id, joined_at)
+    SELECT 'resenha', u.id,
+      CASE
+        WHEN u.id = (SELECT id FROM users WHERE role = 'admin' AND removed_at IS NULL ORDER BY created_at LIMIT 1)
+          THEN 'resenha-dono'
+        WHEN u.role = 'admin' THEN 'resenha-mod'
+        ELSE 'resenha-membro'
+      END,
+      u.created_at
+    FROM users u WHERE u.removed_at IS NULL;
+  UPDATE channels SET roda_id = 'resenha' WHERE conversation IS NULL;
+  UPDATE invites SET roda_id = 'resenha';
+  `,
 ];
 
 /**

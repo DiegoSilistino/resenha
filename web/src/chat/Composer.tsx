@@ -29,7 +29,7 @@ const drafts = new Map<string, string>();
 const TYPING_EVERY_MS = 2_500;
 let pendingKey = 0;
 
-export function Composer({ channel, ref }: { channel: Channel; ref: Ref<ComposerHandle> }) {
+export function Composer({ channel, ref, canAttach = true }: { channel: Channel; ref: Ref<ComposerHandle>; canAttach?: boolean }) {
   const [text, setText] = useState(() => drafts.get(channel.id) ?? "");
   const [pending, setPending] = useState<Pending[]>([]);
   const [sending, setSending] = useState(false);
@@ -223,15 +223,17 @@ export function Composer({ channel, ref }: { channel: Channel; ref: Ref<Composer
         </ul>
       )}
       <div className="composer-row">
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={() => fileInput.current?.click()}
-          aria-label="Anexar arquivo"
-          title="Anexar arquivo"
-        >
-          <Paperclip size={20} />
-        </button>
+        {canAttach && (
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => fileInput.current?.click()}
+            aria-label="Anexar arquivo"
+            title="Anexar arquivo"
+          >
+            <Paperclip size={20} />
+          </button>
+        )}
         <input
           ref={fileInput}
           type="file"

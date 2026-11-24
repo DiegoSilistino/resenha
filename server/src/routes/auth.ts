@@ -1,11 +1,12 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { AVATAR_COLORS, loginBody, registerBody, type Invite } from "@resenha/shared";
+import { AVATAR_COLORS, loginBody, registerBody, type Invite, type InviteInfo } from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { transaction } from "../db.ts";
 import { badRequest, currentUser, HttpError, notFound, parse, unauthorized } from "../http.ts";
 import { dummyPasswordHash, hashPassword, verifyPassword } from "../auth/password.ts";
 import { createSession, SESSION_COOKIE, SESSION_TTL_MS } from "../auth/sessions.ts";
 import { toPublicUser } from "../store.ts";
+import { joinViaInvite } from "./rodas.ts";
 
 export function isInviteUsable(invite: Invite | null, now = Date.now()): invite is Invite {
   return (
@@ -66,7 +67,14 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
     async (req) => {
       const invite = store.inviteByCode(req.params.code);
       if (!isInviteUsable(invite)) throw notFound("Convite inválido, expirado ou já usado");
-      return { role: invite.role };
+      const roda = invite.rodaId ? store.rodaById(invite.rodaId) : null;
+      const info: InviteInfo = {
+        role: invite.role,
+        roda: roda
+          ? { name: roda.name, hue: roda.hue, memberCount: Object.keys(roda.members).length, approval: invite.approval }
+          : null,
+      };
+      return info;
     },
   );
 
@@ -101,6 +109,9 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
     });
 
     hub.broadcast({ type: "user.upsert", user: toPublicUser(user) });
+    // a conta nasce já dentro da roda do convite (ou com o pedido feito, se precisa de aprovação)
+    const invite = store.inviteByCode(body.code);
+    if (invite) joinViaInvite(ctx, user, invite);
     const { token } = createSession(store, user.id, req.headers["user-agent"] ?? null);
     setSessionCookie(ctx, reply, token);
     return reply.status(201).send({ me: toPublicUser(user) });

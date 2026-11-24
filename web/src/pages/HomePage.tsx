@@ -43,9 +43,14 @@ export function HomePage() {
             <h1 className="hero-title">E aí, {me?.displayName}.</h1>
             <p className="hero-sub">{sub}</p>
           </div>
-          <Link to="/amigos?aba=adicionar" className="btn btn-outline">
-            Adicionar amigo
-          </Link>
+          <span className="row-actions">
+            <Link to="/amigos?aba=adicionar" className="btn btn-outline">
+              Adicionar amigo
+            </Link>
+            <button type="button" className="btn btn-primary" onClick={() => useUi.getState().setNewRodaOpen(true)}>
+              Nova roda
+            </button>
+          </span>
         </header>
 
         <section className="page-section" aria-labelledby="live-title">
@@ -111,6 +116,7 @@ function LiveRoomCard({ channel }: { channel: Channel }) {
   const members = useApp((s) => s.voice[channel.id]) ?? [];
   const users = useApp((s) => s.users);
   const streamer = members.find((m) => m.streaming);
+  const rodaName = useApp((s) => (channel.rodaId ? s.rodas[channel.rodaId]?.name : undefined)) ?? "";
 
   return (
     <Link to={`/c/${channel.id}`} className="live-card" onPointerEnter={preloadVoice}>
@@ -130,7 +136,7 @@ function LiveRoomCard({ channel }: { channel: Channel }) {
       </span>
       <span className="live-card-foot">
         <span className="live-card-names">
-          <span className="mono-label">{APP_NAME}</span>
+          <span className="mono-label">{rodaName}</span>
           <span className="live-card-name">{channel.name}</span>
         </span>
         <span className="live-card-meta">{members.length} na call</span>
