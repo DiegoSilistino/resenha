@@ -99,7 +99,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   // rede privada: o online de cada um só chega a quem o conhece; com o banco fechado (desligando), a ninguém
   hub.presenceAudience = (userId) => {
     try {
-      return store.audienceOf(userId);
+      return store.relatedUserIds(userId);
     } catch {
       return [];
     }

@@ -2,7 +2,7 @@
 
 Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Discord. Inspirado no VoiceClub, com a arquitetura pensada para rodar inteira num servidor pequeno.
 
-- **Cadastro aberto.** Qualquer pessoa cria conta em "Criar conta", na tela de entrada, e entra nas rodas abertas. Links de convite (uso único ou limitado, com validade) levam direto para uma roda, e o de admin cria contas de administração. Em ⚙ Administrar → Membros ele também desativa (reversível) ou remove de vez uma conta, por exemplo uma duplicada: a pessoa sai na hora, o nome de usuário fica livre e as mensagens antigas ficam assinadas como "Ex-membro".
+- **Cadastro aberto.** Qualquer pessoa cria conta em "Criar conta", na tela de entrada, e entra nas rodas abertas. Links de convite (uso único ou limitado, com validade) levam direto para uma roda, e o de admin cria contas de administração. Em Administrar o site → Membros ele também desativa (reversível) ou remove de vez uma conta, por exemplo uma duplicada: a pessoa sai na hora, o nome de usuário fica livre e as mensagens antigas ficam assinadas como "Ex-membro".
 - **Canais de texto** em tempo real:
   - anexos (imagens e vídeos aparecem na conversa);
   - reações com emoji (barra rápida e seletor com busca em português);
@@ -29,7 +29,7 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
   - quem fala "acende".
 - **Assistir juntos.** Uma fila do YouTube sincronizada no mesmo segundo para todos, que serve para música e para cinema. Quem está no canal pausa, pula e adianta. O player continua tocando enquanto você navega pelo chat.
 - **Legendas ao vivo.** Cada pessoa transcreve a própria fala no navegador e o texto vai para a sala, sem custo de servidor.
-- **Painel de erros para o admin.** Quando algo falha no navegador de alguém (entrar na chamada, microfone, tela, redução de ruído), o erro aparece em ⚙ Administrar → Erros com quem, quando, navegador e detalhes técnicos. A engrenagem ganha um pontinho vermelho quando chega erro novo.
+- **Painel do site: erros e feedback.** Clicando no seu perfil, admins têm o botão "Administrar o site". Quando algo falha no navegador de alguém (entrar na chamada, microfone, tela, redução de ruído), o erro aparece em Administrar o site → Erros com quem, quando, navegador e detalhes técnicos. O feedback que as pessoas mandam pela tela inicial vai para a aba Feedback, que só o criador do site (a primeira conta admin) vê. Um aviso aparece na lateral quando chega novidade.
 - **Funciona no navegador e no celular**, e pode ser instalado como app (PWA).
 
 ## Como funciona
@@ -83,7 +83,7 @@ O `npm run dev` sobe três coisas, cada uma com uma etiqueta no terminal:
 | `[web]` | O site, em `http://localhost:5173`. |
 
 1. O terminal mostra um link `http://localhost:5173/convite/...`. Abra-o para criar a conta de **administrador**.
-2. Para testar a voz com uma segunda pessoa, crie um convite em **⚙ Administrar → Convites** e abra-o numa **janela anônima**.
+2. Para testar a voz com uma segunda pessoa, crie um convite em **Administrar o site → Convites** e abra-o numa **janela anônima**.
 
 Se você tem Docker e prefere usá-lo, rode `docker compose -f docker-compose.dev.yml up -d` antes: o `npm run dev` percebe que já há um LiveKit rodando e usa esse.
 
@@ -136,7 +136,7 @@ Os dados (banco, anexos, fotos e sons da mesa) ficam no volume `app-data`. Há t
 
 1. **Cópia diária do banco** em `backups/` dentro do volume, guardando as últimas 7. Serve para voltar atrás se algo for apagado sem querer.
 2. **Cópia antes de cada atualização** que mude a estrutura do banco (`backups/resenha-antes-da-vN-….db`).
-3. **Backup completo para guardar fora da VPS.** Em ⚙ Administrar → Backup, o botão "Baixar backup completo" gera um `.tar` com tudo. Baixe toda semana e guarde no PC ou no Google Drive; a aba avisa quando faz mais de 7 dias. Se a VPS se perder, é com esse arquivo que o Resenha volta.
+3. **Backup completo para guardar fora da VPS.** Em Administrar o site → Backup, o botão "Baixar backup completo" gera um `.tar` com tudo. Baixe toda semana e guarde no PC ou no Google Drive; a aba avisa quando faz mais de 7 dias. Se a VPS se perder, é com esse arquivo que o Resenha volta.
 
 **Restaurar** (na VPS, dentro de `/opt/resenha`):
 

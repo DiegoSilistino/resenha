@@ -109,6 +109,9 @@ class RealtimeClient {
         if (event.latestErrorId !== undefined && event.latestErrorId < seen) {
           useSettings.getState().set({ errorsSeenId: event.latestErrorId });
         }
+        if (event.latestFeedbackId !== undefined && event.latestFeedbackId < useSettings.getState().feedbackSeenId) {
+          useSettings.getState().set({ feedbackSeenId: event.latestFeedbackId });
+        }
         useApp.getState().setConnection("online");
         this.startPinging();
         for (const fn of this.helloListeners) fn();

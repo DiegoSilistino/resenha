@@ -356,13 +356,6 @@ export class Store {
     return rows.map((r) => r.id);
   }
 
-  /** Quem recebe as mudanças de perfil e o online da pessoa: quem a conhece e os admins (que veem todo mundo). */
-  audienceOf(userId: string): Set<string> {
-    const ids = this.relatedUserIds(userId);
-    for (const r of this.db.prepare("SELECT id FROM users WHERE role = 'admin'").all() as { id: string }[]) ids.add(r.id);
-    return ids;
-  }
-
   createUser(u: {
     username: string;
     displayName: string;
@@ -1482,8 +1475,17 @@ export class Store {
     return messages.map((message, i) => ({ message, snippet: rows[i]!.snip }));
   }
 
-  // ---------- erros reportados pelos navegadores ----------
+  // ---------- erros reportados pelos navegadores (e o feedback, que mora na mesma tabela) ----------
 
+  /** Criador do site: a primeira conta admin. O feedback da tela inicial é só dele. */
+  siteOwnerId(): string | null {
+    const row = this.db
+      .prepare("SELECT id FROM users WHERE role = 'admin' AND removed_at IS NULL ORDER BY created_at, id LIMIT 1")
+      .get() as { id: string } | undefined;
+    return row?.id ?? null;
+  }
+
+  /** Erros automáticos e feedback são listas separadas: cada uma guarda as suas últimas 500 entradas. */
   insertClientError(e: {
     userId: string;
     kind: ClientErrorKind;
@@ -1499,20 +1501,29 @@ export class Store {
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(e.userId, e.kind, e.message, e.detail, e.userAgent, JSON.stringify(e.context), Date.now());
+      // uma enxurrada de erros não pode apagar feedback (nem o contrário)
+      const fb = e.kind === "feedback" ? 1 : 0;
       this.db
-        .prepare("DELETE FROM client_errors WHERE id <= (SELECT MAX(id) FROM client_errors) - ?")
-        .run(CLIENT_ERRORS_KEEP);
-      return this.listClientErrors(1).find((x) => x.id === Number(res.lastInsertRowid))!;
+        .prepare(
+          `DELETE FROM client_errors WHERE (kind = 'feedback') = ? AND id NOT IN
+             (SELECT id FROM client_errors WHERE (kind = 'feedback') = ? ORDER BY id DESC LIMIT ?)`,
+        )
+        .run(fb, fb, CLIENT_ERRORS_KEEP);
+      return this.listClientErrors(1, fb === 1).find((x) => x.id === Number(res.lastInsertRowid))!;
     });
   }
 
-  latestClientErrorId(): number {
-    const row = this.db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM client_errors").get() as { id: number };
+  latestClientErrorId(feedback = false): number {
+    const row = this.db
+      .prepare("SELECT COALESCE(MAX(id), 0) AS id FROM client_errors WHERE (kind = 'feedback') = ?")
+      .get(feedback ? 1 : 0) as { id: number };
     return Number(row.id);
   }
 
-  listClientErrors(limit = 200): ClientErrorEntry[] {
-    const rows = this.db.prepare("SELECT * FROM client_errors ORDER BY id DESC LIMIT ?").all(limit) as {
+  listClientErrors(limit = 200, feedback = false): ClientErrorEntry[] {
+    const rows = this.db
+      .prepare("SELECT * FROM client_errors WHERE (kind = 'feedback') = ? ORDER BY id DESC LIMIT ?")
+      .all(feedback ? 1 : 0, limit) as {
       id: number;
       user_id: string;
       kind: ClientErrorKind;
@@ -1534,8 +1545,8 @@ export class Store {
     }));
   }
 
-  clearClientErrors(): void {
-    this.db.prepare("DELETE FROM client_errors").run();
+  clearClientErrors(feedback = false): void {
+    this.db.prepare("DELETE FROM client_errors WHERE (kind = 'feedback') = ?").run(feedback ? 1 : 0);
   }
 
   // ---------- soundboard ----------

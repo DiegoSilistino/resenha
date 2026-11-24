@@ -216,6 +216,8 @@ export interface HelloEvent {
   sounds: SoundboardSound[];
   /** Só para admins: id do erro mais recente no painel (0 = nenhum). Acende o aviso na engrenagem. */
   latestErrorId?: number;
+  /** Só para o criador do site: id do feedback mais recente (0 = nenhum). Sem o campo, a aba Feedback não aparece. */
+  latestFeedbackId?: number;
   /** Suas conversas privadas, com quantas mensagens você ainda não leu em cada uma. */
   conversations: Conversation[];
   conversationUnread: Record<string, number>;
@@ -361,6 +363,7 @@ export type ServerEvent =
   | { type: "soundboard.played"; channelId: string; soundId: string; userId: string }
   /** Só para administradores: um navegador reportou uma falha. */
   | { type: "admin.error"; entry: ClientErrorEntry }
+  | { type: "admin.feedback"; entry: ClientErrorEntry }
   /** Só para os membros da conversa. */
   | { type: "conversation.upsert"; conversation: Conversation }
   | { type: "conversation.remove"; conversationId: string }

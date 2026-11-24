@@ -182,10 +182,13 @@ export const api = {
     request<{ user: PublicUser }>("POST", `/api/admin/users/${id}/${disabled ? "disable" : "enable"}`),
   /** Remove a conta de vez (as mensagens ficam como "Ex-membro"). */
   removeUser: (id: string) => request<void>("DELETE", `/api/admin/users/${id}`),
+  adminUsers: () => request<{ users: PublicUser[] }>("GET", "/api/admin/users"),
   setUserRole: (id: string, role: Role) => request<{ user: PublicUser }>("PATCH", `/api/admin/users/${id}/role`, { role }),
   backupInfo: () => request<BackupInfo>("GET", "/api/admin/backup/info"),
   adminErrors: () => request<{ errors: ClientErrorEntry[] }>("GET", "/api/admin/errors"),
   clearAdminErrors: () => request<void>("DELETE", "/api/admin/errors"),
+  adminFeedback: () => request<{ feedback: ClientErrorEntry[] }>("GET", "/api/admin/feedback"),
+  clearAdminFeedback: () => request<void>("DELETE", "/api/admin/feedback"),
 
   search: (q: string, opts: { channelId?: string; before?: number } = {}) => {
     const params = new URLSearchParams({ q });

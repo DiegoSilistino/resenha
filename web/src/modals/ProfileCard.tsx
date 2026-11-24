@@ -49,6 +49,18 @@ export function ProfileCard() {
               >
                 Configurações
               </button>
+              {user.role === "admin" && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    close();
+                    useUi.getState().setAdminOpen(true);
+                  }}
+                >
+                  Administrar o site
+                </button>
+              )}
             </div>
           </>
         )}

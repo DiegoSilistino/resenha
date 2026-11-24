@@ -30,19 +30,19 @@ export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
   const { hub, store, voice, watch } = ctx;
   const visible = <T,>(byChannel: Record<string, T>) =>
     Object.fromEntries(Object.entries(byChannel).filter(([channelId]) => store.canAccess(user.id, channelId)));
-  // Rede privada: só quem a pessoa conhece (amigos, rodas, conversas) e os autores das salas dela.
-  // O admin do servidor vê todo mundo, para administrar as contas.
-  const related = user.role === "admin" ? null : store.relatedUserIds(user.id);
-  const known = related && new Set([...related, ...store.rodaAuthorIds(user.id)]);
+  // Rede privada (vale para o admin também): só quem a pessoa conhece (amigos, rodas, conversas) e os
+  // autores das salas dela. A lista completa de contas fica só no painel do admin (/api/admin/users).
+  const related = store.relatedUserIds(user.id);
+  const known = new Set([...related, ...store.rodaAuthorIds(user.id)]);
   return {
     type: "hello",
     me: toPublicUser(user),
     users: store
       .listUsers()
-      .filter((u) => !known || known.has(u.id))
+      .filter((u) => known.has(u.id))
       .map(toPublicUser),
     channels: store.listChannelsFor(user),
-    online: hub.onlineUserIds().filter((id) => !related || related.has(id)),
+    online: hub.onlineUserIds().filter((id) => related.has(id)),
     voice: visible(voice.snapshot()),
     watch: visible(watch.snapshot()),
     conversations: store.listConversations(user.id),
@@ -54,12 +54,13 @@ export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
     features: { gifs: !!ctx.gifs },
     sounds: store.listSounds(),
     ...(user.role === "admin" ? { latestErrorId: store.latestClientErrorId() } : {}),
+    ...(user.id === store.siteOwnerId() ? { latestFeedbackId: store.latestClientErrorId(true) } : {}),
   };
 }
 
-/** Mudança de perfil: só chega a quem conhece a pessoa (e aos admins). */
+/** Mudança de perfil: só chega a quem conhece a pessoa. */
 export function publishUser(ctx: AppContext, user: PublicUser): void {
-  ctx.hub.sendToUsers(ctx.store.audienceOf(user.id), { type: "user.upsert", user });
+  ctx.hub.sendToUsers(ctx.store.relatedUserIds(user.id), { type: "user.upsert", user });
 }
 
 /**
@@ -69,7 +70,7 @@ export function publishUser(ctx: AppContext, user: PublicUser): void {
 export function introduce(ctx: AppContext, userId: string): void {
   const user = ctx.store.userById(userId);
   if (!user) return;
-  const audience = ctx.store.audienceOf(userId);
+  const audience = ctx.store.relatedUserIds(userId);
   ctx.hub.sendToUsers(audience, { type: "user.upsert", user: toPublicUser(user) });
   if (ctx.hub.onlineUserIds().includes(userId)) ctx.hub.sendToUsers(audience, { type: "presence", userId, online: true });
 }

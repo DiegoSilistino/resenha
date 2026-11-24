@@ -123,7 +123,7 @@ Contas, mensagens e arquivos ficam guardados: a atualização só troca o progra
 ## Backup e restauração
 
 - **Automático, no servidor:** uma cópia do banco por dia (as últimas 7).
-- **Para guardar fora da VPS:** no app, ⚙ Administrar → Backup → **Baixar backup completo**. Faça isso toda semana e guarde o arquivo no PC ou no Google Drive.
+- **Para guardar fora da VPS:** no app, Administrar o site → Backup → **Baixar backup completo**. Faça isso toda semana e guarde o arquivo no PC ou no Google Drive.
 
 Para restaurar, conecte na VPS e rode de dentro de `/opt/resenha`:
 
@@ -140,10 +140,10 @@ O script pede confirmação e guarda os dados atuais antes de substituir (dá pa
 |---|---|
 | O site não abre ou o navegador avisa "não seguro" | O IP no DuckDNS é o da VPS? As portas 80 e 443 estão liberadas? Veja o log com `docker compose logs caddy`. |
 | A voz não conecta | Entre no app e abra `https://SEU_DOMINIO/api/voice/health`. Confira as portas `7881/tcp` e `7882/udp` e veja o log com `docker compose logs livekit`. |
-| Um amigo diz que "deu erro" | Abra ⚙ Administrar → **Erros**: lá aparece o que falhou no navegador dele (chamada, microfone, tela, redução de ruído), quando, qual navegador e os detalhes técnicos. A engrenagem fica com um pontinho vermelho quando chega erro novo. |
+| Um amigo diz que "deu erro" | Abra Administrar o site → **Erros**: lá aparece o que falhou no navegador dele (chamada, microfone, tela, redução de ruído), quando, qual navegador e os detalhes técnicos. Um aviso aparece na lateral quando chega erro novo (o painel abre clicando no seu perfil → Administrar o site). |
 | Alguém esqueceu a senha | `docker compose exec app node dist/cli.js reset-password USUARIO` |
 | Gerar um convite pelo terminal | `docker compose exec app node dist/cli.js invite` |
 | Ver se tudo está rodando | `docker compose ps` |
-| Disco enchendo | Veja o espaço em ⚙ Administrar → Backup. Os logs já têm limite; o que cresce são os anexos (os sons da mesa são pequenos: até 60 sons de ~0,4 MB). |
+| Disco enchendo | Veja o espaço em Administrar o site → Backup. Os logs já têm limite; o que cresce são os anexos (os sons da mesa são pequenos: até 60 sons de ~0,4 MB). |
 
 Para backup, veja a seção **Manutenção** do [README](README.md).

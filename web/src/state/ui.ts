@@ -9,7 +9,7 @@ export interface JumpRequest {
 }
 
 /** Abas do painel do admin (a ordem e os nomes ficam no AdminModal). */
-export type AdminTab = "invites" | "members" | "backup" | "errors";
+export type AdminTab = "invites" | "members" | "backup" | "errors" | "feedback";
 export type RodaSettingsTab = "geral" | "cargos" | "membros" | "convites" | "salas";
 export type SettingsTab = "profile" | "appearance" | "audio" | "notifications" | "captions" | "account";
 

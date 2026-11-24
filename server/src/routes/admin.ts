@@ -61,6 +61,14 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     return user;
   }
 
+  // Todas as contas, só para o painel de Membros: no resto do app o admin também só vê quem conhece.
+  app.get("/api/admin/users", { preHandler: requireAdmin }, async () => ({
+    users: store
+      .listUsers()
+      .filter((u) => !u.removed)
+      .map(toPublicUser),
+  }));
+
   app.post<{ Params: { id: string } }>(
     "/api/admin/users/:id/disable",
     { preHandler: requireAdmin },
@@ -83,6 +91,8 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       if (req.params.id === currentUser(req).id) throw badRequest("Você não pode remover a própria conta");
       manageableUser(req.params.id);
       const friendIds = store.listFriends(req.params.id).map((f) => f.userId);
+      // quem conhecia a pessoa, guardado antes: removida, ela não tem mais amizade nem roda com ninguém
+      const audience = store.relatedUserIds(req.params.id);
       const removed = store.removeUser(req.params.id);
       if (!removed) throw notFound("Usuário não encontrado");
       for (const id of friendIds) hub.sendToUser(id, { type: "friend.remove", userId: removed.user.id });
@@ -90,7 +100,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       const images = [removed.avatarId, removed.bannerId].filter((id): id is string => !!id);
       if (images.length) await ctx.avatars.remove(images);
       if (removed.orphanAttachmentIds.length) await ctx.uploads.remove(removed.orphanAttachmentIds);
-      publishUser(ctx, toPublicUser(removed.user));
+      hub.sendToUsers(audience, { type: "user.upsert", user: toPublicUser(removed.user) });
       return reply.status(204).send();
     },
   );

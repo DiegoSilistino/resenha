@@ -15,18 +15,25 @@ const TABS = [
   { id: "invites", label: "Convites" },
   { id: "members", label: "Membros" },
   { id: "backup", label: "Backup" },
-  { id: "errors", label: "Erros e feedback" },
+  { id: "errors", label: "Erros" },
+  { id: "feedback", label: "Feedback" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
 export function AdminModal() {
   const hasNewErrors = useHasNewErrors();
-  // Aba pedida por quem abriu ("+ Texto" → Canais); senão, aviso de erro novo abre direto em Erros.
-  const [tab, setTab] = useState<TabId>(() => useUi.getState().adminTab ?? (hasNewErrors ? "errors" : "invites"));
+  // Feedback é um canal só do criador do site: para os outros admins a aba nem aparece.
+  const owner = useApp((s) => s.latestFeedbackId !== null);
+  const hasNewFeedback = useApp((s) => s.latestFeedbackId ?? 0) > useSettings((s) => s.feedbackSeenId);
+  // Aba pedida por quem abriu; senão, a novidade (feedback, depois erro) abre direto na aba dela.
+  const [tab, setTab] = useState<TabId>(
+    () => useUi.getState().adminTab ?? (hasNewFeedback ? "feedback" : hasNewErrors ? "errors" : "invites"),
+  );
+  const tabs = TABS.filter((t) => t.id !== "feedback" || owner);
   return (
-    <Modal title="Administrar o grupo" onClose={() => useUi.getState().setAdminOpen(false)} wide>
+    <Modal title="Administrar o site" onClose={() => useUi.getState().setAdminOpen(false)} wide>
       <div className="tabs" role="tablist">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -37,6 +44,9 @@ export function AdminModal() {
           >
             {t.label}
             {t.id === "errors" && hasNewErrors && tab !== "errors" && <span className="unread-dot" aria-label="erros novos" />}
+            {t.id === "feedback" && hasNewFeedback && tab !== "feedback" && (
+              <span className="unread-dot" aria-label="feedback novo" />
+            )}
           </button>
         ))}
       </div>
@@ -45,6 +55,7 @@ export function AdminModal() {
         {tab === "members" && <MembersTab />}
         {tab === "backup" && <BackupTab />}
         {tab === "errors" && <ErrorsTab />}
+        {tab === "feedback" && owner && <FeedbackTab />}
       </div>
     </Modal>
   );
@@ -203,15 +214,30 @@ function InvitesTab() {
   );
 }
 
-function MembersTab() {
-  const users = useApp((s) => s.users);
-  const meId = useApp((s) => (s.me ? s.me.id : null));
-  // Contas removidas só existem para assinar mensagens antigas: não aparecem aqui.
-  const list = Object.values(users)
-    .filter((u) => !u.removed)
-    .sort((a, b) => a.displayName.localeCompare(b.displayName, "pt-BR"));
+/**
+ * Todas as contas do servidor (sem as removidas). No resto do app o admin também só vê quem
+ * conhece; o painel busca a lista completa para dar para administrar quem ele não conhece.
+ */
+function useAllUsers() {
+  const [users, setUsers] = useState<Record<string, PublicUser> | null>(null);
+  const load = useCallback(() => {
+    api
+      .adminUsers()
+      .then((r) => setUsers(Object.fromEntries(r.users.map((u) => [u.id, u]))))
+      .catch((err) => toast.fromError(err));
+  }, []);
+  useEffect(load, [load]);
+  return { users, load };
+}
 
-  const run = (p: Promise<unknown>) => p.catch((err) => toast.fromError(err));
+function MembersTab() {
+  const { users: all, load } = useAllUsers();
+  const meId = useApp((s) => (s.me ? s.me.id : null));
+  if (!all) return <p className="muted">Carregando…</p>;
+  const list = Object.values(all).sort((a, b) => a.displayName.localeCompare(b.displayName, "pt-BR"));
+
+  // depois de mudar alguém, recarrega a lista (quem você não conhece não manda atualização ao vivo)
+  const run = (p: Promise<unknown>) => p.then(load, (err) => toast.fromError(err));
 
   async function remove(u: PublicUser) {
     const ok = confirm(
@@ -223,6 +249,7 @@ function MembersTab() {
     try {
       await api.removeUser(u.id);
       toast.info(`Conta @${u.username} removida.`);
+      load();
     } catch (err) {
       toast.fromError(err);
     }
@@ -416,10 +443,87 @@ function contextValue(key: string, v: string | number | boolean, channels: Chann
 /** Detalhe técnico que só repete a mensagem ("Error: <mensagem>") não acrescenta nada. */
 const usefulDetail = (e: ClientErrorEntry) => (e.detail && !e.detail.endsWith(e.message) ? e.detail : "");
 
+/** Feedback da tela inicial: canal só seu (criador do site), separado dos erros automáticos. */
+function FeedbackTab() {
+  const [items, setItems] = useState<ClientErrorEntry[] | null>(null);
+  const latest = useApp((s) => s.latestFeedbackId ?? 0);
+  const live = useApp((s) => s.users);
+  const { users: all } = useAllUsers();
+  const users = { ...all, ...live };
+
+  // Recarrega quando chega feedback novo com a aba aberta; e marca tudo como visto.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .adminFeedback()
+      .then((r) => {
+        if (cancelled) return;
+        setItems(r.feedback);
+        useSettings.getState().set({ feedbackSeenId: Math.max(latest, r.feedback[0]?.id ?? 0) });
+      })
+      .catch((err) => toast.fromError(err));
+    return () => {
+      cancelled = true;
+    };
+  }, [latest]);
+
+  async function clear() {
+    if (!confirm("Apagar todos os feedbacks? Não dá para desfazer.")) return;
+    try {
+      await api.clearAdminFeedback();
+      setItems([]);
+    } catch (err) {
+      toast.fromError(err);
+    }
+  }
+
+  if (!items) return <p className="muted">Carregando…</p>;
+  if (items.length === 0) {
+    return (
+      <div className="callout">
+        <strong>Nenhum feedback ainda.</strong>
+        <span>Quando alguém mandar pela seção Feedback da tela inicial, aparece aqui. Só você vê esta aba.</span>
+      </div>
+    );
+  }
+
+  const now = Date.now();
+  return (
+    <div className="form errors-tab">
+      <div className="errors-head">
+        <span className="muted">
+          {items.length === 1 ? "1 feedback" : `${items.length} feedbacks`} (os mais recentes primeiro; só você vê)
+        </span>
+        <button type="button" className="btn btn-small btn-ghost" onClick={() => void clear()}>
+          <Trash2 size={14} aria-hidden="true" /> Limpar
+        </button>
+      </div>
+      <ul className="error-list">
+        {items.map((e) => (
+          <li key={e.id} className="error-item" data-kind="feedback">
+            <div className="error-top">
+              <Avatar user={users[e.userId]} size={20} />
+              <strong>{displayNameOf(users, e.userId)}</strong>
+              <time className="muted" dateTime={new Date(e.createdAt).toISOString()} title={formatFull(e.createdAt)}>
+                {formatDay(e.createdAt, now)} às {formatTime(e.createdAt)}
+              </time>
+            </div>
+            <p className="error-message">{e.message}</p>
+            <p className="error-meta muted">{describeUserAgent(e.userAgent)}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ErrorsTab() {
   const [errors, setErrors] = useState<ClientErrorEntry[] | null>(null);
   const latest = useApp((s) => s.latestErrorId);
-  const users = useApp((s) => s.users);
+  // nome de quem mandou, mesmo que o admin não conheça a pessoa (a lista ao vivo, se tiver, vale mais)
+  const live = useApp((s) => s.users);
+  const { users: all } = useAllUsers();
+  const users = { ...all, ...live };
   const channels = useApp((s) => s.channels);
 
   // Recarrega quando chega um erro novo com a aba aberta; e marca tudo como visto.
@@ -468,7 +572,7 @@ function ErrorsTab() {
     <div className="form errors-tab">
       <div className="errors-head">
         <span className="muted">
-          {errors.length === 1 ? "1 registro" : `${errors.length} registros`} (os mais recentes primeiro; ficam os últimos 500)
+          {errors.length === 1 ? "1 erro" : `${errors.length} erros`} (os mais recentes primeiro; ficam os últimos 500)
         </span>
         <button type="button" className="btn btn-small btn-ghost" onClick={() => void clear()}>
           <Trash2 size={14} aria-hidden="true" /> Limpar

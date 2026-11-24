@@ -15,7 +15,9 @@ import { joinVoice, preloadVoice, useVoice } from "../voice/controller.ts";
 export function useAdminBadge() {
   const isAdmin = useApp((s) => !!s.me && s.me.role === "admin");
   const newErrors = useApp((s) => s.latestErrorId) > useSettings((s) => s.errorsSeenId);
-  return { isAdmin, newErrors: isAdmin && newErrors };
+  // feedback novo (só o criador do site recebe) também acende o aviso
+  const newFeedback = (useApp((s) => s.latestFeedbackId) ?? 0) > useSettings((s) => s.feedbackSeenId);
+  return { isAdmin, newErrors: isAdmin && (newErrors || newFeedback) };
 }
 
 /** Ícone da roda: a foto dela ou, sem foto, um quadradinho na cor dela com as iniciais. */
@@ -95,8 +97,8 @@ export function Sidebar({ rodaId }: { rodaId: string }) {
             className="icon-btn admin-btn"
             data-badge
             onClick={() => useUi.getState().setAdminOpen(true)}
-            aria-label="Painel do servidor (tem erro novo)"
-            title="Painel do servidor: tem erro novo"
+            aria-label="Administrar o site (tem novidade)"
+            title="Administrar o site: tem novidade"
           >
             <ShieldAlert size={18} />
           </button>

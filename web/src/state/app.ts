@@ -57,6 +57,8 @@ interface AppState {
   sounds: SoundboardSound[];
   /** Admins: id do erro mais recente no painel de erros (compara com o último visto neste aparelho). */
   latestErrorId: number;
+  /** Criador do site: feedback mais recente. null = você não é o criador (a aba Feedback não aparece). */
+  latestFeedbackId: number | null;
   /** Suas conversas privadas (a dois e grupos). */
   conversations: Record<string, Conversation>;
   /** Amigos e pedidos, pela pessoa do outro lado. */
@@ -101,6 +103,7 @@ const initial = {
   features: { gifs: false },
   sounds: [] as SoundboardSound[],
   latestErrorId: 0,
+  latestFeedbackId: null,
   conversations: {} as Record<string, Conversation>,
   friends: {} as Record<string, FriendEntry>,
   rodas: {} as Record<string, Roda>,
@@ -267,6 +270,8 @@ export const useApp = create<AppState>()((set, get) => ({
         return set({ sounds: s.sounds.filter((x) => x.id !== event.soundId) });
       case "admin.error":
         return set({ latestErrorId: Math.max(s.latestErrorId, event.entry.id) });
+      case "admin.feedback":
+        return set({ latestFeedbackId: Math.max(s.latestFeedbackId ?? 0, event.entry.id) });
       case "conversation.upsert":
         return set({ conversations: { ...s.conversations, [event.conversation.id]: event.conversation } });
       case "conversation.remove": {
@@ -318,6 +323,7 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
     features: e.features ?? { gifs: false },
     sounds: e.sounds ?? [],
     latestErrorId: e.latestErrorId ?? 0,
+    latestFeedbackId: e.latestFeedbackId ?? null,
     conversations: Object.fromEntries((e.conversations ?? []).map((c) => [c.id, c])),
     friends: Object.fromEntries((e.friends ?? []).map((f) => [f.userId, f])),
     rodas: Object.fromEntries((e.rodas ?? []).map((r) => [r.id, r])),

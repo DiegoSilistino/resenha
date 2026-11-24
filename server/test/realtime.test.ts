@@ -150,6 +150,15 @@ describe("rede privada", () => {
     expect(s.events.some((e) => e.type === "user.upsert")).toBe(false);
     expect(a.events.some((e) => e.type === "presence" && e.userId === stranger.id)).toBe(false);
 
+    // o admin também só vê quem conhece no app; a lista completa fica no painel (só para admin)
+    const admin = await registerUser(t, "admin", "chefe");
+    t.ctx.store.removeMember(t.ctx.store.defaultRodaId()!, admin.id);
+    const adm = await connect(admin);
+    expect((await adm.waitFor("hello")).users.map((u) => u.id)).not.toContain(stranger.id);
+    const all = await t.app.inject({ method: "GET", url: "/api/admin/users", headers: { cookie: admin.cookie } });
+    expect(all.json().users.map((u: { id: string }) => u.id)).toContain(stranger.id);
+    expect((await t.app.inject({ method: "GET", url: "/api/admin/users", headers: { cookie: alice.cookie } })).statusCode).toBe(403);
+
     // pedido de amizade pelo nome: os dois passam a se ver, com o online
     await t.app.inject({ method: "POST", url: "/api/friends", headers: { cookie: stranger.cookie }, payload: { who: "alice" } });
     expect((await a.waitFor("user.upsert", (e) => e.user.id === stranger.id)).user.username).toBe("estranho");

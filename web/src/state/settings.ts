@@ -61,6 +61,8 @@ export interface Settings {
   soundboardVolume: number;
   /** Admins: último erro do painel já visto neste aparelho. */
   errorsSeenId: number;
+  /** Criador do site: último feedback já visto neste aparelho. */
+  feedbackSeenId: number;
   /** Aparência (só para você, neste aparelho): cor de destaque, fundo e fundo do chat. */
   themeAccent: ThemeAccent;
   themeBg: ThemeBg;
@@ -125,6 +127,7 @@ export const useSettings = create<Settings>()(
       soundboardEnabled: true,
       soundboardVolume: 0.7,
       errorsSeenId: 0,
+      feedbackSeenId: 0,
       themeAccent: "lima",
       themeBg: "carvao",
       chatWall: "nenhum",

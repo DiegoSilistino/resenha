@@ -89,12 +89,30 @@ describe("painel de erros", () => {
     expect((await report(ana, { kind: "voz", message: "x".repeat(501) })).statusCode).toBe(400);
   });
 
-  it("feedback da tela inicial cai no mesmo painel e pode ser mais longo que um erro", async () => {
+  it("feedback é um canal só do criador do site: fora dos erros, aviso só para ele, outros admins não leem", async () => {
+    const port = await listen(t);
+    const owner = await TestSocket.connect(port, admin.cookie); // admin = primeira conta admin = criador do site
+    expect((await owner.waitFor("hello")).latestFeedbackId).toBe(0);
+    const outro = await registerUser(t, "admin", "outro-admin");
+    const other = await TestSocket.connect(port, outro.cookie);
+    expect((await other.waitFor("hello")).latestFeedbackId).toBeUndefined();
+
     const long = `Sugestão: ${"a".repeat(900)}`;
     expect((await report(ana, { kind: "feedback", message: long })).statusCode).toBe(204);
     expect((await report(ana, { kind: "feedback", message: "x".repeat(1_100) })).statusCode).toBe(400);
-    const list = await t.app.inject({ method: "GET", url: "/api/admin/errors", headers: { cookie: admin.cookie } });
-    expect(list.json().errors[0]).toMatchObject({ kind: "feedback", userId: ana.id, message: long });
+    expect((await owner.waitFor("admin.feedback")).entry).toMatchObject({ kind: "feedback", userId: ana.id, message: long });
+
+    const get = (u: TestUser, url: string) => t.app.inject({ method: "GET", url, headers: { cookie: u.cookie } });
+    expect((await get(admin, "/api/admin/errors")).json().errors).toEqual([]);
+    expect((await get(admin, "/api/admin/feedback")).json().feedback[0]).toMatchObject({ message: long });
+    expect((await get(outro, "/api/admin/feedback")).statusCode).toBe(403);
+    expect((await get(ana, "/api/admin/feedback")).statusCode).toBe(403);
+
+    // limpar os erros não apaga o feedback
+    await t.app.inject({ method: "DELETE", url: "/api/admin/errors", headers: { cookie: admin.cookie } });
+    expect((await get(admin, "/api/admin/feedback")).json().feedback).toHaveLength(1);
+    owner.close();
+    other.close();
   });
 
   it("o hello do admin traz o último erro (acende o aviso); o do membro não", async () => {
