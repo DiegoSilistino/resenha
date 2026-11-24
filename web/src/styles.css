@@ -4008,6 +4008,10 @@ img.roda-badge {
   flex: 1 1 100%;
   color: #ff8a80;
 }
+/* "Administrar o site" (só admins) vai numa linha própria, embaixo de Personalizar e Configurações */
+.profile-admin {
+  flex: 1 1 100%;
+}
 
 /* ------------------------------------------------------------ rodas */
 

@@ -28,7 +28,7 @@ export function ProfileCard() {
         {isMe && (
           <>
             <StatusPicker current={user.status} />
-            <div className="profile-actions">
+            <div className="profile-actions profile-actions-wrap">
               <button
                 type="button"
                 className="btn btn-primary"
@@ -52,7 +52,7 @@ export function ProfileCard() {
               {user.role === "admin" && (
                 <button
                   type="button"
-                  className="btn btn-outline"
+                  className="btn btn-outline profile-admin"
                   onClick={() => {
                     close();
                     useUi.getState().setAdminOpen(true);
