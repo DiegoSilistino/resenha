@@ -5,6 +5,7 @@ import type {
   Channel,
   ClientErrorEntry,
   ChannelKind,
+  GifCategories,
   GifResult,
   Invite,
   InviteInfo,
@@ -182,6 +183,7 @@ export const api = {
     return request<{ sound: SoundboardSound }>("POST", `/api/sounds?${new URLSearchParams({ name, emoji })}`, form);
   },
   deleteSound: (id: string) => request<void>("DELETE", `/api/sounds/${encodeURIComponent(id)}`),
+  gifCategories: () => request<GifCategories>("GET", "/api/gifs/categories"),
   gifs: (q: string, offset = 0) =>
     request<{ gifs: GifResult[] }>("GET", `/api/gifs?${new URLSearchParams({ q, offset: String(offset) })}`),
 };

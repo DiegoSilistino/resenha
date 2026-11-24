@@ -2215,23 +2215,132 @@ input[type="range"] {
   flex-direction: column;
   gap: 6px;
 }
+.gif-search-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 6px;
+}
+.gif-search-row .emoji-search {
+  flex: 1;
+}
+.gif-search-row .icon-btn + .emoji-search {
+  margin-left: 0;
+}
 .gif-item {
-  display: block;
-  padding: 0;
+  position: relative;
   border: 2px solid transparent;
   border-radius: var(--r-sm);
   background: var(--well);
   overflow: hidden;
-  cursor: pointer;
 }
 .gif-item:hover,
-.gif-item:focus-visible {
+.gif-item:focus-within {
   border-color: var(--accent);
 }
-.gif-item img {
+.gif-pick {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.gif-pick video {
   display: block;
   width: 100%;
   height: auto;
+}
+/* estrela de favoritar: aparece ao passar o mouse (sempre, em tela de toque, e quando já é favorito) */
+.gif-fav {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.gif-item:hover .gif-fav,
+.gif-fav:focus-visible,
+.gif-fav[aria-pressed="true"] {
+  opacity: 1;
+}
+.gif-fav[aria-pressed="true"] {
+  color: #ffd34d;
+}
+@media (hover: none) {
+  .gif-fav {
+    opacity: 1;
+  }
+}
+/* tela inicial do seletor: quadrinhos com um GIF de fundo, como no Discord */
+.gif-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.gif-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 100px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--well);
+  color: #fff;
+  overflow: hidden;
+  cursor: pointer;
+}
+.gif-tile video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gif-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.5);
+  transition: background 120ms ease-out;
+}
+.gif-tile:hover::after,
+.gif-tile:focus-visible::after {
+  background: rgb(0 0 0 / 0.3);
+}
+.gif-tile[data-tone="fav"] {
+  color: var(--accent-ink);
+}
+.gif-tile[data-tone="fav"]::after {
+  background: color-mix(in oklch, var(--accent) 78%, transparent);
+}
+.gif-tile[data-tone="fav"]:hover::after,
+.gif-tile[data-tone="fav"]:focus-visible::after {
+  background: color-mix(in oklch, var(--accent) 62%, transparent);
+}
+.gif-tile-label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  font-size: 15px;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.55);
+}
+.gif-tile[data-tone="fav"] .gif-tile-label {
+  text-shadow: none;
 }
 .gif-more {
   display: flex;
@@ -3240,6 +3349,40 @@ input[type="range"] {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+/* editor da capa (Personalizar): mesmo formato da capa do cartão; arrasta para posicionar */
+.banner-editor {
+  aspect-ratio: 5 / 2;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--well);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.banner-editor:active {
+  cursor: grabbing;
+}
+.banner-editor:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.banner-editor img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.banner-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.banner-zoom input {
+  flex: 1;
 }
 .profile-card-body {
   display: flex;

@@ -35,6 +35,16 @@ export const NICK_FONTS: Record<ProfileLook["font"], string> = {
 export type LookUser = Pick<PublicUser, "avatarColor"> & { look?: ProfileLook };
 
 export const lookOf = (u: LookUser | undefined): ProfileLook => u?.look ?? DEFAULT_LOOK;
+
+/**
+ * Capa posicionada: o ponto (bannerX%, bannerY%) da imagem fica nesse mesmo ponto do quadro e o
+ * zoom cresce a partir dele. A mesma conta vale no editor e no cartão, de qualquer largura.
+ */
+export function bannerImageStyle(look: Pick<ProfileLook, "bannerX" | "bannerY" | "bannerZoom">): CSSProperties {
+  const at = `${look.bannerX ?? 50}% ${look.bannerY ?? 50}%`;
+  const zoom = look.bannerZoom ?? 1;
+  return { objectPosition: at, transformOrigin: at, transform: zoom > 1 ? `scale(${zoom})` : undefined };
+}
 export const profileColor = (u: LookUser) => lookOf(u).a ?? u.avatarColor;
 
 /**

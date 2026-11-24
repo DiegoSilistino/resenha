@@ -25,9 +25,13 @@ interface GiphyRendition {
   url?: string;
   mp4?: string;
   webp?: string;
+  webp_size?: string;
   width?: string;
   height?: string;
 }
+
+/** Capa em qualidade original só até aqui; acima disso vai a versão de 200 px (carrega rápido no cartão). */
+const BANNER_ORIGINAL_MAX = 4 * 1024 * 1024;
 
 interface GiphyGif {
   id: string;
@@ -45,9 +49,11 @@ export function toGifResults(data: unknown): GifResult[] {
     const img = g.images ?? {};
     const original = img.original;
     const mp4 = original?.mp4 ?? img.fixed_width?.mp4;
-    const preview = img.fixed_width_downsampled?.webp ?? img.fixed_width?.webp ?? img.fixed_width?.url;
-    // capa do perfil: 200 px de altura cobre bem os 120 px do cartão, com todos os quadros
-    const image = img.fixed_height?.webp ?? img.fixed_width?.webp ?? preview;
+    // MP4 com todos os quadros: o "downsampled" (WebP) pula quadros e fica travado
+    const preview = img.fixed_width?.mp4 ?? mp4;
+    // capa: o original dá para dar zoom sem borrar; se for pesado, a versão de 200 px de altura
+    const originalWebp = Number(original?.webp_size) <= BANNER_ORIGINAL_MAX ? original?.webp : undefined;
+    const image = originalWebp ?? img.fixed_height?.webp ?? img.fixed_width?.webp;
     const width = Number(original?.width ?? img.fixed_width?.width);
     const height = Number(original?.height ?? img.fixed_width?.height);
     if (!g.id || !mp4 || !preview || !image || !(width > 0) || !(height > 0)) continue;

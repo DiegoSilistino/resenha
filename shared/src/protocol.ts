@@ -64,6 +64,10 @@ export const lookSchema = z.object({
   b: profileColor.nullable(),
   twoTone: z.boolean(),
   banner: z.enum(["cor", "imagem"]),
+  // com padrão: cliente antigo (ainda sem estes campos) continua conseguindo salvar o perfil
+  bannerX: z.number().min(0).max(100).default(50),
+  bannerY: z.number().min(0).max(100).default(50),
+  bannerZoom: z.number().min(1).max(3).default(1),
   frame: z.enum(["nenhuma", "anel", "duplo", "tracejado", "halo"]),
   nickStyle: z.enum(["padrao", "cor", "gradiente"]),
   font: z.enum(["onest", "mono", "larga", "serif", "pixel"]),

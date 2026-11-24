@@ -5,7 +5,7 @@ import { Avatar } from "../components/Avatar.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { Nick } from "../components/Nick.tsx";
 import { api } from "../lib/api.ts";
-import { lookOf, lookVars, shownStatus, STATUS, statusLine, type ShownStatus } from "../lib/look.ts";
+import { bannerImageStyle, lookOf, lookVars, shownStatus, STATUS, statusLine, type ShownStatus } from "../lib/look.ts";
 import { callFriend, openConversationWith } from "../lib/social.ts";
 import { FriendRequestActions } from "../pages/FriendsPage.tsx";
 import { useApp } from "../state/app.ts";
@@ -132,7 +132,7 @@ export function ProfileCardView({ user, shown, children }: { user: CardUser; sho
   const image = look.banner === "imagem" && user.bannerUrl;
   return (
     <div className="profile-card" data-two={look.twoTone || undefined} style={lookVars(user)}>
-      <div className="profile-banner">{image && <img src={image} alt="" />}</div>
+      <div className="profile-banner">{image && <img src={image} alt="" style={bannerImageStyle(look)} />}</div>
       <div className="profile-card-body">
         <span className="profile-avatar">
           <Avatar user={user} size={84} online={shown !== "offline"} />

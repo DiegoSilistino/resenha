@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { LIMITS } from "@resenha/shared";
 import { createGiphy, isGiphyMediaUrl, toGifResults } from "../src/gifs/giphy.ts";
+import { GIF_CATEGORY_TERMS } from "../src/routes/gifs.ts";
 import { createTestApp, listen, registerUser, TestSocket, type TestApp } from "./helpers.ts";
 
 const gif = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -34,13 +35,20 @@ describe("conversão da resposta do GIPHY", () => {
       {
         id: "a1",
         title: "GIF a1",
-        previewUrl: "https://media2.giphy.com/media/a1/200w_d.webp",
+        previewUrl: "https://media2.giphy.com/media/a1/200w.mp4",
         mp4Url: "https://media2.giphy.com/media/a1/giphy.mp4?cid=x",
         imageUrl: "https://media2.giphy.com/media/a1/200.webp",
         width: 480,
         height: 270,
       },
     ]);
+  });
+
+  it("capa: WebP original se for leve, senão o de 200 px", () => {
+    const withOriginal = (size: number) =>
+      gif("o", { images: { ...gif("o").images, original: { ...gif("o").images.original, webp: "https://media2.giphy.com/media/o/giphy.webp", webp_size: String(size) } } });
+    expect(toGifResults({ data: [withOriginal(900_000)] })[0]!.imageUrl).toBe("https://media2.giphy.com/media/o/giphy.webp");
+    expect(toGifResults({ data: [withOriginal(9_000_000)] })[0]!.imageUrl).toBe("https://media2.giphy.com/media/o/200.webp");
   });
 
   it("descarta itens incompletos ou com mídia fora do GIPHY", () => {
@@ -107,6 +115,25 @@ describe("rota de GIFs", () => {
     const socket = await TestSocket.connect(await listen(t), u.cookie);
     expect((await socket.waitFor("hello")).features).toEqual({ gifs: true });
     socket.close();
+  });
+
+  it("tela inicial do seletor: em alta + atalhos, cada um com o 1º GIF, e do cache na 2ª vez", async () => {
+    const { calls, fetchFn } = fakeGiphy((url) => {
+      const q = url.searchParams.get("q");
+      if (q === "triste") return { status: 500 };
+      return { body: { data: [gif(q ? `q-${q}` : "alta")] } };
+    });
+    t = await createTestApp({ gifFetch: fetchFn });
+    const u = await registerUser(t);
+    const get = () => t.app.inject({ method: "GET", url: "/api/gifs/categories", headers: { cookie: u.cookie } });
+    const body = (await get()).json();
+    expect(body.trending.id).toBe("alta");
+    expect(body.categories.map((c: { term: string }) => c.term)).toEqual(GIF_CATEGORY_TERMS);
+    expect(body.categories.find((c: { term: string }) => c.term === "oi").gif.id).toBe("q-oi");
+    expect(body.categories.find((c: { term: string }) => c.term === "triste").gif).toBeNull(); // uma busca falhou: o resto aparece
+    const before = calls.length;
+    await get();
+    expect(calls.length - before).toBe(1); // só a que falhou é tentada de novo
   });
 
   it("capa pelo seletor: baixa do GIPHY e guarda; recusa outro site e GIF grande demais", async () => {

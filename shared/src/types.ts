@@ -40,6 +40,10 @@ export interface ProfileLook {
   /** Cartão e molduras em duas cores. */
   twoTone: boolean;
   banner: "cor" | "imagem";
+  /** Ponto da capa que fica à vista, em % (50/50 = centro), e o zoom (1 a 3). */
+  bannerX: number;
+  bannerY: number;
+  bannerZoom: number;
   frame: "nenhuma" | "anel" | "duplo" | "tracejado" | "halo";
   nickStyle: "padrao" | "cor" | "gradiente";
   font: "onest" | "mono" | "larga" | "serif" | "pixel";
@@ -163,7 +167,7 @@ export interface MessageReference {
 export interface GifResult {
   id: string;
   title: string;
-  /** Prévia pequena e leve para a grade do seletor. */
+  /** Prévia para a grade do seletor: MP4 de 200 px de largura, com todos os quadros (fluido). */
   previewUrl: string;
   /** Vídeo MP4 em loop, que é o que vai na mensagem (bem menor que o .gif). */
   mp4Url: string;
@@ -171,6 +175,12 @@ export interface GifResult {
   imageUrl: string;
   width: number;
   height: number;
+}
+
+/** Tela inicial do seletor de GIFs: "em alta" e atalhos de busca, cada um com um GIF de fundo. */
+export interface GifCategories {
+  trending: GifResult | null;
+  categories: { term: string; gif: GifResult | null }[];
 }
 
 export interface Reaction {

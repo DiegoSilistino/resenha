@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { GifResult } from "@resenha/shared";
 import { DEFAULT_SCREEN_QUALITY, type ScreenQualityId } from "../voice/screenQuality.ts";
 
 /** Preferências deste aparelho (ficam no navegador, não no servidor). */
@@ -45,6 +46,11 @@ export interface Settings {
   notifyPromptDismissed: boolean;
   /** Emojis usados por último nas reações (o mais recente primeiro). */
   recentEmojis: string[];
+  /**
+   * GIFs favoritos do seletor (o mais novo primeiro).
+   * shortcut: ficam só neste aparelho; se precisar nos outros, guardar no servidor.
+   */
+  gifFavorites: GifResult[];
   /** Painel de chat aberto ao lado da chamada. */
   voiceChatOpen: boolean;
   /** Avisar quando alguém entrar num canal de voz (opcional; desligado por padrão). */
@@ -78,6 +84,15 @@ export function rememberEmoji(emoji: string) {
   useSettings.getState().set({ recentEmojis: [emoji, ...recent].slice(0, RECENT_EMOJIS_MAX) });
 }
 
+const GIF_FAVORITES_MAX = 60;
+
+/** Estrela do seletor de GIFs: favorita (na frente da lista) ou tira dos favoritos. */
+export function toggleGifFavorite(gif: GifResult) {
+  const favs = useSettings.getState().gifFavorites;
+  const without = favs.filter((g) => g.id !== gif.id);
+  useSettings.getState().set({ gifFavorites: without.length < favs.length ? without : [gif, ...favs].slice(0, GIF_FAVORITES_MAX) });
+}
+
 export const useSettings = create<Settings>()(
   persist(
     (set) => ({
@@ -104,6 +119,7 @@ export const useSettings = create<Settings>()(
       soundVolume: 0.6,
       notifyPromptDismissed: false,
       recentEmojis: [],
+      gifFavorites: [],
       voiceChatOpen: true,
       notifyVoiceJoin: false,
       soundboardEnabled: true,
