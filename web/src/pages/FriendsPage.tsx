@@ -132,7 +132,9 @@ function RequestGroup({ title, items, users }: { title: string; items: FriendEnt
               <Avatar user={users[f.userId]} size={40} />
               <span className="person-names">
                 <Nick user={users[f.userId]} className="person-name" />
-                <span className="person-sub">@{users[f.userId]?.username}</span>
+                <span className="person-sub">
+                  {users[f.userId]?.displayName}#{users[f.userId]?.tag}
+                </span>
               </span>
             </button>
             <FriendRequestActions entry={f} />
@@ -210,7 +212,7 @@ function AddFriend() {
     <div className="add-friend">
       <form className="card add-friend-card" onSubmit={submit}>
         <h2 className="card-title">Chamar alguém</h2>
-        <p className="muted small-note">Digite o usuário da pessoa (o que aparece depois do @ no perfil).</p>
+        <p className="muted small-note">Digite o nick ou nick#tag (o #tag aparece no perfil). Se o nick for único, o #tag é opcional; o @usuário também serve.</p>
         <div className="add-friend-row">
           <input
             value={name}
@@ -218,8 +220,8 @@ function AddFriend() {
               setName(e.target.value);
               setResult(null);
             }}
-            placeholder="usuario"
-            aria-label="Usuário da pessoa"
+            placeholder="gui ou gui#3121"
+            aria-label="Nick da pessoa"
             autoCapitalize="none"
             autoComplete="off"
           />

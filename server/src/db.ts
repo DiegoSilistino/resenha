@@ -220,6 +220,11 @@ export const MIGRATIONS: string[] = [
   UPDATE channels SET roda_id = 'resenha' WHERE conversation IS NULL;
   UPDATE invites SET roda_id = 'resenha';
   `,
+  // 9: tag de 4 números que separa nicks iguais ("bia#0912"), sorteada para quem já existe.
+  `
+  ALTER TABLE users ADD COLUMN tag TEXT NOT NULL DEFAULT '0000';
+  UPDATE users SET tag = printf('%04d', abs(random()) % 10000);
+  `,
 ];
 
 /**

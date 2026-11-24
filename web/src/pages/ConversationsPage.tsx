@@ -1,6 +1,6 @@
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
-import { LogOut } from "lucide-react";
+import { LogOut, Pencil } from "lucide-react";
 import { PROFILE_COLORS, type Conversation } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { ChatPanel } from "../chat/ChatPanel.tsx";
@@ -8,6 +8,7 @@ import { plainText } from "../chat/plain.ts";
 import { BackToRoda } from "../layout/BackToRoda.tsx";
 import { api } from "../lib/api.ts";
 import { lazyChunk } from "../lib/chunks.ts";
+import { EditGroupModal } from "../modals/EditGroupModal.tsx";
 import { formatTime, initials, sameDay } from "../lib/format.ts";
 import { shownStatus, statusLine } from "../lib/look.ts";
 import { SearchButton } from "../search/SearchButton.tsx";
@@ -134,6 +135,7 @@ function ConversationThread({ id }: { id: string }) {
   const callActive = useApp((s) => (s.voice[id]?.length ?? 0) > 0);
   const inThisCall = useVoice((s) => s.channelId === id && s.status !== "idle");
   const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
   const channel = conversationChannel(conv, users, meId);
 
   useEffect(() => {
@@ -192,13 +194,19 @@ function ConversationThread({ id }: { id: string }) {
             Mostrar tela
           </button>
           {conv.type === "group" && (
-            <button type="button" className="icon-btn icon-btn-round" onClick={() => void leave()} aria-label="Sair do grupo" title="Sair do grupo">
-              <LogOut size={18} />
-            </button>
+            <>
+              <button type="button" className="icon-btn icon-btn-round" onClick={() => setEditing(true)} aria-label="Editar grupo" title="Editar grupo">
+                <Pencil size={18} />
+              </button>
+              <button type="button" className="icon-btn icon-btn-round" onClick={() => void leave()} aria-label="Sair do grupo" title="Sair do grupo">
+                <LogOut size={18} />
+              </button>
+            </>
           )}
         </div>
       </header>
       <ChatPanel channel={channel} />
+      {editing && <EditGroupModal id={id} onClose={() => setEditing(false)} />}
     </main>
   );
 }

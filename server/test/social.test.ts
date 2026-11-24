@@ -21,7 +21,7 @@ const req = (user: TestUser, method: "GET" | "POST" | "DELETE", url: string, pay
   t.app.inject({ method, url, headers: { cookie: user.cookie }, ...(payload ? { payload } : {}) });
 
 async function befriend(a: TestUser, b: TestUser) {
-  expect((await req(a, "POST", "/api/friends", { username: `@${b.username}` })).statusCode).toBe(200);
+  expect((await req(a, "POST", "/api/friends", { who: `@${b.username}` })).statusCode).toBe(200);
   expect((await req(b, "POST", `/api/friends/${a.id}/accept`)).statusCode).toBe(200);
 }
 
@@ -37,11 +37,11 @@ describe("amizades", () => {
     const bobSocket = await TestSocket.connect(port, bob.cookie);
     await bobSocket.waitFor("hello");
 
-    const sent = await req(alice, "POST", "/api/friends", { username: "BOB" });
+    const sent = await req(alice, "POST", "/api/friends", { who: "BOB" });
     expect(sent.json().friend).toMatchObject({ userId: bob.id, status: "outgoing" });
     expect((await bobSocket.waitFor("friend.upsert")).friend).toMatchObject({ userId: alice.id, status: "incoming" });
 
-    expect((await req(alice, "POST", "/api/friends", { username: "bob" })).statusCode).toBe(400); // já pedido
+    expect((await req(alice, "POST", "/api/friends", { who: "bob" })).statusCode).toBe(400); // já pedido
     await req(bob, "POST", `/api/friends/${alice.id}/accept`);
     expect(t.ctx.store.areFriends(alice.id, bob.id)).toBe(true);
 
@@ -52,13 +52,13 @@ describe("amizades", () => {
   });
 
   it("pedido cruzado vira amizade; link de amizade manda o pedido sem digitar", async () => {
-    await req(alice, "POST", "/api/friends", { username: "bob" });
-    expect((await req(bob, "POST", "/api/friends", { username: "alice" })).json().friend.status).toBe("friend");
+    await req(alice, "POST", "/api/friends", { who: "bob" });
+    expect((await req(bob, "POST", "/api/friends", { who: "alice" })).json().friend.status).toBe("friend");
 
     const { code } = (await req(carol, "GET", "/api/friends/link")).json();
     expect((await req(alice, "POST", `/api/friends/link/${code}`)).json().friend.status).toBe("outgoing");
     expect((await req(alice, "POST", "/api/friends/link/naoexiste123")).statusCode).toBe(404);
-    expect((await req(alice, "POST", "/api/friends", { username: "ninguem" })).statusCode).toBe(404);
+    expect((await req(alice, "POST", "/api/friends", { who: "ninguem" })).statusCode).toBe(404);
   });
 });
 

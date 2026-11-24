@@ -5,6 +5,7 @@ import {
   memberRoleBody,
   roleBody,
   rodaInviteBody,
+  transferOwnerBody,
   updateRodaBody,
   type Invite,
   type Permission,
@@ -28,10 +29,24 @@ export function resync(ctx: AppContext, userIds: Iterable<string>) {
   }
 }
 
-/** Avisa quem faz parte que a roda mudou (membros, cargos, pedidos, nome). */
+/**
+ * Avisa quem faz parte que a roda mudou (membros, cargos, pedidos, nome). Se ela é aberta,
+ * todo mundo fica sabendo também (a lista "Abertas para entrar" se atualiza sozinha).
+ */
 export function publishRoda(ctx: AppContext, rodaId: string) {
   const roda = ctx.store.rodaById(rodaId);
-  if (roda) ctx.hub.sendToUsers(Object.keys(roda.members), { type: "roda.upsert", roda });
+  if (!roda) return;
+  ctx.hub.sendToUsers(Object.keys(roda.members), { type: "roda.upsert", roda });
+  if (roda.privacy === "aberta") {
+    const summary = {
+      id: roda.id,
+      name: roda.name,
+      description: roda.description,
+      hue: roda.hue,
+      memberCount: Object.keys(roda.members).length,
+    };
+    ctx.hub.broadcast({ type: "roda.open", roda: summary });
+  }
 }
 
 /**
@@ -94,6 +109,7 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
     const hue = RODA_HUES[Math.floor(Math.random() * RODA_HUES.length)]!;
     const roda = store.createRoda({ name: body.name, description: body.description, privacy: body.privacy, hue }, currentUser(req).id, body.template);
     resync(ctx, [currentUser(req).id]);
+    publishRoda(ctx, roda.id);
     return reply.status(201).send({ roda });
   });
 
@@ -103,6 +119,7 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
     ownerOnly(user, req.params.id);
     const roda = store.updateRoda(req.params.id, parse(updateRodaBody, req.body))!;
     publishRoda(ctx, roda.id);
+    if (roda.privacy === "privada") hub.broadcast({ type: "roda.closed", rodaId: roda.id });
     return { roda };
   });
 
@@ -119,6 +136,7 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     await uploads.remove(attachmentIds);
     resync(ctx, members);
+    hub.broadcast({ type: "roda.closed", rodaId: roda.id });
     return reply.status(204).send();
   });
 
@@ -176,6 +194,19 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
       return { roda: store.rodaById(roda.id) };
     },
   );
+
+  // Passar a posse: a pessoa vira Dono e quem era dono fica com o cargo que ela tinha.
+  app.post<{ Params: { id: string } }>("/api/rodas/:id/owner", { preHandler: requireUser }, async (req) => {
+    const user = currentUser(req);
+    const roda = rodaFor(req.params.id, user);
+    ownerOnly(user, roda.id);
+    const { userId } = parse(transferOwnerBody, req.body);
+    const previous = store.transferOwnership(roda.id, userId);
+    if (previous === null) throw badRequest("Essa pessoa não está na roda ou já é a dona");
+    publishRoda(ctx, roda.id);
+    resync(ctx, [userId, previous].filter(Boolean));
+    return { roda: store.rodaById(roda.id) };
+  });
 
   // ---------- cargos ----------
 

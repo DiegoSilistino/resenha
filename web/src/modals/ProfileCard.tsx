@@ -114,7 +114,7 @@ function FriendActions({ userId, onDone }: { userId: string; onDone(): void }) {
       type="button"
       className="btn btn-primary"
       disabled={busy}
-      onClick={() => void run(() => api.addFriend(useApp.getState().users[userId]?.username ?? ""))}
+      onClick={() => void run(() => api.addFriend(`@${useApp.getState().users[userId]?.username ?? ""}`))}
     >
       Adicionar amigo
     </button>
@@ -123,7 +123,7 @@ function FriendActions({ userId, onDone }: { userId: string; onDone(): void }) {
 
 type CardUser = Pick<
   PublicUser,
-  "displayName" | "username" | "avatarColor" | "avatarUrl" | "status" | "activity" | "note" | "look" | "bannerUrl"
+  "displayName" | "username" | "tag" | "avatarColor" | "avatarUrl" | "status" | "activity" | "note" | "look" | "bannerUrl"
 >;
 
 /** O cartão em si: também serve de prévia ao vivo na tela de personalizar. */
@@ -140,8 +140,9 @@ export function ProfileCardView({ user, shown, children }: { user: CardUser; sho
         <div className="profile-names">
           <span className="profile-nick-row">
             <Nick user={user} className="profile-nick" />
-            <span className="profile-handle">@{user.username}</span>
+            <span className="profile-handle">#{user.tag}</span>
           </span>
+          <span className="profile-sub-handle mono-label">@{user.username}</span>
           <span className="profile-sub">
             <span className="status-dot" style={{ background: STATUS[shown].color }} aria-hidden="true" />
             {statusLine(user, shown)}

@@ -253,6 +253,18 @@ function MembersTab({ roda, canSetRole, canKick }: { roda: Roda; canSetRole: boo
                 {role?.name}
               </span>
             )}
+            {canSetRole && !role?.owner && (
+              <button
+                type="button"
+                className="btn btn-small btn-ghost"
+                onClick={() =>
+                  confirm(`Passar a posse de ${roda.name} para ${users[id]!.displayName}? Você fica com o cargo que essa pessoa tem hoje.`) &&
+                  void run(() => api.transferOwner(roda.id, id), "Posse passada.")
+                }
+              >
+                Passar a posse
+              </button>
+            )}
             {canKick && !role?.owner && id !== me && (
               <button
                 type="button"

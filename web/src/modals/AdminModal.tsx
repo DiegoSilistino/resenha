@@ -72,6 +72,9 @@ function InvitesTab() {
   const [maxUses, setMaxUses] = useState(1);
   const [expiry, setExpiry] = useState(1);
   const [latest, setLatest] = useState<InviteWithUrl | null>(null);
+  // em qual roda a pessoa entra (as rodas em que você está; a primeira é a principal)
+  const rodas = Object.values(useApp((s) => s.rodas)).sort((a, b) => a.createdAt - b.createdAt);
+  const [rodaId, setRodaId] = useState(rodas[0]?.id ?? "");
 
   const load = useCallback(() => {
     api
@@ -88,6 +91,7 @@ function InvitesTab() {
         role,
         maxUses,
         expiresInHours: EXPIRY_OPTIONS[expiry]!.hours,
+        ...(rodaId ? { rodaId } : {}),
       });
       setLatest(invite);
       load();
@@ -104,6 +108,18 @@ function InvitesTab() {
   return (
     <div className="form">
       <form className="invite-form" onSubmit={create}>
+        {rodas.length > 1 && (
+          <label className="field">
+            <span>Entra na roda</span>
+            <select value={rodaId} onChange={(e) => setRodaId(e.target.value)}>
+              {rodas.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="field">
           <span>Usos</span>
           <select value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))}>

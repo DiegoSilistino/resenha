@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import {
+  addConversationMembersBody,
   createConversationBody,
   friendRequestBody,
+  renameConversationBody,
   LIMITS,
   readConversationBody,
   type Conversation,
@@ -43,8 +45,10 @@ export function registerSocialRoutes(app: FastifyInstance, ctx: AppContext) {
   };
 
   app.post("/api/friends", { preHandler: requireUser, config: rateLimited(ctx, 20, "1 minute") }, async (req) => {
-    const { username } = parse(friendRequestBody, req.body);
-    return requestFriend(currentUser(req), activeUser(store.userByUsername(username)));
+    const { who } = parse(friendRequestBody, req.body);
+    const found = store.findPeople(who);
+    if (found.length > 1) throw badRequest("Tem mais de uma pessoa com esse nick: use nick#tag (o #tag aparece no perfil)");
+    return requestFriend(currentUser(req), activeUser(found[0] ?? null));
   });
 
   app.post<{ Params: { userId: string } }>("/api/friends/:userId/accept", { preHandler: requireUser }, async (req) => {
@@ -114,6 +118,42 @@ export function registerSocialRoutes(app: FastifyInstance, ctx: AppContext) {
       const conversation = store.createConversation("group", body.name || "Grupo", [me.id, ...ids]);
       publishConversation(conversation);
       return reply.status(201).send({ conversation });
+    },
+  );
+
+  const groupFor = (id: string, userId: string) => {
+    const c = conversationFor(id, userId);
+    if (c.type !== "group") throw badRequest("Só grupos têm nome e mais gente");
+    return c;
+  };
+
+  app.patch<{ Params: { id: string } }>("/api/conversations/:id", { preHandler: requireUser }, async (req) => {
+    const c = groupFor(req.params.id, currentUser(req).id);
+    store.renameConversation(c.id, parse(renameConversationBody, req.body).name);
+    const conversation = store.conversationById(c.id)!;
+    publishConversation(conversation);
+    return { conversation };
+  });
+
+  // Chamar mais gente para o grupo: só amigos de quem chama, até 10 pessoas.
+  app.post<{ Params: { id: string } }>(
+    "/api/conversations/:id/members",
+    { preHandler: requireUser, config: rateLimited(ctx, 20, "1 minute") },
+    async (req) => {
+      const me = currentUser(req);
+      const c = groupFor(req.params.id, me.id);
+      const ids = [...new Set(parse(addConversationMembersBody, req.body).userIds)].filter((id) => !c.memberIds.includes(id));
+      for (const id of ids) {
+        activeUser(store.userById(id));
+        if (!store.areFriends(me.id, id)) throw badRequest("Só dá para chamar amigos para o grupo");
+      }
+      if (c.memberIds.length + ids.length > LIMITS.groupMax) {
+        throw badRequest(`Um grupo tem no máximo ${LIMITS.groupMax} pessoas, contando você`);
+      }
+      store.addConversationMembers(c.id, ids);
+      const conversation = store.conversationById(c.id)!;
+      publishConversation(conversation);
+      return { conversation };
     },
   );
 

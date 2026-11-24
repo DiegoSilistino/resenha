@@ -1,7 +1,7 @@
 /**
  * Acesso a dados. Todo SQL do app mora aqui, com parâmetros posicionais (sem concatenação).
  */
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
   DEFAULT_LOOK,
   LIMITS,
@@ -74,6 +74,7 @@ interface UserRow {
   look: string;
   banner_id: string | null;
   banner_mime: string | null;
+  tag: string;
 }
 
 export interface UserRecord extends PublicUser {
@@ -199,6 +200,7 @@ const toUser = (r: UserRow): UserRecord => ({
   disabled: r.disabled_at !== null,
   removed: r.removed_at !== null,
   avatarUrl: r.avatar_id ? avatarUrl(r.avatar_id) : null,
+  tag: r.tag,
   status: userStatusSchema.catch("online").parse(r.status),
   activity: r.activity,
   note: r.note,
@@ -225,6 +227,7 @@ export const toPublicUser = (u: UserRecord): PublicUser => ({
   disabled: u.disabled,
   removed: u.removed,
   avatarUrl: u.avatarUrl,
+  tag: u.tag,
   status: u.status,
   activity: u.activity,
   note: u.note,
@@ -317,10 +320,10 @@ export class Store {
     const id = randomUUID();
     this.db
       .prepare(
-        `INSERT INTO users (id, username, display_name, password_hash, role, avatar_color, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (id, username, display_name, password_hash, role, avatar_color, created_at, tag)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, u.username, u.displayName, u.passwordHash, u.role, u.avatarColor, Date.now());
+      .run(id, u.username, u.displayName, u.passwordHash, u.role, u.avatarColor, Date.now(), String(randomInt(10_000)).padStart(4, "0"));
     return this.userById(id)!;
   }
 
@@ -709,6 +712,15 @@ export class Store {
     };
   }
 
+  /** Para o terminal: a roda pelo id ou pelo nome (sem diferenciar maiúsculas). */
+  rodaByNameOrId(nameOrId: string): Roda | null {
+    const byId = this.rodaById(nameOrId);
+    if (byId) return byId;
+    const all = this.db.prepare("SELECT id, name FROM rodas ORDER BY created_at").all() as { id: string; name: string }[];
+    const hit = all.find((r) => r.name.localeCompare(nameOrId, "pt-BR", { sensitivity: "accent" }) === 0);
+    return hit ? this.rodaById(hit.id) : null;
+  }
+
   listRodaIdsFor(userId: string): string[] {
     return (
       this.db.prepare("SELECT roda_id FROM roda_members WHERE user_id = ? ORDER BY joined_at").all(userId) as {
@@ -856,6 +868,28 @@ export class Store {
     return Number(res.changes) > 0;
   }
 
+  /**
+   * Passa a posse: a pessoa nova vira Dono e quem era dono fica com o cargo que ela tinha.
+   * Devolve quem era dono (para mandar o estado novo), ou null se a pessoa não está na roda.
+   */
+  transferOwnership(rodaId: string, toUserId: string): string | null {
+    return transaction(this.db, () => {
+      const owner = this.rolesOf(rodaId).find((r) => r.owner);
+      const target = this.memberRole(rodaId, toUserId);
+      if (!owner || !target || target.owner) return null;
+      const previous = this.db
+        .prepare("SELECT user_id FROM roda_members WHERE roda_id = ? AND role_id = ?")
+        .get(rodaId, owner.id) as { user_id: string } | undefined;
+      if (previous) {
+        this.db
+          .prepare("UPDATE roda_members SET role_id = ? WHERE roda_id = ? AND user_id = ?")
+          .run(target.id, rodaId, previous.user_id);
+      }
+      this.db.prepare("UPDATE roda_members SET role_id = ? WHERE roda_id = ? AND user_id = ?").run(owner.id, rodaId, toUserId);
+      return previous?.user_id ?? "";
+    });
+  }
+
   createRole(rodaId: string, r: { name: string; color: string; perms: Permission[] }): RodaRole {
     const id = randomUUID();
     const { next } = this.db
@@ -969,6 +1003,15 @@ export class Store {
     });
   }
 
+  renameConversation(id: string, name: string): void {
+    this.db.prepare("UPDATE channels SET name = ? WHERE id = ? AND conversation = 'group'").run(name, id);
+  }
+
+  addConversationMembers(id: string, userIds: string[]): void {
+    const add = this.db.prepare("INSERT OR IGNORE INTO channel_members (channel_id, user_id, joined_at) VALUES (?, ?, ?)");
+    transaction(this.db, () => userIds.forEach((u, i) => add.run(id, u, Date.now() + i)));
+  }
+
   /** Marca como lido até a mensagem (nunca volta atrás). Devolve se mudou algo. */
   markRead(channelId: string, userId: string, messageId: number): boolean {
     const res = this.db
@@ -994,6 +1037,22 @@ export class Store {
   }
 
   // ---------- amizades ----------
+
+  /**
+   * Quem a pessoa quis dizer: "nick#1234", "@usuario" ou só o nick (se for único).
+   * Só contas ativas; mais de um resultado = nick repetido, falta o #tag.
+   */
+  findPeople(query: string): UserRecord[] {
+    const q = query.trim();
+    const active = this.listUsers().filter((u) => !u.removed && !u.disabled);
+    const same = (a: string, b: string) => a.localeCompare(b, "pt-BR", { sensitivity: "accent" }) === 0;
+    const tagged = /^(.+)#(\d{4})$/.exec(q);
+    if (tagged) return active.filter((u) => u.tag === tagged[2] && same(u.displayName, tagged[1]!.trim()));
+    const handle = q.replace(/^@/, "").toLowerCase();
+    const byUsername = active.find((u) => u.username === handle);
+    if (byUsername) return [byUsername];
+    return q.startsWith("@") ? [] : active.filter((u) => same(u.displayName, q));
+  }
 
   private friendshipRow(a: string, b: string) {
     return this.db

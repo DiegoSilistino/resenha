@@ -21,7 +21,9 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.post("/api/admin/invites", { preHandler: requireAdmin }, async (req, reply) => {
     const body = parse(createInviteBody, req.body ?? {});
+    if (body.rodaId && !store.rodaById(body.rodaId)) throw badRequest("Roda não encontrada");
     const invite = store.createInvite({
+      rodaId: body.rodaId ?? null,
       code: newInviteCode(),
       role: body.role,
       maxUses: body.maxUses,

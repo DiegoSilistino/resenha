@@ -286,6 +286,10 @@ export const useApp = create<AppState>()((set, get) => ({
       }
       case "roda.upsert":
         return set({ rodas: { ...s.rodas, [event.roda.id]: event.roda } });
+      case "roda.open":
+        return set({ openRodas: [...s.openRodas.filter((r) => r.id !== event.roda.id), event.roda] });
+      case "roda.closed":
+        return set({ openRodas: s.openRodas.filter((r) => r.id !== event.rodaId) });
       case "friend.upsert":
         return set({ friends: { ...s.friends, [event.friend.userId]: event.friend } });
       case "friend.remove": {

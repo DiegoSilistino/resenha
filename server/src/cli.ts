@@ -1,7 +1,7 @@
 /**
  * Manutenção pelo terminal (rode com o servidor parado ou rodando; o SQLite aguenta).
  *
- *   npm run cli -- invite [--admin] [--uses N] [--hours H]
+ *   npm run cli -- invite [--admin] [--uses N] [--hours H] [--roda "Nome da roda"]
  *   npm run cli -- reset-password <usuario>
  *   npm run cli -- users
  */
@@ -21,6 +21,7 @@ async function main() {
       admin: { type: "boolean", default: false },
       uses: { type: "string", default: "1" },
       hours: { type: "string", default: "72" },
+      roda: { type: "string" },
     },
   });
   const [command, arg] = positionals;
@@ -34,14 +35,21 @@ async function main() {
       const hours = Number(values.hours);
       if (!Number.isInteger(uses) || uses < 1) throw new Error("--uses precisa ser um inteiro >= 1");
       if (!Number.isFinite(hours) || hours <= 0) throw new Error("--hours precisa ser > 0");
+      // --roda "Nome" ou id: em qual roda a pessoa entra (sem: a roda principal)
+      const roda = values.roda ? store.rodaByNameOrId(values.roda) : null;
+      if (values.roda && !roda) throw new Error(`Roda "${values.roda}" não existe`);
       const invite = store.createInvite({
         code: newInviteCode(),
         role: values.admin ? "admin" : "member",
         maxUses: uses,
         expiresAt: Date.now() + hours * 3_600_000,
         createdBy: null,
+        rodaId: roda?.id ?? null,
       });
-      console.log(`Convite (${invite.role}, ${uses} uso(s), ${hours} h):\n${config.publicUrl}/convite/${invite.code}`);
+      const where = invite.rodaId ? store.rodaById(invite.rodaId)?.name : null;
+      console.log(
+        `Convite (${invite.role}, ${uses} uso(s), ${hours} h${where ? `, roda ${where}` : ""}):\n${config.publicUrl}/convite/${invite.code}`,
+      );
       break;
     }
     case "reset-password": {

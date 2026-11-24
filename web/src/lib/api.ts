@@ -103,7 +103,8 @@ export const api = {
   voiceToken: (channelId: string) => request<VoiceTokenResponse>("POST", "/api/voice/token", { channelId }),
 
   // amigos
-  addFriend: (username: string) => request<{ friend: FriendEntry }>("POST", "/api/friends", { username }),
+  /** "nick", "nick#1234" ou "@usuario". */
+  addFriend: (who: string) => request<{ friend: FriendEntry }>("POST", "/api/friends", { who }),
   acceptFriend: (userId: string) => request<{ friend: FriendEntry }>("POST", `/api/friends/${userId}/accept`),
   removeFriend: (userId: string) => request<void>("DELETE", `/api/friends/${userId}`),
   friendLink: () => request<{ code: string }>("GET", "/api/friends/link"),
@@ -115,6 +116,10 @@ export const api = {
     request<{ conversation: Conversation }>("POST", "/api/conversations", name ? { userIds, name } : { userIds }),
   markConversationRead: (id: string, messageId: number) =>
     request<void>("POST", `/api/conversations/${id}/read`, { messageId }),
+  renameConversation: (id: string, name: string) =>
+    request<{ conversation: Conversation }>("PATCH", `/api/conversations/${id}`, { name }),
+  addConversationMembers: (id: string, userIds: string[]) =>
+    request<{ conversation: Conversation }>("POST", `/api/conversations/${id}/members`, { userIds }),
   leaveConversation: (id: string) => request<void>("DELETE", `/api/conversations/${id}/members/me`),
 
   // rodas
@@ -125,6 +130,7 @@ export const api = {
   deleteRoda: (id: string) => request<void>("DELETE", `/api/rodas/${id}`),
   joinRoda: (id: string) => request<void>("POST", `/api/rodas/${id}/join`),
   leaveRoda: (id: string) => request<void>("DELETE", `/api/rodas/${id}/members/me`),
+  transferOwner: (id: string, userId: string) => request<{ roda: Roda }>("POST", `/api/rodas/${id}/owner`, { userId }),
   kickMember: (id: string, userId: string) => request<void>("DELETE", `/api/rodas/${id}/members/${userId}`),
   setMemberRole: (id: string, userId: string, roleId: string) =>
     request<{ roda: Roda }>("PATCH", `/api/rodas/${id}/members/${userId}`, { roleId }),
@@ -150,7 +156,7 @@ export const api = {
   deleteChannel: (id: string) => request<void>("DELETE", `/api/channels/${id}`),
 
   invites: () => request<{ invites: InviteWithUrl[] }>("GET", "/api/admin/invites"),
-  createInvite: (b: { role: Role; maxUses: number; expiresInHours: number | null }) =>
+  createInvite: (b: { role: Role; maxUses: number; expiresInHours: number | null; rodaId?: string }) =>
     request<{ invite: InviteWithUrl }>("POST", "/api/admin/invites", b),
   revokeInvite: (code: string) => request<void>("DELETE", `/api/admin/invites/${encodeURIComponent(code)}`),
   setUserDisabled: (id: string, disabled: boolean) =>

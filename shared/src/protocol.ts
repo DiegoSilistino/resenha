@@ -99,6 +99,8 @@ export const createInviteBody = z.object({
   maxUses: z.number().int().min(1).max(50).default(1),
   /** null = não expira */
   expiresInHours: z.number().int().min(1).max(24 * 90).nullable().default(72),
+  /** Roda em que a pessoa entra (sem: a roda principal). */
+  rodaId: id.optional(),
 });
 
 export const channelNameSchema = z
@@ -215,13 +217,17 @@ export interface HelloEvent {
 }
 
 export const friendRequestBody = z.object({
-  /** Usuário (com ou sem @). */
-  username: z
-    .string()
-    .trim()
-    .transform((s) => s.replace(/^@/, "").toLowerCase())
-    .pipe(usernameSchema),
+  /** Quem: "nick", "nick#1234" ou "@usuario". */
+  who: z.string().trim().min(1, "Digite o nick ou o @usuário").max(LIMITS.displayNameMax + 6),
 });
+
+export const renameConversationBody = z.object({ name: z.string().trim().min(1, "Dê um nome ao grupo").max(LIMITS.channelNameMax) });
+
+export const addConversationMembersBody = z.object({
+  userIds: z.array(id).min(1, "Escolha alguém").max(LIMITS.groupMax - 1),
+});
+
+export const transferOwnerBody = z.object({ userId: id });
 
 export const createConversationBody = z.object({
   /** Com quem (sem contar você): 1 pessoa = conversa a dois; mais = grupo. */
@@ -344,7 +350,11 @@ export type ServerEvent =
   | { type: "friend.upsert"; friend: FriendEntry }
   | { type: "friend.remove"; userId: string }
   /** Só para quem faz parte (quem entra ou sai recebe um "hello" novo). */
-  | { type: "roda.upsert"; roda: Roda };
+  | { type: "roda.upsert"; roda: Roda }
+  /** Para todos: uma roda aberta apareceu ou mudou (quem já está nela ignora). */
+  | { type: "roda.open"; roda: RodaSummary }
+  /** Para todos: a roda deixou de ser aberta ou foi apagada. */
+  | { type: "roda.closed"; rodaId: string };
 
 export interface ApiErrorBody {
   error: string;

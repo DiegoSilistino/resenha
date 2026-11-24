@@ -13,6 +13,8 @@ export interface PublicUser {
   removed: boolean;
   /** Foto de perfil (URL relativa); null = iniciais sobre a cor do avatar. */
   avatarUrl: string | null;
+  /** 4 números que separam nicks iguais ("bia#0912"). */
+  tag: string;
   /**
    * Status escolhido. "invisivel" vem só para a própria pessoa e quem lê o protocolo cru:
    * para os outros ela simplesmente não aparece online (o servidor esconde a presença).
