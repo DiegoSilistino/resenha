@@ -16,11 +16,14 @@ export interface Tone {
   type?: OscillatorType;
   /** Volume relativo da nota (1 = normal). */
   gain?: number;
+  /** Tempo até o volume máximo, em segundos (padrão 6 ms). Mais longo = começo macio, sem "clique". */
+  attack?: number;
 }
 
+const D5 = 587.33;
 const E5 = 659.25;
+const G5 = 783.99;
 const B5 = 987.77;
-const E6 = 1318.51;
 
 export const SOUNDS: Record<SoundName, Tone[]> = {
   join: [
@@ -46,10 +49,11 @@ export const SOUNDS: Record<SoundName, Tone[]> = {
     { at: 0, dur: 0.12, from: E5 * 2, gain: 0.7 },
     { at: 0.1, dur: 0.22, from: B5 * 2, gain: 0.7 },
   ],
-  // "plim" de mensagem: nota aguda com um harmônico leve, como um sininho
+  // aviso de mensagem: "ti-dum" macio na região média (sol, depois ré), começo suave e sem harmônico agudo,
+  // para não irritar quem recebe muitas mensagens
   message: [
-    { at: 0, dur: 0.28, from: E6, gain: 0.8 },
-    { at: 0, dur: 0.2, from: E6 * 2, gain: 0.12 },
+    { at: 0, dur: 0.16, from: G5, to: 740, gain: 0.5, attack: 0.012 },
+    { at: 0.07, dur: 0.26, from: D5, gain: 0.45, attack: 0.02 },
   ],
 };
 
@@ -111,7 +115,7 @@ export function playSound(name: SoundName): void {
       if (tone.to) osc.frequency.exponentialRampToValueAtTime(tone.to, t0 + tone.at + tone.dur);
       const peak = tone.gain ?? 1;
       env.gain.setValueAtTime(0.0001, t0 + tone.at);
-      env.gain.linearRampToValueAtTime(peak, t0 + tone.at + 0.006);
+      env.gain.linearRampToValueAtTime(peak, t0 + tone.at + (tone.attack ?? 0.006));
       env.gain.exponentialRampToValueAtTime(0.0001, t0 + tone.at + tone.dur);
       osc.connect(env).connect(master);
       osc.start(t0 + tone.at);

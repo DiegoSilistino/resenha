@@ -16,6 +16,13 @@ describe("sons", () => {
     }
   });
 
+  it("aviso de mensagem é suave: nada acima de 1 kHz e começo sem clique", () => {
+    for (const t of SOUNDS.message) {
+      expect(Math.max(t.from, t.to ?? t.from)).toBeLessThan(1000);
+      expect(t.attack ?? 0.006).toBeGreaterThanOrEqual(0.01);
+    }
+  });
+
   it("pares opostos soam espelhados: entrar sobe, sair desce", () => {
     const pitch = (n: SoundName) => SOUNDS[n].map((t) => t.to ?? t.from);
     expect(pitch("join")[0]!).toBeLessThan(pitch("join").at(-1)!);
