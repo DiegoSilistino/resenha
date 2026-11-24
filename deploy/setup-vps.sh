@@ -95,6 +95,14 @@ for _ in $(seq 1 60); do
 done
 docker compose ps
 
+# Sem a chave o app sobe normal, só que sem GIFs (no chat e na capa do perfil): avisa aqui.
+if [[ -z "$(docker compose exec -T app printenv GIPHY_API_KEY 2>/dev/null || true)" ]]; then
+  warn "GIFs desligados: o app está sem GIPHY_API_KEY no .env. Para ligar, troque SUA_CHAVE e rode:"
+  cat <<'EOF'
+  sed -i '/^GIPHY_API_KEY=/d' .env && printf '\nGIPHY_API_KEY=SUA_CHAVE\n' >> .env && bash deploy/setup-vps.sh
+EOF
+fi
+
 INVITE="$(docker compose logs app 2>/dev/null | grep -oE 'https://[^ ]+/convite/[A-Za-z0-9_-]+' | tail -n1 || true)"
 printf '\n\033[1;32mPronto!\033[0m Abra https://%s\n' "$DOMAIN"
 if [[ -n "$INVITE" ]]; then
