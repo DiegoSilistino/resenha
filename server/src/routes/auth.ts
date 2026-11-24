@@ -6,6 +6,7 @@ import { badRequest, currentUser, HttpError, notFound, parse, unauthorized } fro
 import { dummyPasswordHash, hashPassword, verifyPassword } from "../auth/password.ts";
 import { createSession, SESSION_COOKIE, SESSION_TTL_MS } from "../auth/sessions.ts";
 import { toPublicUser } from "../store.ts";
+import { publishUser } from "../realtime/socket.ts";
 import { joinViaInvite } from "./rodas.ts";
 
 export function isInviteUsable(invite: Invite | null, now = Date.now()): invite is Invite {
@@ -118,7 +119,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
       }
     });
 
-    hub.broadcast({ type: "user.upsert", user: toPublicUser(user) });
+    publishUser(ctx, toPublicUser(user));
     // com convite, a conta nasce já dentro da roda dele (ou com o pedido feito, se precisa de aprovação);
     // sem convite, a pessoa entra nas rodas abertas ou espera alguém chamar
     const invite = body.code === undefined ? null : store.inviteByCode(body.code);

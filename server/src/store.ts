@@ -324,6 +324,45 @@ export class Store {
     return (this.db.prepare("SELECT * FROM users ORDER BY display_name COLLATE NOCASE").all() as unknown as UserRow[]).map(toUser);
   }
 
+  /**
+   * Rede privada: com quem a pessoa tem relação. Ela mesma, amizades e pedidos, quem divide uma
+   * roda (ou pediu para entrar numa roda dela) e quem divide uma conversa. É simétrico: se A
+   * conhece B, B conhece A. Estranhos não aparecem um para o outro.
+   */
+  relatedUserIds(userId: string): Set<string> {
+    const rows = this.db
+      .prepare(
+        `SELECT ? AS id
+         UNION SELECT friend_id FROM friendships WHERE user_id = ?
+         UNION SELECT user_id FROM friendships WHERE friend_id = ?
+         UNION SELECT b.user_id FROM roda_members a JOIN roda_members b ON b.roda_id = a.roda_id WHERE a.user_id = ?
+         UNION SELECT r.user_id FROM roda_members a JOIN roda_requests r ON r.roda_id = a.roda_id WHERE a.user_id = ?
+         UNION SELECT a.user_id FROM roda_requests r JOIN roda_members a ON a.roda_id = r.roda_id WHERE r.user_id = ?
+         UNION SELECT b.user_id FROM channel_members a JOIN channel_members b ON b.channel_id = a.channel_id WHERE a.user_id = ?`,
+      )
+      .all(userId, userId, userId, userId, userId, userId, userId) as { id: string }[];
+    return new Set(rows.map((r) => r.id));
+  }
+
+  /** Quem escreveu nas salas das rodas da pessoa: o nome continua nas mensagens antigas de quem já saiu. */
+  rodaAuthorIds(userId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT m.author_id AS id FROM roda_members rm
+         JOIN channels c ON c.roda_id = rm.roda_id JOIN messages m ON m.channel_id = c.id
+         WHERE rm.user_id = ?`,
+      )
+      .all(userId) as { id: string }[];
+    return rows.map((r) => r.id);
+  }
+
+  /** Quem recebe as mudanças de perfil e o online da pessoa: quem a conhece e os admins (que veem todo mundo). */
+  audienceOf(userId: string): Set<string> {
+    const ids = this.relatedUserIds(userId);
+    for (const r of this.db.prepare("SELECT id FROM users WHERE role = 'admin'").all() as { id: string }[]) ids.add(r.id);
+    return ids;
+  }
+
   createUser(u: {
     username: string;
     displayName: string;

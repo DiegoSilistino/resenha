@@ -19,6 +19,14 @@ export class Hub {
   private readonly onPresence: ((userId: string, online: boolean) => void)[] = [];
   /** Quem escolheu "Invisível": conectado, mas os outros não o veem online. */
   private readonly hidden = new Set<string>();
+  /** Quem fica sabendo que a pessoa entrou ou saiu (rede privada: só quem a conhece). Sem isso, todos. */
+  presenceAudience: ((userId: string) => Iterable<string>) | null = null;
+
+  private announce(userId: string, online: boolean, exceptConnId?: string): void {
+    const event: ServerEvent = { type: "presence", userId, online };
+    if (this.presenceAudience) this.publish([...this.presenceAudience(userId)], event, exceptConnId);
+    else this.broadcast(event, exceptConnId);
+  }
 
   onPresenceChange(fn: (userId: string, online: boolean) => void) {
     this.onPresence.push(fn);
@@ -28,7 +36,7 @@ export class Hub {
     const wasOnline = this.isOnline(conn.userId);
     this.conns.set(conn.id, conn);
     if (!wasOnline) {
-      if (!this.hidden.has(conn.userId)) this.broadcast({ type: "presence", userId: conn.userId, online: true }, conn.id);
+      if (!this.hidden.has(conn.userId)) this.announce(conn.userId, true, conn.id);
       for (const fn of this.onPresence) fn(conn.userId, true);
     }
   }
@@ -38,7 +46,7 @@ export class Hub {
     if (!conn) return undefined;
     this.conns.delete(connId);
     if (!this.isOnline(conn.userId)) {
-      if (!this.hidden.has(conn.userId)) this.broadcast({ type: "presence", userId: conn.userId, online: false });
+      if (!this.hidden.has(conn.userId)) this.announce(conn.userId, false);
       for (const fn of this.onPresence) fn(conn.userId, false);
     }
     return conn;
@@ -49,7 +57,7 @@ export class Hub {
     if (this.hidden.has(userId) === hidden) return;
     if (hidden) this.hidden.add(userId);
     else this.hidden.delete(userId);
-    if (this.isOnline(userId)) this.broadcast({ type: "presence", userId, online: !hidden });
+    if (this.isOnline(userId)) this.announce(userId, !hidden);
   }
 
   get(connId: string): Connection | undefined {

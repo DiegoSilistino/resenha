@@ -16,7 +16,7 @@ import {
 } from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, forbidden, notFound, parse } from "../http.ts";
-import { buildHello } from "../realtime/socket.ts";
+import { buildHello, introduce } from "../realtime/socket.ts";
 import { toRodaSummary, type UserRecord } from "../store.ts";
 import { inviteUrl, newInviteCode } from "./admin.ts";
 import { readBannerUpload, receiveAvatar, writeBanner } from "./avatars.ts";
@@ -54,10 +54,12 @@ export function joinViaInvite(ctx: AppContext, user: UserRecord, invite: Invite)
   if (store.memberRole(invite.rodaId, user.id)) return "already";
   if (invite.approval) {
     store.addRequest(invite.rodaId, user.id);
+    introduce(ctx, user.id); // quem vai aprovar precisa ver quem pediu
     publishRoda(ctx, invite.rodaId);
     return "requested";
   }
   store.addMember(invite.rodaId, user.id, user.role === "admin");
+  introduce(ctx, user.id); // quem já estava na roda passa a ver quem chegou
   publishRoda(ctx, invite.rodaId);
   resync(ctx, [user.id]);
   return "joined";
@@ -198,6 +200,7 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
     const roda = store.rodaById(req.params.id);
     if (!roda || roda.privacy !== "aberta") throw notFound("Roda não encontrada");
     store.addMember(roda.id, user.id, user.role === "admin");
+    introduce(ctx, user.id);
     publishRoda(ctx, roda.id);
     resync(ctx, [user.id]);
     return reply.status(204).send();
@@ -356,6 +359,7 @@ export function registerRodaRoutes(app: FastifyInstance, ctx: AppContext) {
       const target = store.userById(req.params.userId);
       if (!roda.requests.includes(req.params.userId) || !target) throw notFound("Pedido não encontrado");
       store.addMember(roda.id, target.id, target.role === "admin");
+      introduce(ctx, target.id);
       publishRoda(ctx, roda.id);
       resync(ctx, [target.id]);
       return reply.status(204).send();

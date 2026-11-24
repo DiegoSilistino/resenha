@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WS_CLOSE_SESSION_REVOKED, WS_CLOSE_UNAUTHORIZED } from "@resenha/shared";
 import {
+  cookieHeader,
   createTestApp,
   listen,
   registerUser,
@@ -120,6 +121,40 @@ describe("presença e chat", () => {
     await b.waitFor("hello");
     await t.app.inject({ method: "POST", url: `/api/admin/users/${bob.id}/disable`, headers: { cookie: admin.cookie } });
     expect(await b.waitClose()).toBe(WS_CLOSE_SESSION_REVOKED);
+  });
+});
+
+describe("rede privada", () => {
+  it("quem não tem relação não aparece (lista, online e perfil); um pedido de amizade apresenta os dois", async () => {
+    // cadastro aberto: sem convite, a conta nasce fora de qualquer roda
+    const res = await t.app.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { username: "estranho", displayName: "Estranho", password: "senha-forte-123" },
+    });
+    const stranger: TestUser = { id: res.json().me.id, username: "estranho", cookie: cookieHeader(res) };
+
+    const a = await connect(alice);
+    expect((await a.waitFor("hello")).users.map((u) => u.id)).not.toContain(stranger.id);
+    const s = await connect(stranger);
+    const hello = await s.waitFor("hello");
+    expect(hello.users.map((u) => u.id)).toEqual([stranger.id]);
+    expect(hello.online).not.toContain(alice.id);
+
+    // alice muda o perfil e o estranho não fica sabendo; alice também não vê o estranho entrar
+    await t.app.inject({ method: "PATCH", url: "/api/me", headers: { cookie: alice.cookie }, payload: { note: "oi" } });
+    for (const sock of [a, s]) {
+      sock.send({ type: "ping", t0: 1 });
+      await sock.waitFor("pong"); // o pong chega depois de tudo que o servidor já mandou
+    }
+    expect(s.events.some((e) => e.type === "user.upsert")).toBe(false);
+    expect(a.events.some((e) => e.type === "presence" && e.userId === stranger.id)).toBe(false);
+
+    // pedido de amizade pelo nome: os dois passam a se ver, com o online
+    await t.app.inject({ method: "POST", url: "/api/friends", headers: { cookie: stranger.cookie }, payload: { who: "alice" } });
+    expect((await a.waitFor("user.upsert", (e) => e.user.id === stranger.id)).user.username).toBe("estranho");
+    expect((await a.waitFor("presence", (e) => e.userId === stranger.id)).online).toBe(true);
+    expect((await s.waitFor("user.upsert", (e) => e.user.id === alice.id)).user.username).toBe("alice");
   });
 });
 

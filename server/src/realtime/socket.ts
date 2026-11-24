@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
-import { clientMessage, LIMITS, WS_CLOSE_UNAUTHORIZED, type ClientMessage, type ServerEvent } from "@resenha/shared";
+import {
+  clientMessage,
+  LIMITS,
+  WS_CLOSE_UNAUTHORIZED,
+  type ClientMessage,
+  type PublicUser,
+  type ServerEvent,
+} from "@resenha/shared";
 import type { AppContext } from "../app.ts";
 import { isSameOrigin } from "../app.ts";
 import { toPublicUser, type UserRecord } from "../store.ts";
@@ -23,12 +30,19 @@ export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
   const { hub, store, voice, watch } = ctx;
   const visible = <T,>(byChannel: Record<string, T>) =>
     Object.fromEntries(Object.entries(byChannel).filter(([channelId]) => store.canAccess(user.id, channelId)));
+  // Rede privada: só quem a pessoa conhece (amigos, rodas, conversas) e os autores das salas dela.
+  // O admin do servidor vê todo mundo, para administrar as contas.
+  const related = user.role === "admin" ? null : store.relatedUserIds(user.id);
+  const known = related && new Set([...related, ...store.rodaAuthorIds(user.id)]);
   return {
     type: "hello",
     me: toPublicUser(user),
-    users: store.listUsers().map(toPublicUser),
+    users: store
+      .listUsers()
+      .filter((u) => !known || known.has(u.id))
+      .map(toPublicUser),
     channels: store.listChannelsFor(user),
-    online: hub.onlineUserIds(),
+    online: hub.onlineUserIds().filter((id) => !related || related.has(id)),
     voice: visible(voice.snapshot()),
     watch: visible(watch.snapshot()),
     conversations: store.listConversations(user.id),
@@ -41,6 +55,23 @@ export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
     sounds: store.listSounds(),
     ...(user.role === "admin" ? { latestErrorId: store.latestClientErrorId() } : {}),
   };
+}
+
+/** Mudança de perfil: só chega a quem conhece a pessoa (e aos admins). */
+export function publishUser(ctx: AppContext, user: PublicUser): void {
+  ctx.hub.sendToUsers(ctx.store.audienceOf(user.id), { type: "user.upsert", user });
+}
+
+/**
+ * Pessoas que acabaram de se conhecer (amizade, roda, grupo): quem agora conhece `userId` recebe
+ * o perfil e o online dela. Chame para cada lado que precisa ver o outro.
+ */
+export function introduce(ctx: AppContext, userId: string): void {
+  const user = ctx.store.userById(userId);
+  if (!user) return;
+  const audience = ctx.store.audienceOf(userId);
+  ctx.hub.sendToUsers(audience, { type: "user.upsert", user: toPublicUser(user) });
+  if (ctx.hub.onlineUserIds().includes(userId)) ctx.hub.sendToUsers(audience, { type: "presence", userId, online: true });
 }
 
 export function registerSocket(app: FastifyInstance, ctx: AppContext) {

@@ -10,6 +10,7 @@ import {
 } from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, notFound, parse } from "../http.ts";
+import { introduce } from "../realtime/socket.ts";
 import type { UserRecord } from "../store.ts";
 
 /** Amizades e conversas privadas (a dois e em grupo). */
@@ -20,6 +21,9 @@ export function registerSocialRoutes(app: FastifyInstance, ctx: AppContext) {
 
   /** Cada uma das duas pessoas recebe a amizade do ponto de vista dela (ou a remoção). */
   const notifyFriendship = (a: string, b: string) => {
+    // pedido ou amizade nova: cada um passa a ver o perfil e o online do outro (antes do aviso da amizade)
+    introduce(ctx, a);
+    introduce(ctx, b);
     for (const [viewer, other] of [
       [a, b],
       [b, a],
@@ -116,6 +120,8 @@ export function registerSocialRoutes(app: FastifyInstance, ctx: AppContext) {
         throw badRequest(`Um grupo tem no máximo ${LIMITS.groupMax} pessoas, contando você`);
       }
       const conversation = store.createConversation("group", body.name || "Grupo", [me.id, ...ids]);
+      // no grupo, os amigos de quem criou passam a se ver entre si
+      for (const id of conversation.memberIds) introduce(ctx, id);
       publishConversation(conversation);
       return reply.status(201).send({ conversation });
     },
@@ -152,6 +158,7 @@ export function registerSocialRoutes(app: FastifyInstance, ctx: AppContext) {
       }
       store.addConversationMembers(c.id, ids);
       const conversation = store.conversationById(c.id)!;
+      for (const id of conversation.memberIds) introduce(ctx, id);
       publishConversation(conversation);
       return { conversation };
     },

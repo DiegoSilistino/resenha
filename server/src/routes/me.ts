@@ -4,6 +4,7 @@ import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, parse } from "../http.ts";
 import { hashPassword, verifyPassword } from "../auth/password.ts";
 import { toPublicUser } from "../store.ts";
+import { publishUser } from "../realtime/socket.ts";
 
 export function registerMeRoutes(app: FastifyInstance, ctx: AppContext) {
   const { store, hub } = ctx;
@@ -13,7 +14,7 @@ export function registerMeRoutes(app: FastifyInstance, ctx: AppContext) {
     const user = store.updateUserProfile(currentUser(req).id, body);
     const me = toPublicUser(user);
     if (body.status) hub.setHidden(user.id, body.status === "invisivel");
-    hub.broadcast({ type: "user.upsert", user: me });
+    publishUser(ctx, me);
     return { me };
   });
 

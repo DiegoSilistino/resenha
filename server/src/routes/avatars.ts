@@ -5,6 +5,7 @@ import { bannerGifBody, LIMITS } from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, HttpError, notFound, parse } from "../http.ts";
 import { toPublicUser } from "../store.ts";
+import { publishUser } from "../realtime/socket.ts";
 import { bannerInfo, imageInfo } from "../uploads/image.ts";
 
 const UUID = /^[0-9a-f-]{36}$/;
@@ -77,7 +78,7 @@ export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
       const previous = store.setAvatar(user.id, await receiveAvatar(req, ctx));
       if (previous) await avatars.remove([previous]);
       const me = toPublicUser(store.userById(user.id)!);
-      hub.broadcast({ type: "user.upsert", user: me });
+      publishUser(ctx, me);
       return { me };
     },
   );
@@ -87,7 +88,7 @@ export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
     const previous = store.setAvatar(user.id, null);
     if (previous) await avatars.remove([previous]);
     const me = toPublicUser(store.userById(user.id)!);
-    hub.broadcast({ type: "user.upsert", user: me });
+    publishUser(ctx, me);
     return { me };
   });
 
@@ -123,7 +124,7 @@ export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
     const { look } = store.userById(userId)!;
     if (look.banner !== "imagem") store.updateUserProfile(userId, { look: { ...look, banner: "imagem" } });
     const me = toPublicUser(store.userById(userId)!);
-    hub.broadcast({ type: "user.upsert", user: me });
+    publishUser(ctx, me);
     return { me };
   }
 
@@ -132,7 +133,7 @@ export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
     const previous = store.setBanner(user.id, null);
     if (previous) await avatars.remove([previous]);
     const me = toPublicUser(store.userById(user.id)!);
-    hub.broadcast({ type: "user.upsert", user: me });
+    publishUser(ctx, me);
     return { me };
   });
 

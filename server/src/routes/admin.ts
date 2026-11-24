@@ -5,6 +5,7 @@ import { createInviteBody, WS_CLOSE_SESSION_REVOKED } from "@resenha/shared";
 import { requireAdmin, type AppContext } from "../app.ts";
 import { badRequest, currentUser, notFound, parse } from "../http.ts";
 import { toPublicUser } from "../store.ts";
+import { publishUser } from "../realtime/socket.ts";
 
 const roleBody = z.object({ role: z.enum(["admin", "member"]) });
 
@@ -69,7 +70,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       const user = store.setUserDisabled(req.params.id, true)!;
       await disconnectEverywhere(user.id, "conta desativada");
       const pub = toPublicUser(user);
-      hub.broadcast({ type: "user.upsert", user: pub });
+      publishUser(ctx, pub);
       return { user: pub };
     },
   );
@@ -89,7 +90,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       const images = [removed.avatarId, removed.bannerId].filter((id): id is string => !!id);
       if (images.length) await ctx.avatars.remove(images);
       if (removed.orphanAttachmentIds.length) await ctx.uploads.remove(removed.orphanAttachmentIds);
-      hub.broadcast({ type: "user.upsert", user: toPublicUser(removed.user) });
+      publishUser(ctx, toPublicUser(removed.user));
       return reply.status(204).send();
     },
   );
@@ -102,7 +103,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       const user = store.setUserDisabled(req.params.id, false);
       if (!user) throw notFound("Usuário não encontrado");
       const pub = toPublicUser(user);
-      hub.broadcast({ type: "user.upsert", user: pub });
+      publishUser(ctx, pub);
       return { user: pub };
     },
   );
@@ -119,7 +120,7 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       const user = store.setUserRole(req.params.id, role);
       if (!user) throw notFound("Usuário não encontrado");
       const pub = toPublicUser(user);
-      hub.broadcast({ type: "user.upsert", user: pub });
+      publishUser(ctx, pub);
       return { user: pub };
     },
   );
