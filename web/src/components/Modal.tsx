@@ -22,6 +22,8 @@ export function Modal({ title, onClose, children, wide, bare }: Props) {
     if (!dialog) return;
     dialog.showModal();
     const onCancel = (e: Event) => {
+      // o "cancel" de um <input type="file"> (fechar a janela de arquivos) também sobe até aqui
+      if (e.target !== dialog) return;
       e.preventDefault();
       closeRef.current();
     };
