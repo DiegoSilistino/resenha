@@ -1975,6 +1975,13 @@ input[type="range"] {
   gap: 8px;
   margin-top: 6px;
 }
+.message[data-mine] .attachments {
+  justify-content: flex-end;
+}
+/* o limite fica no link: o % da <img> é cíclico e o link ficava com a largura natural da foto, empurrando-a para o meio */
+.attachment-image {
+  max-width: min(400px, 100%);
+}
 .attachment-image img,
 .attachment-video {
   display: block;
