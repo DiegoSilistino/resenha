@@ -7,6 +7,8 @@ import { api, ApiError } from "../lib/api.ts";
 import { shownStatus, statusLine } from "../lib/look.ts";
 import { callFriend, openConversationWith } from "../lib/social.ts";
 import { useApp } from "../state/app.ts";
+import desconfiado from "../assets/mascote/desconfiado.webp";
+import piscando from "../assets/mascote/piscando.webp";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 
@@ -110,7 +112,14 @@ function Requests() {
   const users = useApp((s) => s.users);
   const incoming = Object.values(friends).filter((f) => f.status === "incoming");
   const outgoing = Object.values(friends).filter((f) => f.status === "outgoing");
-  if (incoming.length + outgoing.length === 0) return <p className="empty-card">Nenhum pedido por aqui.</p>;
+  if (incoming.length + outgoing.length === 0) {
+    return (
+      <div className="empty-mascot">
+        <img src={desconfiado} alt="" width={401} height={480} decoding="async" />
+        <p>Nenhum pedido por aqui.</p>
+      </div>
+    );
+  }
   return (
     <>
       {incoming.length > 0 && (
@@ -210,6 +219,7 @@ function AddFriend() {
 
   return (
     <div className="add-friend">
+      <img className="add-friend-mascot" src={piscando} alt="" width={418} height={480} decoding="async" />
       <form className="card add-friend-card" onSubmit={submit}>
         <h2 className="card-title">Chamar alguém</h2>
         <p className="muted small-note">Digite o nick ou nick#tag (o #tag aparece no perfil). Se o nick for único, o #tag é opcional; o @usuário também serve.</p>

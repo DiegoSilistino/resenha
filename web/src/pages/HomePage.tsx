@@ -5,6 +5,7 @@ import { Avatar } from "../components/Avatar.tsx";
 import { Nick } from "../components/Nick.tsx";
 import { statusLine } from "../lib/look.ts";
 import { openConversationWith } from "../lib/social.ts";
+import guarana from "../assets/mascote/guarana.webp";
 import { useApp } from "../state/app.ts";
 import { useUi } from "../state/ui.ts";
 import { preloadVoice } from "../voice/controller.ts";
@@ -75,6 +76,7 @@ export function HomePage() {
           )}
         </section>
 
+        <div className="home-row">
         <section className="page-section" aria-labelledby="online-title">
           <div className="section-head">
             <h2 id="online-title" className="section-title">
@@ -107,6 +109,10 @@ export function HomePage() {
             <p className="empty-card">Quando alguém abrir o {APP_NAME}, aparece aqui.</p>
           )}
         </section>
+        <figure className="mascot-card">
+          <img src={guarana} alt="" width={485} height={640} decoding="async" />
+        </figure>
+        </div>
       </div>
     </main>
   );

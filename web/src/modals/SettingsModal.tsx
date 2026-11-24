@@ -23,6 +23,7 @@ import { speechSupported } from "../voice/speech.ts";
 import { AvatarEditor } from "./AvatarEditor.tsx";
 import { MicSensitivity } from "./MicSensitivity.tsx";
 import { ProfileCardView } from "./ProfileCard.tsx";
+import comemorando from "../assets/mascote/comemorando.webp";
 
 const TABS = [
   { id: "profile", label: "Perfil" },
@@ -113,6 +114,12 @@ function ProfileTab() {
   return (
     <form className="profile-editor" onSubmit={save}>
       <div className="form">
+        <div className="all-free">
+          <img src={comemorando} alt="" width={480} height={437} decoding="async" />
+          <p>
+            <strong>Tudo liberado.</strong> Capa com GIF, molduras, nick em degradê e fontes: tudo de graça, para todo mundo.
+          </p>
+        </div>
         <fieldset className="field">
           <legend>Foto de perfil</legend>
           <AvatarEditor onDone={() => undefined} />

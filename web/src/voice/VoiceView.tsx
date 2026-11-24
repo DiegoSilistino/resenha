@@ -20,6 +20,7 @@ import { Avatar } from "../components/Avatar.tsx";
 import { ChatPanel } from "../chat/ChatPanel.tsx";
 import { BackToRoda } from "../layout/BackToRoda.tsx";
 import { useApp, useChannelPerm } from "../state/app.ts";
+import dormindo from "../assets/mascote/dormindo.webp";
 import { useSettings } from "../state/settings.ts";
 import { SearchButton } from "../search/SearchButton.tsx";
 import { useUi } from "../state/ui.ts";
@@ -134,7 +135,10 @@ function JoinCard({ channel }: { channel: Channel }) {
           </p>
         </>
       ) : (
-        <p>Ninguém por aqui ainda. Entre e chame a turma.</p>
+        <>
+          <img className="join-mascot" src={dormindo} alt="" width={480} height={408} decoding="async" />
+          <p>Ninguém na call ainda. Entre e chame a turma.</p>
+        </>
       )}
       {otherChannel && <p className="join-note">Você está em {otherChannel.name}. Entrar aqui troca de canal.</p>}
       <button
