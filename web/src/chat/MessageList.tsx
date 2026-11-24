@@ -3,7 +3,7 @@ import { ArrowDown } from "lucide-react";
 import type { Channel, Message } from "@resenha/shared";
 import { api } from "../lib/api.ts";
 import { formatDay, sameDay } from "../lib/format.ts";
-import { useApp } from "../state/app.ts";
+import { displayNameOf, useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { MessageItem } from "./MessageItem.tsx";
@@ -146,7 +146,16 @@ export function MessageList({ channel }: { channel: Channel }) {
         <div ref={content} className="messages-inner">
           {state?.loaded && !state.hasMore && (
             <div className="channel-start">
-              {channel.kind === "voice" ? (
+              {channel.conversation ? (
+                <>
+                  <h2>{channel.conversation === "dm" ? `Você e ${channel.name}` : channel.name}</h2>
+                  <p>
+                    {channel.conversation === "dm"
+                      ? "Conversa privada. Só vocês dois veem."
+                      : "Grupo privado. Só quem está aqui vê as mensagens."}
+                  </p>
+                </>
+              ) : channel.kind === "voice" ? (
                 <>
                   <h2>Chat de {channel.name}</h2>
                   <p>Para mandar link, print ou GIF durante a call. Fica salvo como num canal de texto.</p>
@@ -174,6 +183,7 @@ export function MessageList({ channel }: { channel: Channel }) {
               </div>
             );
           })}
+          {channel.conversation && <ReadReceipt channelId={channel.id} last={items.at(-1)} />}
         </div>
       </div>
       {showJump && (
@@ -183,6 +193,23 @@ export function MessageList({ channel }: { channel: Channel }) {
       )}
     </div>
   );
+}
+
+/** "Visto" embaixo da sua última mensagem, quando os outros da conversa já leram até ela. */
+function ReadReceipt({ channelId, last }: { channelId: string; last: Message | undefined }) {
+  const conv = useApp((s) => s.conversations[channelId]);
+  const me = useApp((s) => (s.me ? s.me.id : null));
+  const users = useApp((s) => s.users);
+  if (!conv || !last || last.authorId !== me) return null;
+  const seen = conv.memberIds.filter((id) => id !== me && (conv.reads[id] ?? 0) >= last.id);
+  if (seen.length === 0) return null;
+  const text =
+    conv.type === "dm"
+      ? "Visto"
+      : seen.length === conv.memberIds.length - 1
+        ? "Visto por todos"
+        : `Visto por ${seen.map((id) => displayNameOf(users, id)).join(", ")}`;
+  return <p className="read-receipt">{text}</p>;
 }
 
 function isGrouped(prev: Message | undefined, m: Message): boolean {

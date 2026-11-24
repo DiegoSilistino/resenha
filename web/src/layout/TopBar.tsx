@@ -1,7 +1,7 @@
 import { Link, NavLink, useLocation } from "react-router";
 import { APP_NAME } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
-import { useApp } from "../state/app.ts";
+import { unreadConversations, useApp } from "../state/app.ts";
 import { useUi } from "../state/ui.ts";
 import { CallPill } from "./CallPill.tsx";
 
@@ -13,12 +13,30 @@ function useMentionTotal() {
 /** As abas do app: no computador ficam no topo; no celular, no menu de baixo. */
 function Tabs({ className }: { className: string }) {
   const mentions = useMentionTotal();
+  const conversations = useApp(unreadConversations);
+  const requests = useApp((s) => Object.values(s.friends).filter((f) => f.status === "incoming").length);
   // Dentro de um canal você está "na roda" (por enquanto só existe uma).
   const inRoda = useLocation().pathname.startsWith("/c/");
   return (
     <nav className={className} aria-label="Seções">
       <NavLink to="/" end className="tab-pill">
         Início
+      </NavLink>
+      <NavLink to="/conversas" className="tab-pill">
+        Conversas
+        {conversations > 0 && (
+          <span className="tab-badge" aria-label={`${conversations} com mensagem nova`}>
+            {conversations}
+          </span>
+        )}
+      </NavLink>
+      <NavLink to="/amigos" className="tab-pill">
+        Amigos
+        {requests > 0 && (
+          <span className="tab-badge" aria-label={`${requests} ${requests === 1 ? "pedido" : "pedidos"} de amizade`}>
+            {requests}
+          </span>
+        )}
       </NavLink>
       <NavLink to="/roda" className={({ isActive }) => `tab-pill${isActive || inRoda ? " active" : ""}`}>
         Rodas

@@ -247,8 +247,20 @@ export function Composer({ channel, ref }: { channel: Channel; ref: Ref<Composer
           className="composer-input"
           rows={1}
           value={text}
-          placeholder={channel.kind === "voice" ? "Mensagem no chat" : `Mensagem em #${channel.name}`}
-          aria-label={channel.kind === "voice" ? `Mensagem no chat de ${channel.name}` : `Mensagem em #${channel.name}`}
+          placeholder={
+            channel.conversation
+              ? `Mensagem para ${channel.name}`
+              : channel.kind === "voice"
+                ? "Mensagem no chat"
+                : `Mensagem em #${channel.name}`
+          }
+          aria-label={
+            channel.conversation
+              ? `Mensagem para ${channel.name}`
+              : channel.kind === "voice"
+                ? `Mensagem no chat de ${channel.name}`
+                : `Mensagem em #${channel.name}`
+          }
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           onPaste={(e) => {

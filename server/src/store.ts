@@ -1,7 +1,7 @@
 /**
  * Acesso a dados. Todo SQL do app mora aqui, com parâmetros posicionais (sem concatenação).
  */
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   DEFAULT_LOOK,
   LIMITS,
@@ -12,6 +12,8 @@ import {
   type ChannelKind,
   type ClientErrorEntry,
   type ClientErrorKind,
+  type Conversation,
+  type FriendEntry,
   type Invite,
   type Message,
   type MessageReference,
@@ -92,6 +94,7 @@ interface ChannelRow {
   name: string;
   kind: ChannelKind;
   position: number;
+  conversation: "dm" | "group" | null;
 }
 
 interface MessageRow {
@@ -186,6 +189,7 @@ const toChannel = (r: ChannelRow): Channel => ({
   name: r.name,
   kind: r.kind,
   position: r.position,
+  ...(r.conversation ? { conversation: r.conversation } : {}),
 });
 
 export const attachmentUrl = (id: string, filename: string) =>
@@ -382,6 +386,7 @@ export class Store {
         this.db.prepare("SELECT id FROM attachments WHERE uploader_id = ? AND message_id IS NULL").all(id) as { id: string }[]
       ).map((r) => r.id);
       this.db.prepare("DELETE FROM attachments WHERE uploader_id = ? AND message_id IS NULL").run(id);
+      this.db.prepare("DELETE FROM friendships WHERE user_id = ? OR friend_id = ?").run(id, id);
       return { user: this.userById(id)!, avatarId: before.avatarId, bannerId: before.bannerId, orphanAttachmentIds: orphans };
     });
   }
@@ -506,17 +511,226 @@ export class Store {
 
   // ---------- canais ----------
 
+  /** Salas da roda (as conversas privadas ficam de fora). */
   listChannels(): Channel[] {
     return (
-      this.db.prepare("SELECT id, name, kind, position FROM channels ORDER BY position, created_at").all() as unknown as ChannelRow[]
+      this.db
+        .prepare(
+          "SELECT id, name, kind, position, conversation FROM channels WHERE conversation IS NULL ORDER BY position, created_at",
+        )
+        .all() as unknown as ChannelRow[]
     ).map(toChannel);
   }
 
+  /** Sala da roda ou conversa privada (confira o acesso com canAccess antes de mostrar). */
   channelById(id: string): Channel | null {
-    const r = this.db.prepare("SELECT id, name, kind, position FROM channels WHERE id = ?").get(id) as
+    const r = this.db.prepare("SELECT id, name, kind, position, conversation FROM channels WHERE id = ?").get(id) as
       | ChannelRow
       | undefined;
     return r ? toChannel(r) : null;
+  }
+
+  /** Quem pode ver o canal: null = todo mundo (sala da roda); senão, os membros da conversa. */
+  channelAudience(channelId: string): string[] | null {
+    const r = this.db.prepare("SELECT conversation FROM channels WHERE id = ?").get(channelId) as
+      | { conversation: string | null }
+      | undefined;
+    if (!r) return [];
+    if (!r.conversation) return null;
+    return this.memberIds(channelId);
+  }
+
+  canAccess(userId: string, channelId: string): boolean {
+    const audience = this.channelAudience(channelId);
+    return audience === null || audience.includes(userId);
+  }
+
+  /** Dá para ligar aqui: sala de voz da roda ou conversa privada de que a pessoa participa. */
+  canCall(userId: string, channelId: string): boolean {
+    const c = this.channelById(channelId);
+    return !!c && (c.kind === "voice" || !!c.conversation) && this.canAccess(userId, channelId);
+  }
+
+  private memberIds(channelId: string): string[] {
+    return (
+      this.db.prepare("SELECT user_id FROM channel_members WHERE channel_id = ? ORDER BY joined_at").all(channelId) as {
+        user_id: string;
+      }[]
+    ).map((r) => r.user_id);
+  }
+
+  // ---------- conversas privadas ----------
+
+  conversationById(id: string): Conversation | null {
+    const c = this.db
+      .prepare("SELECT id, name, conversation, created_at FROM channels WHERE id = ? AND conversation IS NOT NULL")
+      .get(id) as { id: string; name: string; conversation: "dm" | "group"; created_at: number } | undefined;
+    if (!c) return null;
+    const members = this.db
+      .prepare("SELECT user_id, last_read FROM channel_members WHERE channel_id = ? ORDER BY joined_at")
+      .all(id) as { user_id: string; last_read: number }[];
+    const last = this.db.prepare("SELECT * FROM messages WHERE channel_id = ? ORDER BY id DESC LIMIT 1").get(id) as
+      | MessageRow
+      | undefined;
+    return {
+      id: c.id,
+      type: c.conversation,
+      name: c.name,
+      memberIds: members.map((m) => m.user_id),
+      lastMessage: last ? this.hydrate([last])[0]! : null,
+      reads: Object.fromEntries(members.map((m) => [m.user_id, Number(m.last_read)])),
+      createdAt: c.created_at,
+    };
+  }
+
+  listConversations(userId: string): Conversation[] {
+    const ids = this.db.prepare("SELECT channel_id FROM channel_members WHERE user_id = ?").all(userId) as {
+      channel_id: string;
+    }[];
+    return ids.map((r) => this.conversationById(r.channel_id)).filter((c): c is Conversation => !!c);
+  }
+
+  /** Mensagens dos outros que você ainda não leu, por conversa (só as que têm alguma). */
+  conversationUnread(userId: string): Record<string, number> {
+    const rows = this.db
+      .prepare(
+        `SELECT cm.channel_id AS id, COUNT(m.id) AS n FROM channel_members cm
+         JOIN messages m ON m.channel_id = cm.channel_id AND m.id > cm.last_read AND m.author_id <> cm.user_id
+         WHERE cm.user_id = ? GROUP BY cm.channel_id`,
+      )
+      .all(userId) as { id: string; n: number }[];
+    return Object.fromEntries(rows.map((r) => [r.id, Number(r.n)]));
+  }
+
+  /** A conversa a dois entre essas pessoas, se já existe (só existe uma por par). */
+  findDm(a: string, b: string): string | null {
+    const r = this.db
+      .prepare(
+        `SELECT c.id FROM channels c
+         JOIN channel_members x ON x.channel_id = c.id AND x.user_id = ?
+         JOIN channel_members y ON y.channel_id = c.id AND y.user_id = ?
+         WHERE c.conversation = 'dm' LIMIT 1`,
+      )
+      .get(a, b) as { id: string } | undefined;
+    return r?.id ?? null;
+  }
+
+  createConversation(type: "dm" | "group", name: string, memberIds: string[]): Conversation {
+    return transaction(this.db, () => {
+      const id = randomUUID();
+      const now = Date.now();
+      this.db
+        .prepare("INSERT INTO channels (id, name, kind, position, created_at, conversation) VALUES (?, ?, 'text', 0, ?, ?)")
+        .run(id, name, now, type);
+      const add = this.db.prepare("INSERT INTO channel_members (channel_id, user_id, joined_at) VALUES (?, ?, ?)");
+      memberIds.forEach((userId, i) => add.run(id, userId, now + i));
+      return this.conversationById(id)!;
+    });
+  }
+
+  /** Marca como lido até a mensagem (nunca volta atrás). Devolve se mudou algo. */
+  markRead(channelId: string, userId: string, messageId: number): boolean {
+    const res = this.db
+      .prepare(
+        `UPDATE channel_members SET last_read = ?
+         WHERE channel_id = ? AND user_id = ? AND last_read < ?
+           AND ? <= (SELECT COALESCE(MAX(id), 0) FROM messages WHERE channel_id = ?)`,
+      )
+      .run(messageId, channelId, userId, messageId, messageId, channelId);
+    return Number(res.changes) > 0;
+  }
+
+  /**
+   * Sai do grupo. Se não sobrar ninguém, o grupo é apagado e os anexos voltam para serem
+   * removidos do disco.
+   */
+  leaveConversation(channelId: string, userId: string): { remaining: string[]; attachmentIds: string[] } {
+    return transaction(this.db, () => {
+      this.db.prepare("DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?").run(channelId, userId);
+      const remaining = this.memberIds(channelId);
+      return { remaining, attachmentIds: remaining.length ? [] : this.deleteChannel(channelId) };
+    });
+  }
+
+  // ---------- amizades ----------
+
+  private friendshipRow(a: string, b: string) {
+    return this.db
+      .prepare(
+        "SELECT user_id, friend_id, status, created_at FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
+      )
+      .get(a, b, b, a) as { user_id: string; friend_id: string; status: "pending" | "accepted"; created_at: number } | undefined;
+  }
+
+  /** A amizade vista por `viewer` (null = nenhuma relação). */
+  friendEntry(viewer: string, other: string): FriendEntry | null {
+    const r = this.friendshipRow(viewer, other);
+    if (!r) return null;
+    const status = r.status === "accepted" ? "friend" : r.user_id === viewer ? "outgoing" : "incoming";
+    return { userId: other, status, since: r.created_at };
+  }
+
+  listFriends(userId: string): FriendEntry[] {
+    const rows = this.db
+      .prepare("SELECT user_id, friend_id FROM friendships WHERE user_id = ? OR friend_id = ?")
+      .all(userId, userId) as { user_id: string; friend_id: string }[];
+    return rows.map((r) => this.friendEntry(userId, r.user_id === userId ? r.friend_id : r.user_id)!);
+  }
+
+  areFriends(a: string, b: string): boolean {
+    return this.friendshipRow(a, b)?.status === "accepted";
+  }
+
+  /** Pede amizade; se o outro já tinha pedido, vira amizade na hora. */
+  requestFriend(from: string, to: string): "requested" | "accepted" | "already" {
+    return transaction(this.db, () => {
+      const r = this.friendshipRow(from, to);
+      if (r?.status === "accepted" || (r && r.user_id === from)) return "already";
+      if (r) {
+        this.db
+          .prepare("UPDATE friendships SET status = 'accepted', created_at = ? WHERE user_id = ? AND friend_id = ?")
+          .run(Date.now(), to, from);
+        return "accepted";
+      }
+      this.db
+        .prepare("INSERT INTO friendships (user_id, friend_id, status, created_at) VALUES (?, ?, 'pending', ?)")
+        .run(from, to, Date.now());
+      return "requested";
+    });
+  }
+
+  /** Aceita o pedido que `other` mandou para `me`. */
+  acceptFriend(me: string, other: string): boolean {
+    const res = this.db
+      .prepare(
+        "UPDATE friendships SET status = 'accepted', created_at = ? WHERE user_id = ? AND friend_id = ? AND status = 'pending'",
+      )
+      .run(Date.now(), other, me);
+    return Number(res.changes) > 0;
+  }
+
+  /** Recusa, cancela ou desfaz (o que houver entre os dois). */
+  removeFriendship(a: string, b: string): boolean {
+    const res = this.db
+      .prepare("DELETE FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)")
+      .run(a, b, b, a);
+    return Number(res.changes) > 0;
+  }
+
+  /** Código do link de amizade (criado na primeira vez que a pessoa pede). */
+  friendCode(userId: string): string {
+    const r = this.db.prepare("SELECT friend_code FROM users WHERE id = ?").get(userId) as
+      | { friend_code: string | null }
+      | undefined;
+    if (r?.friend_code) return r.friend_code;
+    const code = randomBytes(9).toString("base64url");
+    this.db.prepare("UPDATE users SET friend_code = ? WHERE id = ?").run(code, userId);
+    return code;
+  }
+
+  userByFriendCode(code: string): UserRecord | null {
+    const r = this.db.prepare("SELECT * FROM users WHERE friend_code = ?").get(code) as UserRow | undefined;
+    return r ? toUser(r) : null;
   }
 
   createChannel(name: string, kind: ChannelKind): Channel {
@@ -707,11 +921,16 @@ export class Store {
   private ftsAvailable: boolean | null = null;
 
   /** Mensagens que contêm todas as palavras (mais novas primeiro). GIFs ficam de fora. */
-  search(opts: { terms: string[]; channelId?: string; before?: number; limit: number }): SearchResult[] {
-    const { terms, channelId, before, limit } = opts;
+  search(opts: { terms: string[]; userId: string; channelId?: string; before?: number; limit: number }): SearchResult[] {
+    const { terms, userId, channelId, before, limit } = opts;
     this.ftsAvailable ??= !!this.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'messages_fts'").get();
-    const filters = ["m.content NOT LIKE 'https://%giphy.com/%'"];
-    const params: (string | number)[] = [];
+    // salas da roda e só as conversas de que a pessoa participa
+    const filters = [
+      "m.content NOT LIKE 'https://%giphy.com/%'",
+      `m.channel_id IN (SELECT id FROM channels WHERE conversation IS NULL
+                        UNION SELECT channel_id FROM channel_members WHERE user_id = ?)`,
+    ];
+    const params: (string | number)[] = [userId];
     if (channelId) {
       filters.push("m.channel_id = ?");
       params.push(channelId);

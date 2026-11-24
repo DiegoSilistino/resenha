@@ -1,10 +1,10 @@
 import { Link } from "react-router";
 import { ChevronLeft } from "lucide-react";
 
-/** No celular não há painel de salas ao lado: este "‹" volta para a roda, onde ficam as outras salas. */
-export function BackToRoda() {
+/** No celular não há painel ao lado: este "‹" volta para a lista (a roda ou as conversas). */
+export function BackToRoda({ to = "/roda", label = "Voltar para a roda" }: { to?: string; label?: string }) {
   return (
-    <Link to="/roda" className="icon-btn icon-btn-round back-to-roda" aria-label="Voltar para a roda" title="Voltar para a roda">
+    <Link to={to} className="icon-btn icon-btn-round back-to-roda" aria-label={label} title={label}>
       <ChevronLeft size={20} />
     </Link>
   );

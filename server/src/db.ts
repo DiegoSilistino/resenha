@@ -127,6 +127,34 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN banner_id TEXT;
   ALTER TABLE users ADD COLUMN banner_mime TEXT;
   `,
+  // 7: conversas privadas (canal de texto com membros), amizades e link de amizade.
+  // O CHECK de channels.kind não deixa outro tipo; recriar a tabela apagaria as mensagens em
+  // cascata, então a conversa é um canal de texto marcado na coluna nova.
+  `
+  ALTER TABLE channels ADD COLUMN conversation TEXT CHECK (conversation IN ('dm', 'group'));
+
+  CREATE TABLE channel_members (
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at  INTEGER NOT NULL,
+    last_read  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (channel_id, user_id)
+  );
+  CREATE INDEX channel_members_user ON channel_members (user_id);
+
+  -- uma linha por par: quem pediu (user_id) e quem recebeu (friend_id)
+  CREATE TABLE friendships (
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    friend_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status     TEXT NOT NULL CHECK (status IN ('pending', 'accepted')),
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, friend_id)
+  );
+  CREATE INDEX friendships_friend ON friendships (friend_id);
+
+  ALTER TABLE users ADD COLUMN friend_code TEXT;
+  CREATE UNIQUE INDEX users_friend_code ON users (friend_code);
+  `,
 ];
 
 /**

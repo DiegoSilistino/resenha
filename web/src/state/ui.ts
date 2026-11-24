@@ -21,6 +21,7 @@ interface UiState {
   settingsTab: SettingsTab | null;
   /** Cartão de perfil aberto (id da pessoa). */
   profileId: string | null;
+  newGroupOpen: boolean;
   shareDialogOpen: boolean;
   /** Painel de busca de mensagens aberto. */
   searchOpen: boolean;
@@ -34,6 +35,7 @@ interface UiState {
   setSettingsOpen(open: boolean, tab?: SettingsTab): void;
   setAdminOpen(open: boolean, tab?: AdminTab): void;
   openProfile(userId: string | null): void;
+  setNewGroupOpen(open: boolean): void;
   setShareDialogOpen(open: boolean): void;
   setSearchOpen(open: boolean): void;
   setPageTitle(title: string): void;
@@ -50,6 +52,7 @@ export const useUi = create<UiState>()((set) => ({
   adminTab: null,
   settingsTab: null,
   profileId: null,
+  newGroupOpen: false,
   shareDialogOpen: false,
   searchOpen: false,
   pageTitle: "Resenha",
@@ -59,6 +62,7 @@ export const useUi = create<UiState>()((set) => ({
   setSettingsOpen: (settingsOpen, tab) => set({ settingsOpen, settingsTab: tab ?? null }),
   setAdminOpen: (adminOpen, tab) => set({ adminOpen, adminTab: tab ?? null }),
   openProfile: (profileId) => set({ profileId }),
+  setNewGroupOpen: (newGroupOpen) => set({ newGroupOpen }),
   setShareDialogOpen: (shareDialogOpen) => set({ shareDialogOpen }),
   setSearchOpen: (searchOpen) => set({ searchOpen }),
   setPageTitle: (pageTitle) => set({ pageTitle }),

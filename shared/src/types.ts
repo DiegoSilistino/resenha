@@ -50,6 +50,33 @@ export interface Channel {
   name: string;
   kind: ChannelKind;
   position: number;
+  /** Conversa privada (só no app, para o chat saber como se apresentar); salas da roda não têm. */
+  conversation?: Conversation["type"];
+}
+
+/**
+ * Conversa privada: entre dois amigos ("dm") ou um grupo de até 10 pessoas.
+ * Por baixo é um canal de texto com membros; mensagens, anexos e chamada funcionam igual.
+ */
+export interface Conversation {
+  id: string;
+  type: "dm" | "group";
+  /** Nome do grupo (vazio na conversa a dois: o app mostra o nome da outra pessoa). */
+  name: string;
+  /** Inclui você. */
+  memberIds: string[];
+  /** Última mensagem (prévia na lista e ordem das conversas). */
+  lastMessage: Message | null;
+  /** Até qual mensagem cada membro já leu (o "Visto"). */
+  reads: Record<string, number>;
+  createdAt: number;
+}
+
+/** Amizade do seu ponto de vista: amigo, pedido que chegou ou pedido que você mandou. */
+export interface FriendEntry {
+  userId: string;
+  status: "friend" | "incoming" | "outgoing";
+  since: number;
 }
 
 export interface Attachment {

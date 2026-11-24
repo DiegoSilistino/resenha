@@ -18,6 +18,8 @@ export class WatchError extends Error {}
  */
 export class WatchService {
   private readonly states = new Map<string, WatchState>();
+  /** Quem recebe o estado: todos (sala da roda) ou só os membros da conversa. */
+  audienceOf: (channelId: string) => string[] | null = () => null;
 
   constructor(
     private readonly hub: Hub,
@@ -77,6 +79,6 @@ export class WatchService {
     const next = reduceWatch(prev, action, this.now());
     if (next === prev) return;
     this.states.set(channelId, next);
-    this.hub.broadcast({ type: "watch.state", state: next });
+    this.hub.publish(this.audienceOf(channelId), { type: "watch.state", state: next });
   }
 }

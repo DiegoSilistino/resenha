@@ -9,6 +9,9 @@ import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { ChatView } from "../chat/ChatView.tsx";
 import { ProfileCard } from "../modals/ProfileCard.tsx";
+import { ConversationsPage } from "../pages/ConversationsPage.tsx";
+import { FriendLinkPage } from "../pages/FriendLinkPage.tsx";
+import { FriendsPage } from "../pages/FriendsPage.tsx";
 import { HomePage } from "../pages/HomePage.tsx";
 import { RodaPage } from "../pages/RodaPage.tsx";
 import { preloadVoice } from "../voice/controller.ts";
@@ -23,6 +26,7 @@ const loadAdmin = () => import("../modals/AdminModal.tsx");
 const VoiceView = lazyChunk(() => loadVoiceView().then((m) => m.VoiceView));
 const SettingsModal = lazyChunk(() => loadSettings().then((m) => m.SettingsModal));
 const AdminModal = lazyChunk(() => loadAdmin().then((m) => m.AdminModal));
+const NewGroupModal = lazyChunk(() => import("../modals/NewGroupModal.tsx").then((m) => m.NewGroupModal));
 const ShareDialog = lazyChunk(() => import("../modals/ShareDialog.tsx").then((m) => m.ShareDialog));
 const loadSearch = () => import("../search/SearchPanel.tsx");
 const SearchPanel = lazyChunk(() => loadSearch().then((m) => m.SearchPanel));
@@ -50,6 +54,7 @@ export function Shell() {
   const adminOpen = useUi((s) => s.adminOpen);
   const shareDialogOpen = useUi((s) => s.shareDialogOpen);
   const searchOpen = useUi((s) => s.searchOpen);
+  const newGroupOpen = useUi((s) => s.newGroupOpen);
   const navigate = useNavigate();
   useDocumentTitle();
   useIdlePreload(ready);
@@ -83,6 +88,9 @@ export function Shell() {
         <Routes>
           <Route index element={<HomePage />} />
           <Route path="/roda" element={<RodaPage />} />
+          <Route path="/conversas/:id?" element={<ConversationsPage />} />
+          <Route path="/amigos" element={<FriendsPage />} />
+          <Route path="/amigo/:code" element={<FriendLinkPage />} />
           <Route path="/c/:channelId" element={<ChannelRoute />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -95,6 +103,7 @@ export function Shell() {
         {adminOpen && <AdminModal />}
         {shareDialogOpen && <ShareDialog />}
         {searchOpen && <SearchPanel />}
+        {newGroupOpen && <NewGroupModal />}
       </Suspense>
     </div>
   );
@@ -104,6 +113,9 @@ export function Shell() {
 function ChannelRoute() {
   const { channelId = "" } = useParams();
   const channel = useApp((s) => s.channels.find((c) => c.id === channelId));
+  const isConversation = useApp((s) => !!s.conversations[channelId]);
+  // Conversa privada (link de notificação ou busca) tem tela própria.
+  if (!channel && isConversation) return <Navigate to={`/conversas/${channelId}`} replace />;
   // Sala apagada (ou link velho): volta para a roda.
   if (!channel) return <Navigate to="/roda" replace />;
   return (

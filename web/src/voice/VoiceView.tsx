@@ -74,9 +74,9 @@ export function VoiceView({ channel }: { channel: Channel }) {
   return (
     <main className="main voice-view">
       <header className="main-header">
-        <BackToRoda />
+        {channel.conversation ? <BackToRoda to="/conversas" label="Voltar para as conversas" /> : <BackToRoda />}
         <div className="main-titles">
-          <span className="mono-label">sala de voz · {APP_NAME}</span>
+          <span className="mono-label">{channel.conversation ? "chamada privada" : `sala de voz · ${APP_NAME}`}</span>
           <h1 className="main-title">{channel.name}</h1>
         </div>
         <span className="mono-label voice-count">{inCall > 0 ? `${inCall} na call` : "ninguém na call"}</span>

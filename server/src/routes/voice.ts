@@ -40,8 +40,8 @@ export function registerVoiceRoutes(app: FastifyInstance, ctx: AppContext) {
     async (req): Promise<VoiceTokenResponse> => {
       const { channelId } = parse(voiceTokenBody, req.body);
       const channel = store.channelById(channelId);
-      if (!channel) throw notFound("Canal não encontrado");
-      if (channel.kind !== "voice") throw badRequest("Esse canal não é de voz");
+      if (!channel || !store.canAccess(currentUser(req).id, channel.id)) throw notFound("Canal não encontrado");
+      if (!store.canCall(currentUser(req).id, channel.id)) throw badRequest("Esse canal não é de voz");
       await ensureVoiceServer(req);
       return {
         url: gateway.publicUrl(req.protocol, req.host),

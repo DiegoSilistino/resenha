@@ -77,6 +77,20 @@ export class Hub {
     }
   }
 
+  sendToUsers(userIds: Iterable<string>, event: ServerEvent): void {
+    this.publish([...userIds], event);
+  }
+
+  /** Evento de um canal: para todos (sala da roda, audience null) ou só para os membros da conversa. */
+  publish(audience: string[] | null, event: ServerEvent, exceptConnId?: string): void {
+    if (audience === null) return this.broadcast(event, exceptConnId);
+    const ids = new Set(audience);
+    const data = JSON.stringify(event);
+    for (const c of this.conns.values()) {
+      if (c.id !== exceptConnId && ids.has(c.userId) && c.socket.readyState === c.socket.OPEN) c.socket.send(data);
+    }
+  }
+
   sendToUser(userId: string, event: ServerEvent): void {
     for (const c of this.conns.values()) if (c.userId === userId) this.send(c, event);
   }

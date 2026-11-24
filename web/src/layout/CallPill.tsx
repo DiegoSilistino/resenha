@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { APP_NAME } from "@resenha/shared";
-import { useApp } from "../state/app.ts";
+import { conversationTitle, useApp } from "../state/app.ts";
 import { keyLabel, useSettings } from "../state/settings.ts";
 import { currentRoom, leaveVoice, toggleMute, toggleScreenShare, unlockAudio, useVoice } from "../voice/controller.ts";
 import { SignalIcon } from "../voice/SignalIcon.tsx";
@@ -20,17 +20,23 @@ export function CallPill({ place }: { place: "top" | "bottom" }) {
   const ptt = useSettings((s) => s.pttEnabled);
   const pttKey = useSettings((s) => s.pttKey);
   const channel = useApp((s) => s.channels.find((c) => c.id === channelId));
+  // chamada numa conversa privada: o nome da pessoa ou do grupo
+  const convName = useApp((s) => {
+    const conv = channelId ? s.conversations[channelId] : undefined;
+    return conv ? conversationTitle(conv, s.users, s.me ? s.me.id : undefined) : null;
+  });
   useVoice((s) => s.version); // a qualidade muda junto com a sala
   if (status === "idle" || !channelId) return null;
   const quality = currentRoom()?.localParticipant.connectionQuality;
   const connected = status === "connected";
-  const name = channel?.name ?? "Canal de voz";
+  const name = convName ?? channel?.name ?? "Canal de voz";
+  const href = convName ? `/conversas/${channelId}` : `/c/${channelId}`;
 
   return (
     <div className="call-pill" data-place={place} data-status={status} role="region" aria-label="Chamada em andamento">
       {connected ? <SignalIcon quality={quality} /> : <span className="call-pill-dot" aria-hidden="true" />}
-      <Link to={`/c/${channelId}`} className="call-pill-label" title={`Voltar para ${name}`}>
-        {connected ? `${name} · ${APP_NAME}` : STATUS_TEXT[status]}
+      <Link to={href} className="call-pill-label" title={`Voltar para ${name}`}>
+        {connected ? (convName ? `call com ${name}` : `${name} · ${APP_NAME}`) : STATUS_TEXT[status]}
       </Link>
       {audioBlocked && (
         <button type="button" className="call-pill-btn" data-on onClick={() => void unlockAudio()}>

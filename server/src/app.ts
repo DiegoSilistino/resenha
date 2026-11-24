@@ -17,6 +17,7 @@ import { resolveSession, SESSION_COOKIE } from "./auth/sessions.ts";
 import { BackupService } from "./backup/service.ts";
 import { registerAdminRoutes } from "./routes/admin.ts";
 import { registerAvatarRoutes } from "./routes/avatars.ts";
+import { registerSocialRoutes } from "./routes/social.ts";
 import { registerBackupRoutes } from "./routes/backup.ts";
 import { registerGifRoutes } from "./routes/gifs.ts";
 import { registerDiagnosticsRoutes } from "./routes/diagnostics.ts";
@@ -83,12 +84,25 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   const voice = new VoicePresence(hub);
   const store = new Store(deps.db);
   for (const id of store.invisibleUserIds()) hub.setHidden(id, true);
+  // chamada e "assistir juntos" de conversa privada só chegam a quem participa
+  // Desligando, o banco fecha antes das conexões saírem da chamada: aí o aviso não vai para ninguém
+  // (na dúvida, nunca para todos).
+  const audienceOf = (channelId: string): string[] | null => {
+    try {
+      return store.channelAudience(channelId);
+    } catch {
+      return [];
+    }
+  };
+  voice.audienceOf = audienceOf;
   const ctx: AppContext = {
     config,
     store,
     hub,
     voice,
-    watch: new WatchService(hub, deps.fetchTitle ?? createOEmbedFetcher()),
+    watch: Object.assign(new WatchService(hub, deps.fetchTitle ?? createOEmbedFetcher()), {
+      audienceOf,
+    }),
     gateway: deps.voiceGateway ?? new LiveKitGateway(config.livekit),
     uploads: new UploadStorage(config.uploadsDir),
     avatars: new UploadStorage(config.avatarsDir),
@@ -178,6 +192,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   registerSearchRoutes(app, ctx);
   registerSoundRoutes(app, ctx);
   registerVoiceRoutes(app, ctx);
+  registerSocialRoutes(app, ctx);
   registerSocket(app, ctx);
 
   await registerFrontend(app, config);

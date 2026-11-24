@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { APP_NAME, type Channel } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Nick } from "../components/Nick.tsx";
 import { statusLine } from "../lib/look.ts";
+import { openConversationWith } from "../lib/social.ts";
 import { useApp } from "../state/app.ts";
 import { useUi } from "../state/ui.ts";
 import { preloadVoice } from "../voice/controller.ts";
@@ -15,6 +16,8 @@ export function HomePage() {
   const online = useApp((s) => s.online);
   const channels = useApp((s) => s.channels);
   const voice = useApp((s) => s.voice);
+  const friends = useApp((s) => s.friends);
+  const navigate = useNavigate();
 
   useEffect(() => {
     useUi.getState().setPageTitle(APP_NAME);
@@ -35,9 +38,14 @@ export function HomePage() {
   return (
     <main className="page">
       <div className="page-inner">
-        <header className="hero">
-          <h1 className="hero-title">E aí, {me?.displayName}.</h1>
-          <p className="hero-sub">{sub}</p>
+        <header className="hero hero-row">
+          <div className="hero-text">
+            <h1 className="hero-title">E aí, {me?.displayName}.</h1>
+            <p className="hero-sub">{sub}</p>
+          </div>
+          <Link to="/amigos?aba=adicionar" className="btn btn-outline">
+            Adicionar amigo
+          </Link>
         </header>
 
         <section className="page-section" aria-labelledby="live-title">
@@ -74,14 +82,19 @@ export function HomePage() {
           {onlineNow.length > 0 ? (
             <ul className="online-grid">
               {onlineNow.map((u) => (
-                <li key={u.id}>
-                  <button type="button" className="person-card" onClick={() => useUi.getState().openProfile(u.id)}>
+                <li key={u.id} className="person-card">
+                  <button type="button" className="person-open" onClick={() => useUi.getState().openProfile(u.id)}>
                     <Avatar user={u} size={44} online />
                     <span className="person-names">
                       <Nick user={u} className="person-name" />
                       <span className="person-sub">{statusLine(u, u.status)}</span>
                     </span>
                   </button>
+                  {friends[u.id]?.status === "friend" && (
+                    <button type="button" className="btn btn-small" onClick={() => void openConversationWith([u.id], navigate)}>
+                      Chamar
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

@@ -8,6 +8,8 @@ import { AVATAR_COLORS, LIMITS, PROFILE_COLORS, USERNAME_PATTERN } from "./const
 import type {
   Channel,
   ClientErrorEntry,
+  Conversation,
+  FriendEntry,
   Me,
   Message,
   PublicUser,
@@ -199,7 +201,31 @@ export interface HelloEvent {
   sounds: SoundboardSound[];
   /** Só para admins: id do erro mais recente no painel (0 = nenhum). Acende o aviso na engrenagem. */
   latestErrorId?: number;
+  /** Suas conversas privadas, com quantas mensagens você ainda não leu em cada uma. */
+  conversations: Conversation[];
+  conversationUnread: Record<string, number>;
+  friends: FriendEntry[];
 }
+
+export const friendRequestBody = z.object({
+  /** Usuário (com ou sem @). */
+  username: z
+    .string()
+    .trim()
+    .transform((s) => s.replace(/^@/, "").toLowerCase())
+    .pipe(usernameSchema),
+});
+
+export const createConversationBody = z.object({
+  /** Com quem (sem contar você): 1 pessoa = conversa a dois; mais = grupo. */
+  userIds: z
+    .array(id)
+    .min(1, "Escolha alguém")
+    .max(LIMITS.groupMax - 1, `Um grupo tem no máximo ${LIMITS.groupMax} pessoas, contando você`),
+  name: z.string().trim().max(LIMITS.channelNameMax).optional(),
+});
+
+export const readConversationBody = z.object({ messageId: z.number().int().positive() });
 
 export const clientErrorBody = z.object({
   kind: z.enum(["voz", "microfone", "tela", "ruido", "inesperado"]),
@@ -252,7 +278,14 @@ export type ServerEvent =
   /** Só para quem está naquela chamada. */
   | { type: "soundboard.played"; channelId: string; soundId: string; userId: string }
   /** Só para administradores: um navegador reportou uma falha. */
-  | { type: "admin.error"; entry: ClientErrorEntry };
+  | { type: "admin.error"; entry: ClientErrorEntry }
+  /** Só para os membros da conversa. */
+  | { type: "conversation.upsert"; conversation: Conversation }
+  | { type: "conversation.remove"; conversationId: string }
+  | { type: "conversation.read"; conversationId: string; userId: string; messageId: number }
+  /** Só para as duas pessoas envolvidas. */
+  | { type: "friend.upsert"; friend: FriendEntry }
+  | { type: "friend.remove"; userId: string };
 
 export interface ApiErrorBody {
   error: string;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { Channel } from "@resenha/shared";
-import { useApp } from "../state/app.ts";
+import { api } from "../lib/api.ts";
+import { useApp, windowFocused } from "../state/app.ts";
 import { Composer, type ComposerHandle } from "./Composer.tsx";
 import { MessageList } from "./MessageList.tsx";
 import { TypingIndicator } from "./TypingIndicator.tsx";
@@ -17,6 +18,16 @@ export function ChatPanel({ channel }: { channel: Channel }) {
       if (useApp.getState().activeChannelId === channel.id) useApp.getState().setActiveChannel(null);
     };
   }, [channel.id]);
+
+  // Conversa privada: avisa o servidor até onde você leu (é o "Visto" dos outros e as não lidas do
+  // próximo acesso). Só com a janela em uso; ao voltar para ela, marca o que chegou.
+  const lastId = useApp((s) => s.messages[channel.id]?.items.at(-1)?.id ?? 0);
+  const myRead = useApp((s) => (s.me ? (s.conversations[channel.id]?.reads[s.me.id] ?? 0) : 0));
+  const awayUnread = useApp((s) => s.awayUnread);
+  useEffect(() => {
+    if (!channel.conversation || lastId <= myRead || !windowFocused()) return;
+    api.markConversationRead(channel.id, lastId).catch(() => undefined);
+  }, [channel.id, channel.conversation, lastId, myRead, awayUnread]);
 
   const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes("Files");
   const where = channel.kind === "voice" ? `no chat de ${channel.name}` : `em #${channel.name}`;

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Navigate, Route, Routes } from "react-router";
+import { Navigate, Route, Routes, useLocation } from "react-router";
 import { APP_NAME } from "@resenha/shared";
 import { api } from "./lib/api.ts";
 import { realtime } from "./lib/realtime.ts";
@@ -14,6 +14,8 @@ export function App() {
   const me = useApp((s) => s.me);
   const loggedIn = !!me;
   useTheme();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from;
 
   useEffect(() => {
     api
@@ -38,8 +40,12 @@ export function App() {
     <>
       <Routes>
         <Route path="/convite/:code" element={<InvitePage />} />
-        <Route path="/login" element={loggedIn ? <Navigate to="/" replace /> : <LoginPage />} />
-        <Route path="/*" element={loggedIn ? <Shell /> : <Navigate to="/login" replace />} />
+        {/* sem login, guarda para onde ia (link de amizade, notificação) e volta para lá depois de entrar */}
+        <Route path="/login" element={loggedIn ? <Navigate to={from ?? "/"} replace /> : <LoginPage />} />
+        <Route
+          path="/*"
+          element={loggedIn ? <Shell /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />}
+        />
       </Routes>
       <Toasts />
     </>

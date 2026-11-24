@@ -17,6 +17,8 @@ const SOUNDBOARD_INTERVAL_MS = LIMITS.soundboardCooldownMs;
 
 export function registerSocket(app: FastifyInstance, ctx: AppContext) {
   const { hub, store, voice, watch } = ctx;
+  const visibleTo = <T,>(userId: string, byChannel: Record<string, T>) =>
+    Object.fromEntries(Object.entries(byChannel).filter(([channelId]) => store.canAccess(userId, channelId)));
   const lastSound = new Map<string, number>();
 
   app.get("/ws", { websocket: true }, (socket: WebSocket, req) => {
@@ -72,8 +74,12 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
       users: store.listUsers().map(toPublicUser),
       channels: store.listChannels(),
       online: hub.onlineUserIds(),
-      voice: voice.snapshot(),
-      watch: watch.snapshot(),
+      // chamadas e vídeos de conversas alheias ficam de fora
+      voice: visibleTo(req.auth.user.id, voice.snapshot()),
+      watch: visibleTo(req.auth.user.id, watch.snapshot()),
+      conversations: store.listConversations(req.auth.user.id),
+      conversationUnread: store.conversationUnread(req.auth.user.id),
+      friends: store.listFriends(req.auth.user.id),
       serverTime: Date.now(),
       features: { gifs: !!ctx.gifs },
       sounds: store.listSounds(),
@@ -90,14 +96,15 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
       case "typing": {
         const now = Date.now();
         if (now - conn.lastTypingAt < TYPING_INTERVAL_MS) return;
-        if (!store.channelById(msg.channelId)) return; // texto ou chat do canal de voz
+        // texto, chat do canal de voz ou conversa de que a pessoa participa
+        if (!store.channelById(msg.channelId) || !store.canAccess(conn.userId, msg.channelId)) return;
         conn.lastTypingAt = now;
-        hub.broadcast({ type: "typing", channelId: msg.channelId, userId: conn.userId }, conn.id);
+        hub.publish(store.channelAudience(msg.channelId), { type: "typing", channelId: msg.channelId, userId: conn.userId }, conn.id);
         return;
       }
 
       case "voice.join":
-        if (store.channelById(msg.channelId)?.kind !== "voice") return;
+        if (!store.canCall(conn.userId, msg.channelId)) return;
         voice.join(conn.userId, conn.id, msg.channelId);
         return;
 

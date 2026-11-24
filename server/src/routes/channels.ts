@@ -15,6 +15,8 @@ export function registerChannelRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.patch<{ Params: { id: string } }>("/api/channels/:id", { preHandler: requireAdmin }, async (req) => {
     const body = parse(updateChannelBody, req.body);
+    // conversa privada não é sala da roda: o admin não mexe nela por aqui
+    if (store.channelById(req.params.id)?.conversation) throw notFound("Canal não encontrado");
     const channel = store.updateChannel(req.params.id, body);
     if (!channel) throw notFound("Canal não encontrado");
     hub.broadcast({ type: "channel.upsert", channel });
@@ -23,7 +25,7 @@ export function registerChannelRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.delete<{ Params: { id: string } }>("/api/channels/:id", { preHandler: requireAdmin }, async (req, reply) => {
     const channel = store.channelById(req.params.id);
-    if (!channel) throw notFound("Canal não encontrado");
+    if (!channel || channel.conversation) throw notFound("Canal não encontrado");
     if (channel.kind === "text" && store.listChannels().filter((c) => c.kind === "text").length === 1) {
       throw badRequest("Mantenha pelo menos um canal de texto");
     }

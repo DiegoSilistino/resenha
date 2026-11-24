@@ -34,5 +34,5 @@ export function parseSnippet(snippet: string): SnippetPart[] {
 
 /** Canal atual a partir do endereço (/c/:id). */
 export function channelIdFromPath(path: string): string | null {
-  return /^\/c\/([^/]+)/.exec(path)?.[1] ?? null;
+  return /^\/(?:c|conversas)\/([^/]+)/.exec(path)?.[1] ?? null;
 }

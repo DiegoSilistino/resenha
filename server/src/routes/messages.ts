@@ -1,5 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { createMessageBody, editMessageBody, LIMITS, listMessagesQuery, reactionEmojiSchema } from "@resenha/shared";
+import {
+  createMessageBody,
+  editMessageBody,
+  LIMITS,
+  listMessagesQuery,
+  reactionEmojiSchema,
+  type ServerEvent,
+} from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, forbidden, notFound, parse } from "../http.ts";
 import { AttachmentLinkError } from "../store.ts";
@@ -7,12 +14,22 @@ import { AttachmentLinkError } from "../store.ts";
 export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
   const { store, hub, uploads } = ctx;
 
-  // Canais de voz também têm chat (para mandar link ou print durante a call).
-  const messageChannel = (id: string) => {
+  // Canais de voz também têm chat (para mandar link ou print durante a call). Conversa privada
+  // de que a pessoa não participa responde como se não existisse.
+  const messageChannel = (id: string, userId: string) => {
     const channel = store.channelById(id);
-    if (!channel) throw notFound("Canal não encontrado");
+    if (!channel || !store.canAccess(userId, channel.id)) throw notFound("Canal não encontrado");
     return channel;
   };
+
+  /** Mensagem que a pessoa pode ver (de conversa alheia: 404). */
+  const visibleMessage = (raw: string, userId: string) => {
+    const message = store.messageById(parseMessageId(raw));
+    if (!message || !store.canAccess(userId, message.channelId)) throw notFound("Mensagem não encontrada");
+    return message;
+  };
+
+  const publish = (channelId: string, event: ServerEvent) => hub.publish(store.channelAudience(channelId), event);
 
   const parseMessageId = (raw: string) => {
     const id = Number(raw);
@@ -24,7 +41,7 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
     "/api/channels/:id/messages",
     { preHandler: requireUser },
     async (req) => {
-      const channel = messageChannel(req.params.id);
+      const channel = messageChannel(req.params.id, currentUser(req).id);
       const q = parse(listMessagesQuery, req.query);
       if (q.since) return store.listMessagesSince(channel.id, q.before, q.since);
       const messages = store.listMessages(channel.id, q.before, q.limit);
@@ -36,7 +53,7 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
     "/api/channels/:id/messages",
     { preHandler: requireUser, config: rateLimited(ctx, 30, "10 seconds") },
     async (req, reply) => {
-      const channel = messageChannel(req.params.id);
+      const channel = messageChannel(req.params.id, currentUser(req).id);
       const body = parse(createMessageBody, req.body);
       if (body.replyTo !== undefined) {
         const original = store.messageById(body.replyTo);
@@ -53,7 +70,7 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
           replyTo: body.replyTo ?? null,
         });
         if (!message) throw new Error("mensagem não criada");
-        hub.broadcast({ type: "message.create", message });
+        publish(channel.id, { type: "message.create", message });
         return reply.status(201).send({ message });
       } catch (err) {
         if (err instanceof AttachmentLinkError) throw badRequest("Um dos anexos é inválido ou já foi usado");
@@ -63,31 +80,29 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
   );
 
   app.patch<{ Params: { id: string } }>("/api/messages/:id", { preHandler: requireUser }, async (req) => {
-    const existing = store.messageById(parseMessageId(req.params.id));
-    if (!existing) throw notFound("Mensagem não encontrada");
+    const existing = visibleMessage(req.params.id, currentUser(req).id);
     if (existing.authorId !== currentUser(req).id) throw forbidden("Você só pode editar suas mensagens");
     const { content } = parse(editMessageBody, req.body);
     const message = store.editMessage(existing.id, content)!;
-    hub.broadcast({ type: "message.update", message });
+    publish(message.channelId, { type: "message.update", message });
     return { message };
   });
 
   // ---------- reações ----------
 
-  const reactionTarget = (params: { id: string; emoji: string }) => {
-    const message = store.messageById(parseMessageId(params.id));
-    if (!message) throw notFound("Mensagem não encontrada");
+  const reactionTarget = (params: { id: string; emoji: string }, userId: string) => {
+    const message = visibleMessage(params.id, userId);
     return { message, emoji: parse(reactionEmojiSchema, params.emoji) };
   };
 
   const broadcastReactions = (channelId: string, messageId: number) =>
-    hub.broadcast({ type: "message.reactions", channelId, messageId, reactions: store.reactionsFor(messageId) });
+    publish(channelId, { type: "message.reactions", channelId, messageId, reactions: store.reactionsFor(messageId) });
 
   app.put<{ Params: { id: string; emoji: string } }>(
     "/api/messages/:id/reactions/:emoji",
     { preHandler: requireUser, config: rateLimited(ctx, 40, "10 seconds") },
     async (req, reply) => {
-      const { message, emoji } = reactionTarget(req.params);
+      const { message, emoji } = reactionTarget(req.params, currentUser(req).id);
       const result = store.addReaction(message.id, currentUser(req).id, emoji);
       if (result === "limit") throw badRequest(`Esta mensagem já tem ${LIMITS.reactionsPerMessage} emojis diferentes`);
       if (result === "added") broadcastReactions(message.channelId, message.id);
@@ -99,7 +114,7 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
     "/api/messages/:id/reactions/:emoji",
     { preHandler: requireUser, config: rateLimited(ctx, 40, "10 seconds") },
     async (req, reply) => {
-      const { message, emoji } = reactionTarget(req.params);
+      const { message, emoji } = reactionTarget(req.params, currentUser(req).id);
       if (store.removeReaction(message.id, currentUser(req).id, emoji)) {
         broadcastReactions(message.channelId, message.id);
       }
@@ -108,14 +123,13 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
   );
 
   app.delete<{ Params: { id: string } }>("/api/messages/:id", { preHandler: requireUser }, async (req, reply) => {
-    const existing = store.messageById(parseMessageId(req.params.id));
-    if (!existing) throw notFound("Mensagem não encontrada");
     const user = currentUser(req);
+    const existing = visibleMessage(req.params.id, user.id);
     if (existing.authorId !== user.id && user.role !== "admin") {
       throw forbidden("Você só pode apagar suas mensagens");
     }
     await uploads.remove(store.deleteMessage(existing.id));
-    hub.broadcast({ type: "message.delete", channelId: existing.channelId, messageId: existing.id });
+    publish(existing.channelId, { type: "message.delete", channelId: existing.channelId, messageId: existing.id });
     return reply.status(204).send();
   });
 }

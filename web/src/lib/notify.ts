@@ -10,7 +10,7 @@
  */
 import type { Message, VoiceMember } from "@resenha/shared";
 import { plainText } from "../chat/plain.ts";
-import { displayNameOf, mentionsMe, useApp, windowFocused } from "../state/app.ts";
+import { conversationTitle, displayNameOf, mentionsMe, useApp, windowFocused } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { playSound } from "./sounds.ts";
@@ -73,7 +73,9 @@ export function onNewMessage(m: Message): void {
   const s = useApp.getState();
   if (!s.me) return;
   const settings = useSettings.getState();
-  const mentioned = mentionsMe(m, s.me);
+  const conv = s.conversations[m.channelId];
+  // Conversa privada conta como menção: é com você.
+  const mentioned = !!conv || mentionsMe(m, s.me);
   // Chat de canal de voz é conversa de quem está na call: fora dela, só avisa se te mencionarem.
   const voiceChat = s.channels.find((c) => c.id === m.channelId)?.kind === "voice";
   if (voiceChat && !mentioned && useVoice.getState().channelId !== m.channelId) return;
@@ -91,7 +93,15 @@ export function onNewMessage(m: Message): void {
   const channel = s.channels.find((c) => c.id === m.channelId);
   const author = s.users[m.authorId];
   try {
-    const where = channel ? (channel.kind === "voice" ? ` no chat de ${channel.name}` : ` em #${channel.name}`) : "";
+    const where = conv
+      ? conv.type === "group"
+        ? ` em ${conversationTitle(conv, s.users, s.me.id)}`
+        : ""
+      : channel
+        ? channel.kind === "voice"
+          ? ` no chat de ${channel.name}`
+          : ` em #${channel.name}`
+        : "";
     const n = new Notification(`${displayNameOf(s.users, m.authorId)}${where}`, {
       body: notificationBody(m),
       icon: author?.avatarUrl ?? "/icon-192.png",
@@ -104,7 +114,7 @@ export function onNewMessage(m: Message): void {
     n.onclose = () => open.delete(n);
     n.onclick = () => {
       window.focus();
-      navigate?.(`/c/${m.channelId}`);
+      navigate?.(conv ? `/conversas/${m.channelId}` : `/c/${m.channelId}`);
       n.close();
     };
   } catch {
@@ -150,13 +160,17 @@ export function onVoiceMembers(channelId: string, prev: VoiceMember[], next: Voi
   const s = useApp.getState();
   if (!s.me) return;
   const joined = joinedMembers(prev, next, s.me.id, Date.now(), lastLeft);
-  // Só com o aviso ligado e com você fora de chamadas (dentro de uma, o som da call já avisa).
-  if (joined.length === 0 || !useSettings.getState().notifyVoiceJoin) return;
+  const conv = s.conversations[channelId];
+  // Sala da roda: só com o aviso ligado. Conversa privada é ligação para você: avisa sempre.
+  // Em ambos, só com você fora de chamadas (dentro de uma, o som da call já avisa).
+  if (joined.length === 0 || (!conv && !useSettings.getState().notifyVoiceJoin)) return;
   if (useVoice.getState().status !== "idle") return;
 
   const channel = s.channels.find((c) => c.id === channelId);
   const who = joined.map((id) => displayNameOf(s.users, id)).join(" e ");
-  const title = `${who} ${joined.length > 1 ? "entraram" : "entrou"} em ${channel?.name ?? "um canal de voz"}`;
+  const title = conv
+    ? `${who} ${conv.type === "group" ? `ligou em ${conversationTitle(conv, s.users, s.me.id)}` : "está te ligando"}`
+    : `${who} ${joined.length > 1 ? "entraram" : "entrou"} em ${channel?.name ?? "um canal de voz"}`;
   playSound("friendJoined");
   if (windowFocused()) {
     toast.info(title);
@@ -175,7 +189,7 @@ export function onVoiceMembers(channelId: string, prev: VoiceMember[], next: Voi
     n.onclose = () => open.delete(n);
     n.onclick = () => {
       window.focus();
-      navigate?.(`/c/${channelId}`);
+      navigate?.(conv ? `/conversas/${channelId}` : `/c/${channelId}`);
       n.close();
     };
   } catch {

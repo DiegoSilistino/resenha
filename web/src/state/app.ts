@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type {
   Channel,
+  Conversation,
+  FriendEntry,
   HelloEvent,
   Me,
   Message,
@@ -51,6 +53,10 @@ interface AppState {
   sounds: SoundboardSound[];
   /** Admins: id do erro mais recente no painel de erros (compara com o último visto neste aparelho). */
   latestErrorId: number;
+  /** Suas conversas privadas (a dois e grupos). */
+  conversations: Record<string, Conversation>;
+  /** Amigos e pedidos, pela pessoa do outro lado. */
+  friends: Record<string, FriendEntry>;
 
   setMe(me: Me | false): void;
   setConnection(status: ConnectionStatus): void;
@@ -87,6 +93,8 @@ const initial = {
   features: { gifs: false },
   sounds: [] as SoundboardSound[],
   latestErrorId: 0,
+  conversations: {} as Record<string, Conversation>,
+  friends: {} as Record<string, FriendEntry>,
 };
 
 /** A pessoa está olhando para o app agora? */
@@ -179,11 +187,17 @@ export const useApp = create<AppState>()((set, get) => ({
         get().upsertMessage(m);
         // quem enviou já não está "digitando"
         const typing = withoutTyping(get().typing, m.channelId, m.authorId);
-        if (!s.me || m.authorId === s.me.id) return set({ typing });
+        const conv = s.conversations[m.channelId];
+        const conversations = conv ? { ...s.conversations, [conv.id]: { ...conv, lastMessage: m } } : s.conversations;
+        if (!s.me || m.authorId === s.me.id) return set({ typing, conversations });
         if (m.channelId === s.activeChannelId) {
-          return set({ typing, awayUnread: windowFocused() ? 0 : s.awayUnread + 1 });
+          return set({ typing, conversations, awayUnread: windowFocused() ? 0 : s.awayUnread + 1 });
         }
-        const patch: Partial<AppState> = { typing, unread: { ...s.unread, [m.channelId]: (s.unread[m.channelId] ?? 0) + 1 } };
+        const patch: Partial<AppState> = {
+          typing,
+          conversations,
+          unread: { ...s.unread, [m.channelId]: (s.unread[m.channelId] ?? 0) + 1 },
+        };
         if (mentionsMe(m, s.me)) {
           patch.mentions = { ...s.mentions, [m.channelId]: (s.mentions[m.channelId] ?? 0) + 1 };
         }
@@ -243,6 +257,30 @@ export const useApp = create<AppState>()((set, get) => ({
         return set({ sounds: s.sounds.filter((x) => x.id !== event.soundId) });
       case "admin.error":
         return set({ latestErrorId: Math.max(s.latestErrorId, event.entry.id) });
+      case "conversation.upsert":
+        return set({ conversations: { ...s.conversations, [event.conversation.id]: event.conversation } });
+      case "conversation.remove": {
+        const conversations = { ...s.conversations };
+        delete conversations[event.conversationId];
+        const messages = { ...s.messages };
+        delete messages[event.conversationId];
+        const unread = { ...s.unread };
+        delete unread[event.conversationId];
+        return set({ conversations, messages, unread });
+      }
+      case "conversation.read": {
+        const conv = s.conversations[event.conversationId];
+        if (!conv) return;
+        const reads = { ...conv.reads, [event.userId]: Math.max(conv.reads[event.userId] ?? 0, event.messageId) };
+        return set({ conversations: { ...s.conversations, [conv.id]: { ...conv, reads } } });
+      }
+      case "friend.upsert":
+        return set({ friends: { ...s.friends, [event.friend.userId]: event.friend } });
+      case "friend.remove": {
+        const friends = { ...s.friends };
+        delete friends[event.userId];
+        return set({ friends });
+      }
       case "soundboard.played":
         return; // tocado pelo módulo da mesa de sons
       case "pong":
@@ -264,6 +302,10 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
     features: e.features ?? { gifs: false },
     sounds: e.sounds ?? [],
     latestErrorId: e.latestErrorId ?? 0,
+    conversations: Object.fromEntries((e.conversations ?? []).map((c) => [c.id, c])),
+    friends: Object.fromEntries((e.friends ?? []).map((f) => [f.userId, f])),
+    // não lidas das conversas vêm do servidor (ele guarda até onde você leu)
+    unread: { ...useApp.getState().unread, ...(e.conversationUnread ?? {}) },
   };
   // Numa reconexão, mensagens podem ter chegado enquanto estávamos fora: recarrega sob demanda.
   if (wasReady) patch.messages = {};
@@ -328,8 +370,27 @@ export function displayNameOf(users: Record<string, PublicUser>, id: string): st
  * Total para o título da aba: "(3) #geral". Chat de canal de voz só entra quando te
  * mencionam (é conversa de quem está na call).
  */
-export const unreadTotal = (s: Pick<AppState, "unread" | "mentions" | "awayUnread" | "channels">) => {
+export const unreadTotal = (s: Pick<AppState, "unread" | "mentions" | "awayUnread" | "channels" | "conversations">) => {
   let total = s.awayUnread;
   for (const c of s.channels) total += c.kind === "text" ? (s.unread[c.id] ?? 0) : (s.mentions[c.id] ?? 0);
+  for (const id in s.conversations) total += s.unread[id] ?? 0;
   return total;
 };
+
+/** Conversas com mensagem nova (o número na aba Conversas). */
+export const unreadConversations = (s: Pick<AppState, "unread" | "conversations">) =>
+  Object.keys(s.conversations).filter((id) => (s.unread[id] ?? 0) > 0).length;
+
+/** Na conversa a dois, a outra pessoa. */
+export const otherMember = (c: Conversation, meId: string | undefined) => c.memberIds.find((id) => id !== meId) ?? c.memberIds[0]!;
+
+/** Título da conversa: o nome do grupo ou o da outra pessoa. */
+export function conversationTitle(c: Conversation, users: Record<string, PublicUser>, meId: string | undefined): string {
+  if (c.type === "group") return c.name || "Grupo";
+  return displayNameOf(users, otherMember(c, meId));
+}
+
+/** A conversa como canal, para o chat (mensagens, anexos, chamada) funcionar igual. */
+export function conversationChannel(c: Conversation, users: Record<string, PublicUser>, meId: string | undefined): Channel {
+  return { id: c.id, name: conversationTitle(c, users, meId), kind: "text", position: 0, conversation: c.type };
+}

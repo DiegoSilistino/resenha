@@ -38,6 +38,8 @@ export const LIMITS = {
   /** Capa do perfil: imagem ou GIF, sem recorte no navegador. */
   bannerMaxBytes: 8 * 1024 * 1024,
   bannerMaxSide: 4096,
+  /** Grupo privado: pessoas, contando quem criou. */
+  groupMax: 10,
 } as const;
 
 /** Cores do perfil (cartão, molduras, nick colorido): mesmo brilho, matizes diferentes. */

@@ -79,8 +79,10 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     async (req, reply) => {
       if (req.params.id === currentUser(req).id) throw badRequest("Você não pode remover a própria conta");
       manageableUser(req.params.id);
+      const friendIds = store.listFriends(req.params.id).map((f) => f.userId);
       const removed = store.removeUser(req.params.id);
       if (!removed) throw notFound("Usuário não encontrado");
+      for (const id of friendIds) hub.sendToUser(id, { type: "friend.remove", userId: removed.user.id });
       await disconnectEverywhere(removed.user.id, "conta removida");
       const images = [removed.avatarId, removed.bannerId].filter((id): id is string => !!id);
       if (images.length) await ctx.avatars.remove(images);

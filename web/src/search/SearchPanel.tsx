@@ -5,7 +5,7 @@ import type { SearchResult } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { api } from "../lib/api.ts";
 import { formatDay, formatTime } from "../lib/format.ts";
-import { displayNameOf, useApp } from "../state/app.ts";
+import { conversationChannel, displayNameOf, useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { useUi } from "../state/ui.ts";
 import { channelIdFromPath, parseSnippet } from "./snippet.ts";
@@ -38,9 +38,13 @@ export function SearchPanel() {
   const location = useLocation();
   const navigate = useNavigate();
   const here = channelIdFromPath(location.pathname);
-  const hereChannel = useApp((s) => s.channels.find((c) => c.id === here));
-  const channels = useApp((s) => s.channels);
+  const roomChannels = useApp((s) => s.channels);
+  const conversations = useApp((s) => s.conversations);
   const users = useApp((s) => s.users);
+  const meId = useApp((s) => (s.me ? s.me.id : undefined));
+  // salas da roda e suas conversas privadas (a busca do servidor só devolve o que você pode ver)
+  const channels = [...roomChannels, ...Object.values(conversations).map((c) => conversationChannel(c, users, meId))];
+  const hereChannel = channels.find((c) => c.id === here);
 
   const close = () => useUi.getState().setSearchOpen(false);
 
@@ -118,14 +122,19 @@ export function SearchPanel() {
     if (!channel) return;
     // No canal de voz, a conversa fica no painel de chat da chamada: abre ele.
     if (channel.kind === "voice") useSettings.getState().set({ voiceChatOpen: true });
-    if (here !== channel.id) void navigate(`/c/${channel.id}`, { state: { openChat: true } });
+    const path = channel.conversation ? `/conversas/${channel.id}` : `/c/${channel.id}`;
+    if (here !== channel.id) void navigate(path, { state: { openChat: true } });
     useUi.getState().jumpTo(channel.id, r.message.id);
     // Em tela estreita o painel cobre a conversa: fecha para mostrar a mensagem.
     if (window.matchMedia("(max-width: 760px)").matches) close();
   }
 
   const showChannel = scope === "all";
-  const hereLabel = hereChannel ? (hereChannel.kind === "voice" ? hereChannel.name : `#${hereChannel.name}`) : "este canal";
+  const hereLabel = hereChannel
+    ? hereChannel.conversation || hereChannel.kind === "voice"
+      ? hereChannel.name
+      : `#${hereChannel.name}`
+    : "este canal";
 
   return (
     <aside className="search-panel" aria-label="Buscar mensagens">
@@ -197,7 +206,7 @@ export function SearchPanel() {
                     <button type="button" className="search-hit" onClick={() => open(r)}>
                       {showChannel && channel && (
                         <span className="search-channel">
-                          {channel.kind === "voice" ? (
+                          {channel.conversation ? null : channel.kind === "voice" ? (
                             <Volume2 size={12} aria-hidden="true" />
                           ) : (
                             <Hash size={12} aria-hidden="true" />

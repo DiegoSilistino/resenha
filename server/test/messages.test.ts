@@ -192,6 +192,9 @@ describe("anexos", () => {
     const up = await upload(alice, "foto.png", Buffer.from("<html><script>alert(1)</script></html>"));
     const { attachment } = up.json();
     expect(attachment).toMatchObject({ mime: "application/octet-stream", inline: false });
+    // antes de ir para uma mensagem, o arquivo é só de quem subiu
+    expect((await t.app.inject({ method: "GET", url: attachment.url, headers: { cookie: bob.cookie } })).statusCode).toBe(404);
+    expect((await post(alice, "olha", [attachment.id])).statusCode).toBe(201);
     const file = await t.app.inject({ method: "GET", url: attachment.url, headers: { cookie: bob.cookie } });
     expect(file.headers["content-type"]).toBe("application/octet-stream");
     expect(String(file.headers["content-disposition"])).toMatch(/^attachment/);

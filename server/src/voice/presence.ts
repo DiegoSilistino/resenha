@@ -16,6 +16,8 @@ interface Entry extends VoiceMember {
 export class VoicePresence {
   private readonly byUser = new Map<string, Entry>();
   private readonly emptyListeners: ((channelId: string) => void)[] = [];
+  /** Quem fica sabendo da chamada: todos (sala da roda) ou só os membros da conversa. */
+  audienceOf: (channelId: string) => string[] | null = () => null;
 
   constructor(private readonly hub: Hub) {}
 
@@ -106,7 +108,7 @@ export class VoicePresence {
 
   private channelChanged(channelId: string): void {
     const members = this.members(channelId);
-    this.hub.broadcast({ type: "voice.channel", channelId, members });
+    this.hub.publish(this.audienceOf(channelId), { type: "voice.channel", channelId, members });
     if (members.length === 0) for (const fn of this.emptyListeners) fn(channelId);
   }
 }

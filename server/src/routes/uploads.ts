@@ -54,7 +54,11 @@ export function registerUploadRoutes(app: FastifyInstance, ctx: AppContext) {
     async (req, reply) => {
       if (!/^[0-9a-f-]{36}$/.test(req.params.id)) throw notFound();
       const a = store.attachmentById(req.params.id);
-      if (!a) throw notFound("Arquivo não encontrado");
+      // anexo de conversa privada só para quem participa; ainda não enviado, só para quem subiu
+      const userId = currentUser(req).id;
+      const channelId = a?.messageId ? store.messageById(a.messageId)?.channelId : undefined;
+      const allowed = a && (channelId ? store.canAccess(userId, channelId) : a.uploaderId === userId);
+      if (!a || !allowed) throw notFound("Arquivo não encontrado");
 
       const disposition = a.inline ? "inline" : "attachment";
       const asciiName = a.filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");

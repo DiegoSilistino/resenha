@@ -9,6 +9,8 @@ import type {
   Invite,
   Me,
   Message,
+  Conversation,
+  FriendEntry,
   PublicUser,
   Role,
   SearchResult,
@@ -95,6 +97,21 @@ export const api = {
     request<void>(on ? "PUT" : "DELETE", `/api/messages/${id}/reactions/${encodeURIComponent(emoji)}`),
 
   voiceToken: (channelId: string) => request<VoiceTokenResponse>("POST", "/api/voice/token", { channelId }),
+
+  // amigos
+  addFriend: (username: string) => request<{ friend: FriendEntry }>("POST", "/api/friends", { username }),
+  acceptFriend: (userId: string) => request<{ friend: FriendEntry }>("POST", `/api/friends/${userId}/accept`),
+  removeFriend: (userId: string) => request<void>("DELETE", `/api/friends/${userId}`),
+  friendLink: () => request<{ code: string }>("GET", "/api/friends/link"),
+  useFriendLink: (code: string) =>
+    request<{ friend: FriendEntry }>("POST", `/api/friends/link/${encodeURIComponent(code)}`),
+
+  // conversas privadas
+  openConversation: (userIds: string[], name?: string) =>
+    request<{ conversation: Conversation }>("POST", "/api/conversations", name ? { userIds, name } : { userIds }),
+  markConversationRead: (id: string, messageId: number) =>
+    request<void>("POST", `/api/conversations/${id}/read`, { messageId }),
+  leaveConversation: (id: string) => request<void>("DELETE", `/api/conversations/${id}/members/me`),
 
   createChannel: (name: string, kind: ChannelKind) => request<{ channel: Channel }>("POST", "/api/channels", { name, kind }),
   updateChannel: (id: string, b: { name?: string; position?: number }) =>

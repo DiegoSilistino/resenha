@@ -1,10 +1,13 @@
 import { useState, type ReactNode } from "react";
+import { useNavigate } from "react-router";
 import type { PublicUser, UserStatus } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { Nick } from "../components/Nick.tsx";
 import { api } from "../lib/api.ts";
 import { lookOf, lookVars, shownStatus, STATUS, statusLine, type ShownStatus } from "../lib/look.ts";
+import { callFriend, openConversationWith } from "../lib/social.ts";
+import { FriendRequestActions } from "../pages/FriendsPage.tsx";
 import { useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
@@ -49,8 +52,72 @@ export function ProfileCard() {
             </div>
           </>
         )}
+        {!isMe && !user.removed && <FriendActions userId={id} onDone={close} />}
       </ProfileCardView>
     </Modal>
+  );
+}
+
+/** No cartão de outra pessoa: conversar e ligar (amigos) ou o pedido de amizade. */
+function FriendActions({ userId, onDone }: { userId: string; onDone(): void }) {
+  const entry = useApp((s) => s.friends[userId]);
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  async function run(task: () => Promise<unknown>) {
+    setBusy(true);
+    try {
+      await task();
+    } catch (err) {
+      toast.fromError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (entry?.status === "friend") {
+    return (
+      <div className="profile-actions profile-actions-wrap">
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            onDone();
+            void openConversationWith([userId], navigate);
+          }}
+        >
+          Mensagem
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={() => {
+            onDone();
+            void callFriend(userId, navigate);
+          }}
+        >
+          Ligar
+        </button>
+        <button
+          type="button"
+          className="btn btn-small btn-ghost profile-unfriend"
+          disabled={busy}
+          onClick={() => confirm("Desfazer a amizade?") && void run(() => api.removeFriend(userId))}
+        >
+          Desfazer amizade
+        </button>
+      </div>
+    );
+  }
+  if (entry) return <FriendRequestActions entry={entry} />;
+  return (
+    <button
+      type="button"
+      className="btn btn-primary"
+      disabled={busy}
+      onClick={() => void run(() => api.addFriend(useApp.getState().users[userId]?.username ?? ""))}
+    >
+      Adicionar amigo
+    </button>
   );
 }
 
