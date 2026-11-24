@@ -321,6 +321,9 @@ export const gifSearchQuery = z.object({
   offset: z.coerce.number().int().min(0).max(4_999).default(0),
 });
 
+/** Capa do perfil escolhida no seletor de GIFs: a imagem do GIPHY (o servidor baixa e guarda). */
+export const bannerGifBody = z.object({ url: z.string().max(1_000) });
+
 export type ServerEvent =
   | HelloEvent
   | { type: "pong"; t0: number; serverTime: number }

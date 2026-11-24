@@ -10,6 +10,8 @@ import { HttpError } from "../http.ts";
 export interface GifProvider {
   trending(offset: number): Promise<GifResult[]>;
   search(query: string, offset: number): Promise<GifResult[]>;
+  /** Baixa uma mídia do GIPHY (a capa do perfil), sem passar de maxBytes. */
+  download(url: string, maxBytes: number): Promise<Buffer>;
 }
 
 const PAGE = 24;
@@ -44,11 +46,13 @@ export function toGifResults(data: unknown): GifResult[] {
     const original = img.original;
     const mp4 = original?.mp4 ?? img.fixed_width?.mp4;
     const preview = img.fixed_width_downsampled?.webp ?? img.fixed_width?.webp ?? img.fixed_width?.url;
+    // capa do perfil: 200 px de altura cobre bem os 120 px do cartão, com todos os quadros
+    const image = img.fixed_height?.webp ?? img.fixed_width?.webp ?? preview;
     const width = Number(original?.width ?? img.fixed_width?.width);
     const height = Number(original?.height ?? img.fixed_width?.height);
-    if (!g.id || !mp4 || !preview || !(width > 0) || !(height > 0)) continue;
-    if (!isGiphyMediaUrl(mp4) || !isGiphyMediaUrl(preview)) continue;
-    out.push({ id: g.id, title: (g.alt_text || g.title || "GIF").slice(0, 120), previewUrl: preview, mp4Url: mp4, width, height });
+    if (!g.id || !mp4 || !preview || !image || !(width > 0) || !(height > 0)) continue;
+    if (!isGiphyMediaUrl(mp4) || !isGiphyMediaUrl(preview) || !isGiphyMediaUrl(image)) continue;
+    out.push({ id: g.id, title: (g.alt_text || g.title || "GIF").slice(0, 120), previewUrl: preview, mp4Url: mp4, imageUrl: image, width, height });
   }
   return out;
 }
@@ -97,9 +101,42 @@ export function createGiphy(opts: { apiKey: string; baseUrl: string; fetch?: typ
     return results;
   }
 
+  async function download(url: string, maxBytes: number): Promise<Buffer> {
+    if (!isGiphyMediaUrl(url)) throw new HttpError(400, "Escolha um GIF do seletor.");
+    const unreachable = () => new HttpError(502, "Não consegui baixar o GIF do GIPHY agora. Tente de novo em instantes.");
+    const tooBig = () => new HttpError(413, `Esse GIF passa de ${maxBytes / 1024 / 1024} MB; escolha outro.`);
+    let res: Response;
+    try {
+      // sem seguir redirecionamento: o servidor só busca o que é do GIPHY
+      res = await doFetch(url, { redirect: "error", signal: AbortSignal.timeout(15_000) });
+    } catch {
+      throw unreachable();
+    }
+    if (!res.ok || !res.body) throw new HttpError(502, `O GIPHY respondeu com erro ${res.status}.`);
+    if (Number(res.headers.get("content-length")) > maxBytes) throw tooBig();
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      for (let r = await reader.read(); !r.done; r = await reader.read()) {
+        size += r.value.byteLength;
+        if (size > maxBytes) break;
+        chunks.push(r.value);
+      }
+    } catch {
+      throw unreachable();
+    }
+    if (size > maxBytes) {
+      void reader.cancel().catch(() => {});
+      throw tooBig();
+    }
+    return Buffer.concat(chunks);
+  }
+
   return {
     trending: (offset) => call("/v1/gifs/trending", { offset: String(offset) }, TRENDING_TTL_MS),
     search: (query, offset) =>
       call("/v1/gifs/search", { q: query.toLowerCase(), offset: String(offset), lang: "pt" }, SEARCH_TTL_MS),
+    download,
   };
 }

@@ -55,6 +55,7 @@ export function GifPicker({ anchor, onPick, onClose }: Props) {
 
   function onKeyDown(e: KeyboardEvent) {
     if (e.key === "Escape") {
+      e.preventDefault(); // dentro de um <dialog>, o Esc fecharia o diálogo inteiro
       e.stopPropagation();
       onClose();
       anchor.focus();
@@ -118,6 +119,7 @@ export function GifPicker({ anchor, onPick, onClose }: Props) {
       </div>
       <p className="gif-attribution">Powered by GIPHY</p>
     </div>,
-    document.body,
+    // dentro de um modal (<dialog> na camada do topo) o painel precisa ir junto, senão fica por baixo
+    anchor.closest("dialog") ?? document.body,
   );
 }

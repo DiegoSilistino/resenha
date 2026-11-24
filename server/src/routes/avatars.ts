@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { LIMITS } from "@resenha/shared";
+import { bannerGifBody, LIMITS } from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
-import { badRequest, currentUser, HttpError, notFound } from "../http.ts";
+import { badRequest, currentUser, HttpError, notFound, parse } from "../http.ts";
 import { toPublicUser } from "../store.ts";
 import { bannerInfo, imageInfo } from "../uploads/image.ts";
 
@@ -80,24 +80,39 @@ export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
         throw err;
       }
       if (file.file.truncated) throw tooBig();
-
-      const info = bannerInfo(data);
-      if (!info) throw badRequest("Envie uma imagem PNG, JPEG, WebP ou GIF");
-      const max = LIMITS.bannerMaxSide;
-      if (info.width < 1 || info.height < 1 || info.width > max || info.height > max) {
-        throw badRequest(`A capa pode ter no máximo ${max} pixels de lado`);
-      }
-
-      const user = currentUser(req);
-      const id = randomUUID();
-      await writeFile(avatars.pathFor(id), data, { flag: "wx" });
-      const previous = store.setBanner(user.id, { id, mime: info.mime });
-      if (previous) await avatars.remove([previous]);
-      const me = toPublicUser(store.userById(user.id)!);
-      hub.broadcast({ type: "user.upsert", user: me });
-      return { me };
+      return saveBanner(currentUser(req).id, data);
     },
   );
+
+  // Capa escolhida no seletor de GIFs: o servidor baixa do GIPHY e guarda como se fosse enviada.
+  app.post(
+    "/api/me/banner/gif",
+    { preHandler: requireUser, config: rateLimited(ctx, 10, "10 minutes") },
+    async (req) => {
+      if (!ctx.gifs) throw notFound();
+      const { url } = parse(bannerGifBody, req.body);
+      return saveBanner(currentUser(req).id, await ctx.gifs.download(url, LIMITS.bannerMaxBytes));
+    },
+  );
+
+  async function saveBanner(userId: string, data: Buffer) {
+    const info = bannerInfo(data);
+    if (!info) throw badRequest("Envie uma imagem PNG, JPEG, WebP ou GIF");
+    const max = LIMITS.bannerMaxSide;
+    if (info.width < 1 || info.height < 1 || info.width > max || info.height > max) {
+      throw badRequest(`A capa pode ter no máximo ${max} pixels de lado`);
+    }
+    const id = randomUUID();
+    await writeFile(avatars.pathFor(id), data, { flag: "wx" });
+    const previous = store.setBanner(userId, { id, mime: info.mime });
+    if (previous) await avatars.remove([previous]);
+    // quem escolhe uma capa quer vê-la: liga "Imagem ou GIF" sem depender do "Salvar perfil"
+    const { look } = store.userById(userId)!;
+    if (look.banner !== "imagem") store.updateUserProfile(userId, { look: { ...look, banner: "imagem" } });
+    const me = toPublicUser(store.userById(userId)!);
+    hub.broadcast({ type: "user.upsert", user: me });
+    return { me };
+  }
 
   app.delete("/api/me/banner", { preHandler: requireUser }, async (req) => {
     const user = currentUser(req);

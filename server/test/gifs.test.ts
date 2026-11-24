@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { LIMITS } from "@resenha/shared";
 import { createGiphy, isGiphyMediaUrl, toGifResults } from "../src/gifs/giphy.ts";
 import { createTestApp, listen, registerUser, TestSocket, type TestApp } from "./helpers.ts";
 
@@ -10,6 +11,7 @@ const gif = (id: string, extra: Record<string, unknown> = {}) => ({
     original: { width: "480", height: "270", mp4: `https://media2.giphy.com/media/${id}/giphy.mp4?cid=x`, url: `https://media2.giphy.com/media/${id}/giphy.gif` },
     fixed_width: { width: "200", height: "113", webp: `https://media2.giphy.com/media/${id}/200w.webp`, mp4: `https://media2.giphy.com/media/${id}/200w.mp4` },
     fixed_width_downsampled: { width: "200", height: "113", webp: `https://media2.giphy.com/media/${id}/200w_d.webp` },
+    fixed_height: { width: "356", height: "200", webp: `https://media2.giphy.com/media/${id}/200.webp` },
   },
   ...extra,
 });
@@ -34,6 +36,7 @@ describe("conversão da resposta do GIPHY", () => {
         title: "GIF a1",
         previewUrl: "https://media2.giphy.com/media/a1/200w_d.webp",
         mp4Url: "https://media2.giphy.com/media/a1/giphy.mp4?cid=x",
+        imageUrl: "https://media2.giphy.com/media/a1/200.webp",
         width: 480,
         height: 270,
       },
@@ -104,5 +107,35 @@ describe("rota de GIFs", () => {
     const socket = await TestSocket.connect(await listen(t), u.cookie);
     expect((await socket.waitFor("hello")).features).toEqual({ gifs: true });
     socket.close();
+  });
+
+  it("capa pelo seletor: baixa do GIPHY e guarda; recusa outro site e GIF grande demais", async () => {
+    const gifBytes = Buffer.from("GIF89a\x64\x01\xc8\x00\x00\x00\x00", "latin1"); // 356 x 200
+    const calls: string[] = [];
+    let body: Uint8Array = gifBytes;
+    const fetchFn = (async (input: string | URL | Request) => {
+      calls.push(String(input));
+      return new Response(body, { status: 200, headers: { "content-type": "image/gif" } });
+    }) as typeof fetch;
+    t = await createTestApp({ gifFetch: fetchFn });
+    const u = await registerUser(t);
+    const pick = (url: string) =>
+      t.app.inject({ method: "POST", url: "/api/me/banner/gif", headers: { cookie: u.cookie }, payload: { url } });
+
+    const ok = await pick("https://media2.giphy.com/media/a1/200.webp");
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().me.look.banner).toBe("imagem"); // a capa aparece sem precisar de "Salvar perfil"
+    const bannerUrl = ok.json().me.bannerUrl as string;
+    const img = await t.app.inject({ method: "GET", url: bannerUrl, headers: { cookie: u.cookie } });
+    expect(img.headers["content-type"]).toBe("image/gif");
+    expect(img.rawPayload.equals(gifBytes)).toBe(true);
+
+    expect((await pick("https://evil.example/x.gif")).statusCode).toBe(400);
+    expect((await pick("http://169.254.169.254/latest")).statusCode).toBe(400);
+    expect(calls).toHaveLength(1);
+
+    body = new Uint8Array(LIMITS.bannerMaxBytes + 1);
+    expect((await pick("https://media2.giphy.com/media/big/200.webp")).statusCode).toBe(413);
+    expect((await t.app.inject({ method: "POST", url: "/api/me/banner/gif", payload: { url: "https://media2.giphy.com/x" } })).statusCode).toBe(401);
   });
 });

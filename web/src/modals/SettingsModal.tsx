@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { AVATAR_COLORS, DEFAULT_LOOK, LIMITS, PROFILE_COLORS, type Me, type ProfileLook } from "@resenha/shared";
+import { GifPicker } from "../chat/GifPicker.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { api, ApiError } from "../lib/api.ts";
 import { ACCENTS, accentColor, BGS, WALLS } from "../lib/theme.ts";
@@ -240,6 +241,8 @@ function Choice<T extends string>({
 /** A capa é enviada na hora (como a foto); "Salvar perfil" cuida do resto. */
 function BannerUpload({ hasBanner }: { hasBanner: boolean }) {
   const [busy, setBusy] = useState(false);
+  const [gifAnchor, setGifAnchor] = useState<HTMLElement | null>(null);
+  const gifs = useApp((s) => s.features.gifs);
   async function run(task: () => Promise<{ me: Me }>) {
     setBusy(true);
     try {
@@ -253,8 +256,19 @@ function BannerUpload({ hasBanner }: { hasBanner: boolean }) {
   }
   return (
     <div className="row-actions">
+      {gifs && (
+        <button
+          type="button"
+          className="btn btn-small btn-primary"
+          disabled={busy}
+          aria-expanded={!!gifAnchor}
+          onClick={(e) => setGifAnchor(gifAnchor ? null : e.currentTarget)}
+        >
+          {busy ? "Salvando capa…" : "Escolher GIF"}
+        </button>
+      )}
       <label className="btn btn-small btn-outline" aria-disabled={busy || undefined}>
-        {hasBanner ? "Trocar imagem ou GIF" : "Escolher imagem ou GIF"}
+        {gifs ? "Enviar do computador" : hasBanner ? "Trocar imagem ou GIF" : "Escolher imagem ou GIF"}
         <input
           type="file"
           accept="image/png,image/jpeg,image/webp,image/gif"
@@ -272,7 +286,19 @@ function BannerUpload({ hasBanner }: { hasBanner: boolean }) {
           Tirar a imagem
         </button>
       )}
-      <small className="muted">PNG, JPEG, WebP ou GIF, até {LIMITS.bannerMaxBytes / 1024 / 1024} MB.</small>
+      <small className="muted">
+        {gifs && "Escolha um GIF ou envie "}PNG, JPEG, WebP ou GIF, até {LIMITS.bannerMaxBytes / 1024 / 1024} MB.
+      </small>
+      {gifAnchor && (
+        <GifPicker
+          anchor={gifAnchor}
+          onClose={() => setGifAnchor(null)}
+          onPick={(g) => {
+            setGifAnchor(null);
+            void run(() => api.bannerGif(g.imageUrl));
+          }}
+        />
+      )}
     </div>
   );
 }

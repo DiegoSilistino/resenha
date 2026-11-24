@@ -72,6 +72,7 @@ export const api = {
     return request<{ me: Me }>("POST", "/api/me/banner", form);
   },
   removeBanner: () => request<{ me: Me }>("DELETE", "/api/me/banner"),
+  bannerGif: (url: string) => request<{ me: Me }>("POST", "/api/me/banner/gif", { url }),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>("POST", "/api/me/password", { currentPassword, newPassword }),
   uploadAvatar: (image: Blob) => {

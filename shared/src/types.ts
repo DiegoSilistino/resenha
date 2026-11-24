@@ -167,6 +167,8 @@ export interface GifResult {
   previewUrl: string;
   /** Vídeo MP4 em loop, que é o que vai na mensagem (bem menor que o .gif). */
   mp4Url: string;
+  /** WebP animado de 200 px de altura: é o que vira capa do perfil. */
+  imageUrl: string;
   width: number;
   height: number;
 }
