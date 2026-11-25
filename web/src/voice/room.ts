@@ -20,6 +20,7 @@ import {
 } from "livekit-client";
 import { CAPTIONS_TOPIC } from "@resenha/shared";
 import { api, ApiError } from "../lib/api.ts";
+import { desktop } from "../lib/desktop.ts";
 import { realtime } from "../lib/realtime.ts";
 import { reportError } from "../lib/errors.ts";
 import { playSound } from "../lib/sounds.ts";
@@ -437,6 +438,22 @@ if (typeof window !== "undefined") {
   });
   // Trocar de janela com a tecla apertada não pode deixar o microfone preso aberto.
   window.addEventListener("blur", () => setPtt(false));
+}
+
+// App de desktop: com outra janela em foco (o jogo), quem vê a tecla é o atalho global do app.
+if (desktop) {
+  const bridge = desktop;
+  const sync = () => {
+    const s = useSettings.getState();
+    bridge.setPushToTalkKey(s.pttEnabled ? s.pttKey : null);
+  };
+  sync();
+  useSettings.subscribe((s, prev) => {
+    if (s.pttEnabled !== prev.pttEnabled || s.pttKey !== prev.pttKey) sync();
+  });
+  bridge.onPushToTalk((down) => {
+    if (room && useSettings.getState().pttEnabled) setPtt(down);
+  });
 }
 
 // ---------------------------------------------------------------- tela e câmera

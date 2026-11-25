@@ -1,0 +1,48 @@
+{
+  "name": "resenha-desktop",
+  "productName": "Resenha",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Resenha para Windows: o site numa janela própria, com push-to-talk global e ícone na bandeja.",
+  "author": "Resenha",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "build": {
+    "appId": "br.resenha.desktop",
+    "productName": "Resenha",
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "setup.html",
+      "config.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/public/icon-192.png",
+        "to": "icon.png"
+      }
+    ],
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "../web/public/icon-512.png"
+    },
+    "nsis": {
+      "artifactName": "Resenha-Setup.${ext}",
+      "shortcutName": "Resenha"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.5"
+  }
+}

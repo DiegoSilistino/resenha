@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Resenha</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #09090b;
+        color: #f2f2f3;
+        font: 15px system-ui, sans-serif;
+      }
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: min(380px, 90vw);
+      }
+      h1 {
+        margin: 0;
+        font-size: 28px;
+      }
+      p {
+        margin: 0;
+        color: #9a9aa3;
+      }
+      input {
+        padding: 12px 14px;
+        border: 1px solid #2a2a30;
+        border-radius: 12px;
+        background: #17171a;
+        color: inherit;
+        font: inherit;
+      }
+      button {
+        padding: 12px;
+        border: 0;
+        border-radius: 999px;
+        background: #c5f04a;
+        color: #1a2306;
+        font: 600 15px system-ui, sans-serif;
+        cursor: pointer;
+      }
+      #erro {
+        color: #ff5a4f;
+        min-height: 1.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <form id="form">
+      <h1>Resenha</h1>
+      <p>Qual é o endereço do Resenha da sua turma? É o mesmo que você abre no navegador.</p>
+      <input id="url" type="url" required placeholder="https://resenha.seudominio.com.br" autofocus />
+      <button>Entrar</button>
+      <span id="erro" role="alert"></span>
+    </form>
+    <script>
+      document.getElementById("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const erro = await window.resenhaDesktop.saveUrl(document.getElementById("url").value);
+        document.getElementById("erro").textContent = erro || "";
+      });
+    </script>
+  </body>
+</html>

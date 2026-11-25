@@ -1,0 +1,43 @@
+# Monta o instalador do Resenha para Windows e publica numa Release do GitHub.
+# O botão "Baixar app" do site aponta para releases/latest/download/Resenha-Setup.exe.
+# Nova versão do instalador: suba "version" em desktop/package.json (o site em si atualiza sozinho no app).
+name: App de desktop
+
+on:
+  push:
+    branches: [main]
+    paths: ["desktop/**", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      # endereço do site (variável RESENHA_URL do repositório); sem ela, o app pergunta na primeira vez
+      - run: node -e "require('fs').writeFileSync('config.json', JSON.stringify({ url: process.env.RESENHA_URL || '' }))"
+        env:
+          RESENHA_URL: ${{ vars.RESENHA_URL }}
+      - run: npm run dist
+      - id: version
+        shell: bash
+        run: echo "value=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ steps.version.outputs.value }}
+          name: Resenha para Windows ${{ steps.version.outputs.value }}
+          body: Instalador do Resenha para Windows. Baixe o Resenha-Setup.exe e abra.
+          files: desktop/dist/Resenha-Setup.exe
+          make_latest: true

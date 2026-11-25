@@ -1,11 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { Phone, PhoneCall, PhoneOff } from "lucide-react";
 import { Avatar } from "../components/Avatar.tsx";
+import { desktop } from "../lib/desktop.ts";
 import { realtime } from "../lib/realtime.ts";
 import { loopSound } from "../lib/sounds.ts";
 import { conversationTitle, displayNameOf, useApp } from "../state/app.ts";
-import { joinVoice } from "../voice/controller.ts";
+import { toast } from "../state/toasts.ts";
+import { joinVoice, leaveVoice } from "../voice/controller.ts";
 import { useVoice } from "../voice/state.ts";
 
 /**
@@ -69,6 +71,7 @@ function RingDialog({
     const dialog = ref.current;
     if (!dialog) return;
     dialog.showModal();
+    desktop?.show(false); // app na bandeja ou minimizado: aparece sem roubar o foco do jogo
     const keep = (e: Event) => e.preventDefault();
     dialog.addEventListener("cancel", keep);
     const stopRing = loopSound("ring", 2_400);
@@ -99,6 +102,48 @@ function RingDialog({
         </button>
       </div>
     </dialog>
+  );
+}
+
+/** Sozinho na chamada de uma conversa por tanto tempo, o app avisa; sem resposta ao aviso, sai. */
+const ALONE_MS = 5 * 60_000;
+const ALONE_WARN_MS = 30_000;
+
+/**
+ * Como no Discord: em conversa privada ou grupo (salas das rodas não), quem fica 5 min sozinho na
+ * chamada sai sozinho, depois de 30 s de aviso com "Ficar". Evita microfone esquecido aberto e
+ * chamada fantasma.
+ */
+export function AloneInCall() {
+  const channelId = useVoice((s) => (s.status === "connected" ? s.channelId : null));
+  const watch = useApp((s) => !!channelId && !!s.conversations[channelId] && (s.voice[channelId]?.length ?? 0) <= 1);
+  const [warning, setWarning] = useState(false);
+  const [round, setRound] = useState(0); // "Ficar" recomeça a contagem
+
+  useEffect(() => {
+    setWarning(false);
+    if (!watch) return;
+    const timer = setTimeout(() => setWarning(true), ALONE_MS - ALONE_WARN_MS);
+    return () => clearTimeout(timer);
+  }, [watch, channelId, round]);
+
+  useEffect(() => {
+    if (!warning) return;
+    const timer = setTimeout(() => {
+      void leaveVoice();
+      toast.info("Você saiu da chamada: ficou 5 minutos sozinho.");
+    }, ALONE_WARN_MS);
+    return () => clearTimeout(timer);
+  }, [warning]);
+
+  if (!warning) return null;
+  return (
+    <div className="alone-warning" role="alert">
+      <span>Você está sozinho na chamada há quase 5 minutos. Saindo em 30 segundos.</span>
+      <button type="button" className="btn btn-small btn-primary" onClick={() => setRound((r) => r + 1)}>
+        Ficar
+      </button>
+    </div>
   );
 }
 

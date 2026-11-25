@@ -1,5 +1,6 @@
 import { Link, NavLink, useLocation } from "react-router";
-import { Coins } from "lucide-react";
+import { Coins, Download } from "lucide-react";
+import { DESKTOP_DOWNLOAD_URL, offerDesktopApp } from "../lib/desktop.ts";
 import { APP_NAME } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { unreadConversations, useApp } from "../state/app.ts";
@@ -63,6 +64,11 @@ export function TopBar() {
       <Tabs className="tabs-top" />
       <div className="topbar-spacer" />
       <CallPill place="top" />
+      {offerDesktopApp && (
+        <a className="topbar-coins" href={DESKTOP_DOWNLOAD_URL} title="Baixar o app do Resenha para Windows">
+          <Download size={16} aria-hidden="true" /> Baixar app
+        </a>
+      )}
       <button
         type="button"
         className="topbar-coins"

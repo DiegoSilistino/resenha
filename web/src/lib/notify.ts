@@ -13,6 +13,7 @@ import { plainText } from "../chat/plain.ts";
 import { conversationTitle, displayNameOf, mentionsMe, useApp, windowFocused } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
+import { focusApp } from "./desktop.ts";
 import { playSound } from "./sounds.ts";
 import { useVoice } from "../voice/state.ts";
 import { leaveVoice } from "../voice/controller.ts";
@@ -67,7 +68,7 @@ export function onRing(channelId: string, ring: CallRing | null): void {
     });
     ringing.set(channelId, n);
     n.onclick = () => {
-      window.focus();
+      focusApp();
       n.close();
     };
   } catch {
@@ -158,7 +159,7 @@ export function onNewMessage(m: Message): void {
     open.add(n);
     n.onclose = () => open.delete(n);
     n.onclick = () => {
-      window.focus();
+      focusApp();
       navigate?.(conv ? `/conversas/${m.channelId}` : `/c/${m.channelId}`);
       n.close();
     };
@@ -234,7 +235,7 @@ export function onVoiceMembers(channelId: string, prev: VoiceMember[], next: Voi
     open.add(n);
     n.onclose = () => open.delete(n);
     n.onclick = () => {
-      window.focus();
+      focusApp();
       navigate?.(conv ? `/conversas/${channelId}` : `/c/${channelId}`);
       n.close();
     };

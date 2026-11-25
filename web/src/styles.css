@@ -5437,3 +5437,25 @@ a.roda-card:hover {
 .stage-banner-ring svg {
   animation: deco-pulse 1.2s ease-in-out infinite;
 }
+
+/* aviso de "sozinho na chamada" (conversas): acima do menu de baixo do celular e dos avisos rápidos */
+.alone-warning {
+  position: fixed;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%);
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 12px 14px 12px 18px;
+  border: 1px solid color-mix(in oklch, var(--accent) 45%, var(--line-2));
+  border-radius: var(--r-md);
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+}
+a.topbar-coins {
+  text-decoration: none;
+}

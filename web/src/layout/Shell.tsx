@@ -17,7 +17,7 @@ import { RodaPage } from "../pages/RodaPage.tsx";
 import { RodasPage } from "../pages/RodasPage.tsx";
 import { preloadVoice } from "../voice/controller.ts";
 import { WatchDock } from "../watch/WatchDock.tsx";
-import { IncomingCall } from "./IncomingCall.tsx";
+import { AloneInCall, IncomingCall } from "./IncomingCall.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 import { Dock, TopBar } from "./TopBar.tsx";
 
@@ -110,6 +110,7 @@ export function Shell() {
       <Dock />
       <WatchDock />
       <IncomingCall />
+      <AloneInCall />
       <ProfileCard />
       <Suspense fallback={null}>
         {settingsOpen && <SettingsModal />}
