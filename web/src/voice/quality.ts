@@ -25,3 +25,13 @@ export function qualityInfo(q: string | undefined): QualityInfo {
       return { bars: 0, tone: "none", label: "Medindo a conexão…" };
   }
 }
+
+/** Ping que outra pessoa mandou pela sala (`{"ms": 42}`): só número razoável, senão null. */
+export function parsePing(payload: Uint8Array): number | null {
+  try {
+    const { ms } = JSON.parse(new TextDecoder().decode(payload)) as { ms?: unknown };
+    return typeof ms === "number" && ms > 0 && ms < 10_000 ? Math.round(ms) : null;
+  } catch {
+    return null;
+  }
+}

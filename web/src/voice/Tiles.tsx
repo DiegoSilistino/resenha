@@ -109,6 +109,7 @@ export function ParticipantTile({ participant, channelId }: { participant: Parti
   const user = useApp((s) => s.users[userId]);
   const member = useApp((s) => s.voice[channelId]?.find((m) => m.userId === userId));
   const speaking = useVoice((s) => !!s.speaking[userId]);
+  const ping = useVoice((s) => s.pings[userId]);
   useVoice((s) => s.version); // redesenha quando a sala muda
 
   const cam = participant.getTrackPublication(Track.Source.Camera);
@@ -139,7 +140,7 @@ export function ParticipantTile({ participant, channelId }: { participant: Parti
         ) : micOff ? (
           <MicOff size={14} aria-label="microfone desligado" />
         ) : null}
-        <SignalIcon quality={participant.connectionQuality} />
+        <SignalIcon quality={participant.connectionQuality} ping={ping} />
       </div>
       <SoundMark userId={userId} />
       {!participant.isLocal && <VolumeControl userId={userId} name={name} />}

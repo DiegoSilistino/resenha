@@ -26,6 +26,7 @@ export function CallPill({ place }: { place: "top" | "bottom" }) {
   });
   const rodaName = useApp((s) => (channel?.rodaId ? s.rodas[channel.rodaId]?.name : undefined));
   useVoice((s) => s.version); // a qualidade muda junto com a sala
+  const ping = useVoice((s) => s.pings[currentRoom()?.localParticipant.identity ?? ""]);
   if (status === "idle" || !channelId) return null;
   const quality = currentRoom()?.localParticipant.connectionQuality;
   const connected = status === "connected";
@@ -34,7 +35,7 @@ export function CallPill({ place }: { place: "top" | "bottom" }) {
 
   return (
     <div className="call-pill" data-place={place} data-status={status} role="region" aria-label="Chamada em andamento">
-      {connected ? <SignalIcon quality={quality} /> : <span className="call-pill-dot" aria-hidden="true" />}
+      {connected ? <SignalIcon quality={quality} ping={ping} /> : <span className="call-pill-dot" aria-hidden="true" />}
       <Link to={href} className="call-pill-label" title={`Voltar para ${name}`}>
         {connected ? (convName ? `call com ${name}` : rodaName ? `${name} · ${rodaName}` : name) : STATUS_TEXT[status]}
       </Link>

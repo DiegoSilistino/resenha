@@ -33,6 +33,7 @@ import { micChainConfig, micOptions } from "./controller.ts";
 import { MicProcessor } from "./gate/processor.ts";
 import { useVoice } from "./state.ts";
 import { participantVolumes } from "./volumes.ts";
+import { parsePing } from "./quality.ts";
 
 const setV = useVoice.setState;
 const bump = () => setV((s) => ({ version: s.version + 1 }));
@@ -97,6 +98,7 @@ export async function joinVoice(channelId: string): Promise<void> {
 
     established.add(r);
     setV({ status: "connected", audioBlocked: !r.canPlaybackAudio });
+    startPing(r);
     playSound("join");
     realtime.send({ type: "voice.join", channelId });
     applyVolumes();
@@ -156,6 +158,7 @@ export async function leaveVoice({ sound = true }: { sound?: boolean } = {}): Pr
 
 function resetCallState() {
   useUi.getState().setShareDialogOpen(false);
+  stopPing();
   setV((s) => ({
     status: "idle",
     channelId: null,
@@ -165,10 +168,57 @@ function resetCallState() {
     audioBlocked: false,
     speaking: {},
     captions: {},
+    pings: {},
     watching: {},
     focused: null,
     version: s.version + 1,
   }));
+}
+
+// ---------------------------------------------------------------- ping (ms) de cada um
+
+/**
+ * O LiveKit só dá as barrinhas da conexão de cada um. O ping em ms cada app mede o seu (no caminho
+ * real da voz) e conta para a sala pelo canal de dados, a cada 5 s e quando alguém entra.
+ */
+const PING_TOPIC = "ping";
+const PING_EVERY_MS = 5_000;
+let pingTimer: ReturnType<typeof setInterval> | null = null;
+
+async function measurePing(r: Room): Promise<number | null> {
+  let rtt: number | undefined;
+  const mic = r.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+  const report = await mic?.getRTCStatsReport().catch(() => undefined);
+  report?.forEach((s: { type: string; nominated?: boolean; currentRoundTripTime?: number }) => {
+    if (s.type === "candidate-pair" && s.nominated && typeof s.currentRoundTripTime === "number") rtt = s.currentRoundTripTime * 1000;
+  });
+  // sem microfone publicado (ex.: sem permissão): o ping da conexão de sinalização com o mesmo servidor
+  rtt ??= r.engine.client.rtt || undefined;
+  return rtt === undefined ? null : Math.max(1, Math.round(rtt)); // na mesma rede pode medir 0: mostra 1 ms
+}
+
+async function sharePing(r: Room): Promise<void> {
+  const ms = await measurePing(r);
+  if (room !== r || ms === null) return;
+  setV((s) => ({ pings: { ...s.pings, [r.localParticipant.identity]: ms } }));
+  const data = new TextEncoder().encode(JSON.stringify({ ms }));
+  void r.localParticipant.publishData(data, { reliable: false, topic: PING_TOPIC }).catch(() => undefined);
+}
+
+function receivePing(identity: string, payload: Uint8Array): void {
+  const ms = parsePing(payload);
+  if (ms !== null) setV((s) => ({ pings: { ...s.pings, [identity]: ms } }));
+}
+
+function startPing(r: Room): void {
+  stopPing();
+  void sharePing(r);
+  pingTimer = setInterval(() => void sharePing(r), PING_EVERY_MS);
+}
+
+function stopPing(): void {
+  if (pingTimer) clearInterval(pingTimer);
+  pingTimer = null;
 }
 
 // ---------------------------------------------------------------- eventos da sala
@@ -185,6 +235,7 @@ function wire(r: Room) {
     })
     .on(RoomEvent.ParticipantConnected, () => {
       if (room === r && performance.now() > quietUntil) playSound("join");
+      void sharePing(r); // quem chegou vê o seu ping na hora, sem esperar a próxima medição
       bump();
     })
     .on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => {
@@ -193,7 +244,9 @@ function wire(r: Room) {
       setV((s) => {
         const captions = { ...s.captions };
         delete captions[p.identity];
-        return { captions, version: s.version + 1 };
+        const pings = { ...s.pings };
+        delete pings[p.identity];
+        return { captions, pings, version: s.version + 1 };
       });
     })
     .on(RoomEvent.ConnectionQualityChanged, bump)
@@ -221,6 +274,7 @@ function wire(r: Room) {
       setV({ speaking: Object.fromEntries(speakers.map((p) => [p.identity, true as const])) });
     })
     .on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+      if (topic === PING_TOPIC && participant) return receivePing(participant.identity, payload);
       if (topic !== CAPTIONS_TOPIC || !participant) return;
       try {
         const chunk = JSON.parse(new TextDecoder().decode(payload)) as CaptionChunk;

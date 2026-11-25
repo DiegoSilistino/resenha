@@ -27,6 +27,8 @@ export interface VoiceState {
   version: number;
   speaking: Record<string, true>;
   captions: Record<string, Caption>;
+  /** Ping (ms) de cada um até o servidor de voz: cada app mede o seu e conta para a sala. */
+  pings: Record<string, number>;
   /** Som da tela silenciado por pessoa (vale até recarregar a página). */
   streamMuted: Record<string, true>;
   /** Telas dos outros que você abriu (como no Discord: vídeo e som só depois de clicar em Assistir). */
@@ -49,6 +51,7 @@ export const useVoice = create<VoiceState>()(() => ({
   version: 0,
   speaking: {},
   captions: {},
+  pings: {},
   streamMuted: {},
   watching: {},
   focused: null,
