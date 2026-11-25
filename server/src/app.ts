@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import cookie from "@fastify/cookie";
@@ -57,6 +58,8 @@ export interface AppContext {
   voice: VoicePresence;
   /** Toque das chamadas nas conversas privadas. */
   ringer: CallRinger;
+  /** Versão do site servido (muda a cada deploy); null sem o site compilado (desenvolvimento). */
+  build: string | null;
   watch: WatchService;
   gateway: VoiceGateway;
   uploads: UploadStorage;
@@ -115,6 +118,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
     hub,
     voice,
     ringer,
+    build: webBuild(config.webDist),
     watch: Object.assign(new WatchService(hub, deps.fetchTitle ?? createOEmbedFetcher()), {
       audienceOf,
     }),
@@ -263,6 +267,16 @@ async function registerFrontend(app: FastifyInstance, config: Config) {
     reply.header("Cache-Control", "no-cache");
     return reply.sendFile("index.html", dist, { cacheControl: false });
   });
+}
+
+/** Impressão do index.html do site: cada build tem outros nomes de arquivo dentro dele, então muda a cada deploy. */
+function webBuild(dist: string | null): string | null {
+  if (!dist) return null;
+  try {
+    return createHash("sha256").update(readFileSync(path.join(dist, "index.html"))).digest("hex").slice(0, 12);
+  } catch {
+    return null;
+  }
 }
 
 function cspDirectives(config: Config): Record<string, string[]> {

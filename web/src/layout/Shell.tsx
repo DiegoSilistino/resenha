@@ -1,6 +1,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useNavigate, useParams } from "react-router";
-import { BellRing, X } from "lucide-react";
+import { BellRing, RefreshCw, X } from "lucide-react";
+import { hasUnsentDraft } from "../chat/Composer.tsx";
+import { useVoice } from "../voice/state.ts";
 import { lazyChunk } from "../lib/chunks.ts";
 import { notifyPermission, requestNotifyPermission, setNotifyNavigator } from "../lib/notify.ts";
 import { unreadTotal, useApp } from "../state/app.ts";
@@ -92,6 +94,7 @@ export function Shell() {
             Sem conexão com o servidor. Tentando reconectar…
           </div>
         )}
+        <UpdateBanner />
         <NotifyPrompt />
       </div>
       <div className="content">
@@ -123,6 +126,40 @@ export function Shell() {
         {newRoom && <NewRoomModal key={newRoom.rodaId + newRoom.kind} />}
         {inviteRodaId && <InviteFriendsDialog key={inviteRodaId} />}
       </Suspense>
+    </div>
+  );
+}
+
+/**
+ * Saiu atualização (deploy): vale para o site e para o app, que abre o mesmo site. Botão para atualizar
+ * na hora; e, se a janela estiver escondida (bandeja, outra aba), sem chamada e sem texto por enviar,
+ * recarrega sozinho para ninguém ficar na versão velha.
+ */
+function UpdateBanner() {
+  const update = useApp((s) => s.updateAvailable);
+  const inCall = useVoice((s) => s.status !== "idle");
+  useEffect(() => {
+    if (!update) return;
+    const reloadIfAway = () => {
+      if (document.visibilityState === "hidden" && useVoice.getState().status === "idle" && !hasUnsentDraft()) location.reload();
+    };
+    reloadIfAway();
+    document.addEventListener("visibilitychange", reloadIfAway);
+    const stopWatchingCall = useVoice.subscribe(reloadIfAway); // saiu da chamada com a janela escondida
+    return () => {
+      document.removeEventListener("visibilitychange", reloadIfAway);
+      stopWatchingCall();
+    };
+  }, [update]);
+
+  if (!update) return null;
+  return (
+    <div className="notify-prompt" role="status">
+      <RefreshCw size={18} aria-hidden="true" />
+      <span>Saiu uma atualização do Resenha.</span>
+      <button type="button" className="btn btn-small btn-primary" onClick={() => location.reload()}>
+        {inCall ? "Atualizar (sai da chamada)" : "Atualizar"}
+      </button>
     </div>
   );
 }

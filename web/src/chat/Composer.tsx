@@ -26,6 +26,8 @@ interface Pending {
 
 /** Rascunho por canal: trocar de canal e voltar não perde o texto. */
 const drafts = new Map<string, string>();
+/** Tem texto digitado e não enviado (recarregar a página o perderia). */
+export const hasUnsentDraft = () => [...drafts.values()].some((t) => t.trim() !== "");
 const TYPING_EVERY_MS = 2_500;
 let pendingKey = 0;
 

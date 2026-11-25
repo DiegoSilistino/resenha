@@ -15,6 +15,9 @@ export const clock = new ClockSync();
 
 type Listener = () => void;
 
+/** Versão do site que esta página carregou (vem no primeiro hello). */
+let loadedBuild: string | null = null;
+
 /**
  * Conexão WebSocket com reconexão automática (backoff exponencial com jitter).
  * O primeiro evento de cada conexão é sempre "hello", que reidrata todo o estado.
@@ -111,6 +114,11 @@ class RealtimeClient {
         }
         if (event.latestFeedbackId !== undefined && event.latestFeedbackId < useSettings.getState().feedbackSeenId) {
           useSettings.getState().set({ feedbackSeenId: event.latestFeedbackId });
+        }
+        // Deploy: o servidor voltou com outra versão do site que a desta página (a primeira que viu)
+        if (event.build) {
+          loadedBuild ??= event.build;
+          if (event.build !== loadedBuild) useApp.setState({ updateAvailable: true });
         }
         useApp.getState().setConnection("online");
         this.startPinging();

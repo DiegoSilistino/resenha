@@ -255,6 +255,8 @@ export interface HelloEvent {
   notices: UserNotice[];
   /** Chamadas tocando agora nas suas conversas (canal -> quem ligou e para quem toca). */
   rings: Record<string, CallRing>;
+  /** Versão do site no ar (só em produção). Mudou desde que a página abriu = saiu atualização. */
+  build?: string;
 }
 
 export const friendRequestBody = z.object({

@@ -76,6 +76,8 @@ interface AppState {
   notices: UserNotice[];
   /** Chamadas tocando nas suas conversas: canal -> quem ligou e para quem toca. */
   rings: Record<string, CallRing>;
+  /** O servidor está com uma versão do site mais nova do que a aberta aqui (houve deploy). */
+  updateAvailable: boolean;
 
   setMe(me: Me | false): void;
   setWallet(wallet: Wallet): void;
@@ -122,6 +124,7 @@ const initial = {
   wallet: { coins: 0, items: [] } as Wallet,
   notices: [] as UserNotice[],
   rings: {} as Record<string, CallRing>,
+  updateAvailable: false,
 };
 
 /** A pessoa está olhando para o app agora? */

@@ -54,6 +54,7 @@ export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
     wallet: store.wallet(user.id),
     notices: store.listNotices(user.id),
     rings: visible(ctx.ringer.snapshot()),
+    ...(ctx.build ? { build: ctx.build } : {}),
     serverTime: Date.now(),
     features: { gifs: !!ctx.gifs },
     sounds: store.listSounds(),

@@ -38,13 +38,14 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export async function createTestApp(opts: { gifFetch?: typeof fetch } = {}): Promise<TestApp> {
+export async function createTestApp(opts: { gifFetch?: typeof fetch; webDist?: string } = {}): Promise<TestApp> {
   const dataDir = mkdtempSync(path.join(tmpdir(), "resenha-test-"));
   const config = loadConfig({
     NODE_ENV: "test",
     DATA_DIR: dataDir,
     PUBLIC_URL: "http://localhost:5173",
     ...(opts.gifFetch ? { GIPHY_API_KEY: "chave-de-teste" } : {}),
+    ...(opts.webDist ? { WEB_DIST: opts.webDist } : {}),
   });
   const db = openDatabase(":memory:");
   const gateway = new FakeGateway();
