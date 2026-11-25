@@ -27,7 +27,8 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
       # endereço do site (variável RESENHA_URL do repositório); sem ela, o app pergunta na primeira vez
-      - run: node -e "require('fs').writeFileSync('config.json', JSON.stringify({ url: process.env.RESENHA_URL || '' }))"
+      - run: |
+          node -e "require('fs').writeFileSync('config.json', JSON.stringify({ url: process.env.RESENHA_URL || '' }))"
         env:
           RESENHA_URL: ${{ vars.RESENHA_URL }}
       - run: npm run dist
