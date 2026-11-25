@@ -4,7 +4,17 @@
  */
 import { useSettings } from "../state/settings.ts";
 
-export type SoundName = "join" | "leave" | "mute" | "unmute" | "deafen" | "undeafen" | "message" | "friendJoined";
+export type SoundName =
+  | "join"
+  | "leave"
+  | "mute"
+  | "unmute"
+  | "deafen"
+  | "undeafen"
+  | "message"
+  | "friendJoined"
+  | "ring"
+  | "ringback";
 
 export interface Tone {
   /** Início, em segundos a partir do disparo. */
@@ -55,9 +65,20 @@ export const SOUNDS: Record<SoundName, Tone[]> = {
     { at: 0, dur: 0.16, from: G5, to: 740, gain: 0.5, attack: 0.012 },
     { at: 0.07, dur: 0.26, from: D5, gain: 0.45, attack: 0.02 },
   ],
+  // alguém te ligando: arpejo claro (dó-mi-sol agudos), repetido em loop enquanto toca
+  ring: [
+    { at: 0, dur: 0.1, from: 1046.5, gain: 0.7 },
+    { at: 0.1, dur: 0.1, from: 1318.5, gain: 0.7 },
+    { at: 0.2, dur: 0.15, from: 1568, gain: 0.7 },
+  ],
+  // você ligando, esperando atenderem: o "tuu" grave de telefone (duas notas juntas)
+  ringback: [
+    { at: 0, dur: 0.35, from: 440, gain: 0.35, attack: 0.03 },
+    { at: 0, dur: 0.35, from: 480, gain: 0.3, attack: 0.03 },
+  ],
 };
 
-const CALL_SOUNDS = new Set<SoundName>(["join", "leave", "mute", "unmute", "deafen", "undeafen"]);
+const CALL_SOUNDS = new Set<SoundName>(["join", "leave", "mute", "unmute", "deafen", "undeafen", "ringback"]);
 /** Intervalo mínimo entre repetições do mesmo som (evita metralhadora de "plim"). */
 const MIN_GAP_MS: Partial<Record<SoundName, number>> = { message: 1_500, friendJoined: 3_000 };
 const DEFAULT_GAP_MS = 120;
@@ -125,6 +146,21 @@ export function playSound(name: SoundName): void {
   } catch {
     // navegador sem Web Audio ou contexto bloqueado: segue sem som
   }
+}
+
+/** Toque de chamada: o som duas vezes seguidas, repetido a cada `everyMs`, até chamar a função devolvida. */
+export function loopSound(name: SoundName, everyMs: number): () => void {
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  const burst = () => {
+    playSound(name);
+    timers.push(setTimeout(() => playSound(name), 450));
+  };
+  burst();
+  const loop = setInterval(burst, everyMs);
+  return () => {
+    clearInterval(loop);
+    timers.forEach(clearTimeout);
+  };
 }
 
 useSettings.subscribe((s, prev) => {

@@ -8,7 +8,7 @@ import {
 import { useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
-import { onNewMessage, onVoiceMembers } from "./notify.ts";
+import { onCallDeclined, onNewMessage, onRing, onVoiceMembers } from "./notify.ts";
 
 /** Relógio do servidor estimado, usado para sincronizar o "Assistir juntos". */
 export const clock = new ClockSync();
@@ -131,6 +131,13 @@ class RealtimeClient {
       case "user.notice":
         useApp.getState().applyEvent(event);
         toast.info(event.notice.text);
+        return;
+      case "call.ring":
+        useApp.getState().applyEvent(event);
+        onRing(event.channelId, event.ring);
+        return;
+      case "call.declined":
+        onCallDeclined(event.channelId, event.userId, event.reason);
         return;
       default: {
         const prevVoice = event.type === "voice.channel" ? (useApp.getState().voice[event.channelId] ?? []) : null;

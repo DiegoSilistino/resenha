@@ -42,6 +42,7 @@ import {
 import { fitGrid } from "./grid.ts";
 import { SoundboardControl } from "./SoundboardPanel.tsx";
 import { ParticipantTile, ScreenTile } from "./Tiles.tsx";
+import { OutgoingRing } from "../layout/IncomingCall.tsx";
 
 export function VoiceView({ channel }: { channel: Channel }) {
   const status = useVoice((s) => s.status);
@@ -176,6 +177,7 @@ function Stage({ channel }: { channel: Channel }) {
 
   return (
     <div className="stage">
+      <OutgoingRing channelId={channel.id} />
       {status === "reconnecting" && <div className="stage-banner">Conexão instável, reconectando a voz…</div>}
       {audioBlocked && (
         <button type="button" className="stage-banner stage-banner-action" onClick={() => void unlockAudio()}>

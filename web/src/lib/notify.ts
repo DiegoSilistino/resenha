@@ -8,13 +8,14 @@
  * - com a janela minimizada ou em segundo plano, avisa conforme a preferência
  *   (todas as mensagens, só menções ou nada).
  */
-import type { Message, VoiceMember } from "@resenha/shared";
+import type { CallRing, Message, VoiceMember } from "@resenha/shared";
 import { plainText } from "../chat/plain.ts";
 import { conversationTitle, displayNameOf, mentionsMe, useApp, windowFocused } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { playSound } from "./sounds.ts";
 import { useVoice } from "../voice/state.ts";
+import { leaveVoice } from "../voice/controller.ts";
 
 export type NotifyPermission = NotificationPermission | "unsupported";
 
@@ -39,6 +40,50 @@ export function setNotifyNavigator(fn: ((path: string) => void) | null) {
 }
 
 const open = new Set<Notification>();
+/** Notificação do sistema de cada chamada tocando para você (fecha quando para de tocar). */
+const ringing = new Map<string, Notification>();
+
+/**
+ * Chamada tocando para você com o app em segundo plano: notificação do sistema que fica até parar de
+ * tocar (com o app na frente, a tela de chamada recebida basta).
+ */
+export function onRing(channelId: string, ring: CallRing | null): void {
+  const s = useApp.getState();
+  if (!s.me || !ring?.pending.includes(s.me.id)) {
+    ringing.get(channelId)?.close();
+    ringing.delete(channelId);
+    return;
+  }
+  if (ringing.has(channelId) || windowFocused() || notifyPermission() !== "granted") return;
+  const conv = s.conversations[channelId];
+  const who = displayNameOf(s.users, ring.callerId);
+  try {
+    const n = new Notification(conv?.type === "group" ? `${who} está ligando em ${conversationTitle(conv, s.users, s.me.id)}` : `${who} está te ligando`, {
+      body: "Abra o Resenha para atender ou recusar.",
+      icon: s.users[ring.callerId]?.avatarUrl ?? "/icon-192.png",
+      tag: `chamada-${channelId}`,
+      requireInteraction: true,
+      silent: true,
+    });
+    ringing.set(channelId, n);
+    n.onclick = () => {
+      window.focus();
+      n.close();
+    };
+  } catch {
+    // sem notificação via página neste navegador: o toque já avisa
+  }
+}
+
+/** Recusaram ou não atenderam: quem está na chamada fica sabendo; na conversa a dois, ela acaba (como no telefone). */
+export function onCallDeclined(channelId: string, userId: string, reason: "recusou" | "nao-atendeu"): void {
+  const s = useApp.getState();
+  const v = useVoice.getState();
+  if (v.status === "idle" || v.channelId !== channelId) return;
+  const who = displayNameOf(s.users, userId);
+  toast.info(reason === "recusou" ? `${who} recusou a chamada.` : `${who} não atendeu.`);
+  if (s.conversations[channelId]?.type === "dm" && (s.voice[channelId]?.length ?? 0) <= 1) void leaveVoice();
+}
 
 export type NotifyDecision = "none" | "sound" | "notify";
 
@@ -164,6 +209,7 @@ export function onVoiceMembers(channelId: string, prev: VoiceMember[], next: Voi
   // Sala da roda: só com o aviso ligado. Conversa privada é ligação para você: avisa sempre.
   // Em ambos, só com você fora de chamadas (dentro de uma, o som da call já avisa).
   if (joined.length === 0 || (!conv && !useSettings.getState().notifyVoiceJoin)) return;
+  if (conv && s.rings[channelId]) return; // está tocando: a tela de chamada recebida já avisa
   if (useVoice.getState().status !== "idle") return;
 
   const channel = s.channels.find((c) => c.id === channelId);

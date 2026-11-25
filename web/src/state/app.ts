@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  CallRing,
   Channel,
   Conversation,
   FriendEntry,
@@ -73,6 +74,8 @@ interface AppState {
   wallet: Wallet;
   /** Avisos guardados para você (sugestão implementada…), até você dispensar. */
   notices: UserNotice[];
+  /** Chamadas tocando nas suas conversas: canal -> quem ligou e para quem toca. */
+  rings: Record<string, CallRing>;
 
   setMe(me: Me | false): void;
   setWallet(wallet: Wallet): void;
@@ -118,6 +121,7 @@ const initial = {
   openRodas: [] as RodaSummary[],
   wallet: { coins: 0, items: [] } as Wallet,
   notices: [] as UserNotice[],
+  rings: {} as Record<string, CallRing>,
 };
 
 /** A pessoa está olhando para o app agora? */
@@ -320,6 +324,14 @@ export const useApp = create<AppState>()((set, get) => ({
         return set({ wallet: event.wallet });
       case "user.notice":
         return set({ notices: [...s.notices.filter((n) => n.id !== event.notice.id), event.notice] });
+      case "call.ring": {
+        const rings = { ...s.rings };
+        if (event.ring) rings[event.channelId] = event.ring;
+        else delete rings[event.channelId];
+        return set({ rings });
+      }
+      case "call.declined":
+        return; // aviso para quem ligou: tratado pelo cliente de tempo real
       case "pong":
       case "notice":
         return; // tratados pelo cliente de tempo real
@@ -346,6 +358,7 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
     openRodas: e.openRodas ?? [],
     wallet: e.wallet ?? { coins: 0, items: [] },
     notices: e.notices ?? [],
+    rings: e.rings ?? {},
     // não lidas das conversas vêm do servidor (ele guarda até onde você leu)
     unread: { ...useApp.getState().unread, ...(e.conversationUnread ?? {}) },
   };

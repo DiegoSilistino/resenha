@@ -36,6 +36,7 @@ import { Store } from "./store.ts";
 import { UploadStorage } from "./uploads/storage.ts";
 import { LiveKitGateway, type VoiceGateway } from "./voice/livekit.ts";
 import { VoicePresence } from "./voice/presence.ts";
+import { CallRinger } from "./voice/ringing.ts";
 import { createOEmbedFetcher, type TitleFetcher } from "./watch/oembed.ts";
 import { WatchService } from "./watch/service.ts";
 
@@ -54,6 +55,8 @@ export interface AppContext {
   store: Store;
   hub: Hub;
   voice: VoicePresence;
+  /** Toque das chamadas nas conversas privadas. */
+  ringer: CallRinger;
   watch: WatchService;
   gateway: VoiceGateway;
   uploads: UploadStorage;
@@ -97,6 +100,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
     }
   };
   voice.audienceOf = audienceOf;
+  const ringer = Object.assign(new CallRinger(hub), { audienceOf });
   // rede privada: o online de cada um só chega a quem o conhece; com o banco fechado (desligando), a ninguém
   hub.presenceAudience = (userId) => {
     try {
@@ -110,6 +114,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
     store,
     hub,
     voice,
+    ringer,
     watch: Object.assign(new WatchService(hub, deps.fetchTitle ?? createOEmbedFetcher()), {
       audienceOf,
     }),
@@ -131,6 +136,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   await ctx.sounds.init();
   await ctx.backups.init();
   voice.onChannelEmpty((channelId) => ctx.watch.endSession(channelId));
+  voice.onChannelEmpty((channelId) => ringer.end(channelId)); // quem ligou desistiu antes de atenderem
 
   const app = Fastify({
     trustProxy: config.trustProxy,

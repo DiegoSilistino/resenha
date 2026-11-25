@@ -57,6 +57,12 @@ export interface ProfileLook {
   cardFx: string | null;
 }
 
+/** Chamada tocando numa conversa privada: quem ligou e para quem ainda está tocando. */
+export interface CallRing {
+  callerId: string;
+  pending: string[];
+}
+
 /** Moedas e itens comprados: só a própria pessoa vê. */
 export interface Wallet {
   coins: number;

@@ -5369,3 +5369,71 @@ a.roda-card:hover {
 .feedback-done-btn {
   margin-top: 8px;
 }
+
+/* ---------- chamada recebida no privado (como no Discord) e o "Chamando…" de quem liga ---------- */
+.incoming-call {
+  width: min(320px, calc(100vw - 32px));
+  padding: 28px 24px 22px;
+  border: 1px solid var(--line-2);
+  border-radius: 28px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: center;
+}
+.incoming-call[open] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.incoming-call::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+.incoming-call-avatar {
+  --ring-bg: var(--panel);
+  display: grid;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  animation: ring-pulse 1.4s ease-out infinite;
+}
+.incoming-call-name {
+  font-size: 20px;
+}
+.incoming-call-sub {
+  color: var(--muted);
+}
+.incoming-call-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 16px;
+}
+.incoming-call-actions .btn {
+  flex: 1;
+}
+.btn.call-accept,
+.btn.call-accept:hover:not(:disabled) {
+  background: var(--online);
+  color: #04150c;
+}
+.btn.call-decline,
+.btn.call-decline:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+}
+@keyframes ring-pulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--online) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 18px transparent;
+  }
+}
+.stage-banner-ring {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stage-banner-ring svg {
+  animation: deco-pulse 1.2s ease-in-out infinite;
+}

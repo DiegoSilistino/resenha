@@ -7,6 +7,7 @@ import { z } from "zod";
 import { AVATAR_COLORS, LIMITS, PROFILE_COLORS, shopItem, USERNAME_PATTERN, type ShopSlot } from "./constants.ts";
 import { PERMISSIONS } from "./types.ts";
 import type {
+  CallRing,
   Channel,
   ClientErrorEntry,
   Conversation,
@@ -217,6 +218,8 @@ export const clientMessage = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("watch"), channelId: id, action: watchClientAction }),
   z.object({ type: z.literal("soundboard.play"), channelId: id, soundId: id }),
+  /** Recusar a chamada que está tocando para você. */
+  z.object({ type: z.literal("call.decline"), channelId: id }),
 ]);
 export type ClientMessage = z.infer<typeof clientMessage>;
 
@@ -250,6 +253,8 @@ export interface HelloEvent {
   wallet: Wallet;
   /** Avisos guardados para você (ex.: sugestão implementada), do mais antigo ao mais novo. */
   notices: UserNotice[];
+  /** Chamadas tocando agora nas suas conversas (canal -> quem ligou e para quem toca). */
+  rings: Record<string, CallRing>;
 }
 
 export const friendRequestBody = z.object({
@@ -387,6 +392,10 @@ export type ServerEvent =
   | { type: "wallet"; wallet: Wallet; daily?: number }
   /** Só para a própria pessoa: aviso guardado novo (fica até ela dispensar). */
   | { type: "user.notice"; notice: UserNotice }
+  /** Só para os membros da conversa: a chamada começou a tocar, mudou para quem toca ou parou (null). */
+  | { type: "call.ring"; channelId: string; ring: CallRing | null }
+  /** Só para os membros da conversa: alguém recusou ou deixou tocar até o fim. */
+  | { type: "call.declined"; channelId: string; userId: string; reason: "recusou" | "nao-atendeu" }
   | { type: "sound.upsert"; sound: SoundboardSound }
   | { type: "sound.remove"; soundId: string }
   /** Só para quem está naquela chamada. */

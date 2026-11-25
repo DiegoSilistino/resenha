@@ -53,6 +53,7 @@ export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
     openRodas: store.openRodasFor(user.id),
     wallet: store.wallet(user.id),
     notices: store.listNotices(user.id),
+    rings: visible(ctx.ringer.snapshot()),
     serverTime: Date.now(),
     features: { gifs: !!ctx.gifs },
     sounds: store.listSounds(),
@@ -79,7 +80,7 @@ export function introduce(ctx: AppContext, userId: string): void {
 }
 
 export function registerSocket(app: FastifyInstance, ctx: AppContext) {
-  const { hub, store, voice, watch } = ctx;
+  const { hub, store, voice, watch, ringer } = ctx;
   const lastSound = new Map<string, number>();
 
   app.get("/ws", { websocket: true }, (socket: WebSocket, req) => {
@@ -151,7 +152,18 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
 
       case "voice.join":
         if (!store.canCall(conn.userId, msg.channelId)) return;
+        // primeira pessoa na chamada de uma conversa privada: toca para os outros (antes do aviso de
+        // quem está na chamada, para o app de quem recebe já saber que é toque); depois disso, entrar é atender
+        if (voice.members(msg.channelId).length === 0 && store.channelById(msg.channelId)?.conversation) {
+          ringer.start(msg.channelId, conn.userId);
+        } else {
+          ringer.answered(msg.channelId, conn.userId);
+        }
         voice.join(conn.userId, conn.id, msg.channelId);
+        return;
+
+      case "call.decline":
+        ringer.decline(msg.channelId, conn.userId);
         return;
 
       case "voice.leave":
