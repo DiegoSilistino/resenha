@@ -1,13 +1,13 @@
 import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { CornerUpLeft, Download, FileText, Image as ImageIcon, Pencil, Reply, SmilePlus, Trash2, Tv } from "lucide-react";
-import type { Attachment, Message, MessageReference } from "@resenha/shared";
+import { CornerUpLeft, Download, FileText, Image as ImageIcon, Pencil, Reply, SmilePlus, Star, Trash2, Tv } from "lucide-react";
+import type { Attachment, GifResult, Message, MessageReference } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Nick } from "../components/Nick.tsx";
 import { api } from "../lib/api.ts";
 import { formatBytes, formatFull, formatTime } from "../lib/format.ts";
 import { realtime } from "../lib/realtime.ts";
 import { displayNameOf, useApp } from "../state/app.ts";
-import { useSettings } from "../state/settings.ts";
+import { toggleGifFavorite, useSettings } from "../state/settings.ts";
 import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { useVoice } from "../voice/controller.ts";
@@ -17,7 +17,7 @@ import { AudioAttachment, ImageAttachment } from "./Media.tsx";
 import { emojiName, QUICK_REACTIONS } from "./emojis.ts";
 import { renderMessage, youTubeLinks } from "./markdown.tsx";
 import { mentionsUser as mentionsUserIn } from "./mentions.ts";
-import { inviteCodes, parseGifMessage, plainText } from "./plain.ts";
+import { gifFromMessage, inviteCodes, parseGifMessage, plainText } from "./plain.ts";
 import { ReactionBar, toggleReaction } from "./Reactions.tsx";
 
 export const MessageItem = memo(function MessageItem({ message, grouped }: { message: Message; grouped: boolean }) {
@@ -85,7 +85,7 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
         {editing ? (
           <EditBox message={message} onDone={() => setEditing(false)} />
         ) : gif ? (
-          <GifView src={gif.src} width={gif.width} height={gif.height} />
+          <GifView src={gif.src} width={gif.width} height={gif.height} favorite={gifFromMessage(message.content)} />
         ) : (
           message.content && (
             <div className="message-content">
@@ -219,9 +219,13 @@ function ReplyReference({ channelId, reference: r }: { channelId: string; refere
   );
 }
 
-/** GIF do GIPHY: um MP4 em loop (bem mais leve que .gif), que pausa quando sai da tela. */
-function GifView({ src, width, height }: { src: string; width: number; height: number }) {
+/**
+ * GIF do GIPHY: um MP4 em loop (bem mais leve que .gif), que pausa quando sai da tela.
+ * A estrela no canto (ao passar o mouse, como no Discord) põe nos favoritos do seletor.
+ */
+function GifView({ src, width, height, favorite }: { src: string; width: number; height: number; favorite: GifResult | null }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const faved = useSettings((s) => !!favorite && s.gifFavorites.some((g) => g.id === favorite.id));
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
@@ -234,19 +238,33 @@ function GifView({ src, width, height }: { src: string; width: number; height: n
   }, []);
   const scale = Math.min(1, 360 / width, 280 / height);
   return (
-    <video
-      ref={ref}
-      className="gif"
-      src={src}
-      width={Math.round(width * scale)}
-      height={Math.round(height * scale)}
-      autoPlay
-      loop
-      muted
-      playsInline
-      preload="auto"
-      aria-label="GIF"
-    />
+    <span className="gif-message">
+      <video
+        ref={ref}
+        className="gif"
+        src={src}
+        width={Math.round(width * scale)}
+        height={Math.round(height * scale)}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        aria-label="GIF"
+      />
+      {favorite && (
+        <button
+          type="button"
+          className="gif-fav"
+          aria-pressed={faved}
+          aria-label={faved ? "Tirar dos favoritos" : "Adicionar aos favoritos"}
+          title={faved ? "Tirar dos favoritos" : "Adicionar aos favoritos"}
+          onClick={() => toggleGifFavorite(favorite)}
+        >
+          <Star size={16} fill={faved ? "currentColor" : "none"} />
+        </button>
+      )}
+    </span>
   );
 }
 

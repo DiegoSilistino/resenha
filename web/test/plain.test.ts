@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { inviteCodes, parseGifMessage, plainText } from "../src/chat/plain.ts";
+import { gifFromMessage, inviteCodes, parseGifMessage, plainText } from "../src/chat/plain.ts";
+
+describe("favoritar GIF pela conversa", () => {
+  it("usa o id do GIPHY do link (o mesmo do seletor), com e sem o prefixo v1", () => {
+    const fav = gifFromMessage("https://media2.giphy.com/media/v1.Y2lk/3o7TKSjRrfIPjeiVyM/giphy.mp4?cid=x#480x270");
+    expect(fav).toMatchObject({ id: "3o7TKSjRrfIPjeiVyM", width: 480, height: 270, mp4Url: "https://media2.giphy.com/media/v1.Y2lk/3o7TKSjRrfIPjeiVyM/giphy.mp4?cid=x" });
+    expect(fav?.imageUrl).toBe("https://media2.giphy.com/media/v1.Y2lk/3o7TKSjRrfIPjeiVyM/200.webp");
+    expect(gifFromMessage("https://media.giphy.com/media/abc123/giphy.mp4")?.id).toBe("abc123");
+  });
+  it("texto comum não vira favorito", () => {
+    expect(gifFromMessage("oi https://media.giphy.com/media/abc/giphy.mp4")).toBeNull();
+  });
+});
 
 describe("links de convite de roda na mensagem", () => {
   const site = "https://resenha.example";

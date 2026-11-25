@@ -2424,6 +2424,18 @@ img.roda-badge {
   opacity: 0;
   transition: opacity 120ms ease-out;
 }
+/* GIF na conversa: a estrela de favoritar aparece no canto de cima ao passar o mouse, como no Discord */
+.gif-message {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.gif-message .gif-fav {
+  top: 10px;
+  left: 6px;
+  right: auto;
+}
+.gif-message:hover .gif-fav,
 .gif-item:hover .gif-fav,
 .gif-fav:focus-visible,
 .gif-fav[aria-pressed="true"] {

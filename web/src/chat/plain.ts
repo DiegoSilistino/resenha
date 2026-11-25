@@ -1,3 +1,5 @@
+import type { GifResult } from "@resenha/shared";
+
 /**
  * Texto puro de uma mensagem, para citações de resposta e notificações: sem marcação,
  * com spoiler escondido e GIF descrito (nunca a URL crua).
@@ -11,6 +13,22 @@ export function parseGifMessage(content: string): { src: string; width: number; 
   const [src, size] = text.split("#");
   const [w, h] = (size ?? "").split("x").map(Number);
   return { src: src!, width: w && w > 0 ? w : 480, height: h && h > 0 ? h : 270 };
+}
+
+/**
+ * GIF da conversa como item dos favoritos. O id do GIPHY sai do link (/media/<id>/giphy.mp4), o
+ * mesmo que o seletor usa: favoritar aqui ou lá marca o mesmo GIF.
+ */
+export function gifFromMessage(content: string): GifResult | null {
+  const gif = parseGifMessage(content);
+  if (!gif) return null;
+  const url = new URL(gif.src);
+  const parts = url.pathname.split("/");
+  const id = parts.at(-2);
+  if (!id || parts.length < 3) return null;
+  const base = `${url.origin}${parts.slice(0, -1).join("/")}/`;
+  // shortcut: a capa (200.webp) é o nome padrão do GIPHY, não vem na mensagem; se faltar, escolher como capa avisa o erro
+  return { id, title: "GIF", previewUrl: gif.src, mp4Url: gif.src, imageUrl: `${base}200.webp`, width: gif.width, height: gif.height };
 }
 
 /** Códigos dos links de convite de roda deste servidor numa mensagem (sem repetir, no máximo 3). */
