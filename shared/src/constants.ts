@@ -15,8 +15,8 @@ export const LIMITS = {
   uploadMaxBytes: 25 * 1024 * 1024,
   messagesPageSize: 50,
   watchQueueMax: 100,
-  /** A foto é recortada e reduzida no navegador (256 px); o limite só barra abuso. */
-  avatarMaxBytes: 2 * 1024 * 1024,
+  /** A foto parada é recortada e reduzida no navegador (256 px); a animada (GIF) vai inteira, daí a folga. */
+  avatarMaxBytes: 4 * 1024 * 1024,
   avatarMaxSide: 1024,
   avatarMinSide: 32,
   /** Emojis diferentes numa mesma mensagem. */
@@ -57,7 +57,40 @@ export const DEFAULT_LOOK: ProfileLook = {
   frame: "nenhuma",
   nickStyle: "padrao",
   font: "onest",
+  avatarX: 50,
+  avatarY: 50,
+  avatarZoom: 1,
+  deco: null,
+  nickFx: null,
+  cardFx: null,
 };
+
+/** Loja: extras do perfil comprados com moedas. O que já existia (molduras, degradê, fontes, capa) segue grátis. */
+export const SHOP_SLOTS = ["deco", "nickFx", "cardFx"] as const;
+export type ShopSlot = (typeof SHOP_SLOTS)[number];
+
+export interface ShopItem {
+  id: string;
+  slot: ShopSlot;
+  name: string;
+  price: number;
+}
+
+export const SHOP_ITEMS: readonly ShopItem[] = [
+  { id: "brilho", slot: "deco", name: "Brilhinhos", price: 150 },
+  { id: "neon", slot: "deco", name: "Neon pulsante", price: 200 },
+  { id: "arco-iris", slot: "deco", name: "Anel arco-íris", price: 300 },
+  { id: "nick-neon", slot: "nickFx", name: "Nick neon", price: 150 },
+  { id: "nick-brilho", slot: "nickFx", name: "Nick com brilho", price: 200 },
+  { id: "nick-arco-iris", slot: "nickFx", name: "Nick arco-íris", price: 250 },
+  { id: "estrelas", slot: "cardFx", name: "Céu estrelado", price: 250 },
+  { id: "aurora", slot: "cardFx", name: "Aurora", price: 300 },
+];
+
+export const shopItem = (id: string): ShopItem | undefined => SHOP_ITEMS.find((i) => i.id === id);
+
+/** Como se ganha moeda: uma vez por dia ao entrar e por minuto em call com mais alguém (com teto diário). */
+export const COINS = { daily: 25, perVoiceMinute: 1, voiceDailyMax: 60 } as const;
 
 /** Usuário: letras minúsculas, números, ponto, hífen e underline. */
 export const USERNAME_PATTERN = /^[a-z0-9._-]+$/;

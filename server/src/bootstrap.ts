@@ -1,5 +1,6 @@
 import type { AppContext } from "./app.ts";
 import { inviteUrl, newInviteCode } from "./routes/admin.ts";
+import { payVoiceMinute } from "./routes/shop.ts";
 
 const DEFAULT_CHANNELS = [
   { name: "geral", kind: "text" },
@@ -62,8 +63,10 @@ export function startMaintenance(ctx: AppContext, log: (msg: string) => void): (
 
   const heartbeat = setInterval(() => hub.sweep(), 30_000);
   const hourly = setInterval(cleanup, HOUR);
+  const coins = setInterval(() => payVoiceMinute(ctx), 60_000);
   void cleanup();
   return () => {
+    clearInterval(coins);
     clearInterval(heartbeat);
     clearInterval(hourly);
   };

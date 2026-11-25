@@ -16,6 +16,7 @@ export function Nick({
       className={`nick ${className}`}
       data-style={user ? lookOf(user).nickStyle : undefined}
       data-font={user ? lookOf(user).font : undefined}
+      data-fx={(user && lookOf(user).nickFx) || undefined}
       style={lookVars(user)}
     >
       {user?.displayName ?? fallback}

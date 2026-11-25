@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ImagePlus, Trash2 } from "lucide-react";
+import { LIMITS, type AvatarPos } from "@resenha/shared";
+import { GifPicker } from "../chat/GifPicker.tsx";
+import { BannerEditor, type BannerPos } from "../components/Banner.tsx";
+import { useApp } from "../state/app.ts";
 import { toast } from "../state/toasts.ts";
 import { initialCrop, MAX_ZOOM, moveCrop, scaleOf, sourceRect, zoomCrop, type Crop } from "./crop.ts";
 
@@ -31,16 +35,25 @@ async function renderCrop(img: HTMLImageElement, crop: Crop, w: number, h: numbe
   return png;
 }
 
-/** Escolher, recortar e enviar a foto (do perfil ou da roda). `square` mostra o recorte quadrado, como o ícone da roda. */
+/** GIF escolhido (arquivo ou do GIPHY), ainda sendo enquadrado. */
+type Animated = { url: string; src: File | string };
+const CENTER: BannerPos = { bannerX: 50, bannerY: 50, bannerZoom: 1 };
+
+/**
+ * Escolher, recortar e enviar a foto (do perfil ou da roda). `square` mostra o recorte quadrado, como o ícone da roda.
+ * Com `uploadGif` (perfil), aceita GIF: vai inteiro, animado, e o enquadramento vira posição e zoom.
+ */
 export function AvatarEditor({
   hasImage,
   upload,
+  uploadGif,
   remove: removeImage,
   onDone = () => undefined,
   square = false,
 }: {
   hasImage: boolean;
   upload(image: Blob): Promise<unknown>;
+  uploadGif?(src: File | string, pos: AvatarPos): Promise<unknown>;
   remove(): Promise<unknown>;
   onDone?(): void;
   square?: boolean;
@@ -48,6 +61,10 @@ export function AvatarEditor({
   const input = useRef<HTMLInputElement>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [crop, setCrop] = useState<Crop | null>(null);
+  const [animated, setAnimated] = useState<Animated | null>(null);
+  const [pos, setPos] = useState<BannerPos>(CENTER);
+  const [gifAnchor, setGifAnchor] = useState<HTMLElement | null>(null);
+  const gifs = useApp((s) => s.features.gifs) && !!uploadGif;
   const [busy, setBusy] = useState(false);
   const drag = useRef<{ x: number; y: number } | null>(null);
   const view = useRef<HTMLDivElement>(null);
@@ -55,6 +72,29 @@ export function AvatarEditor({
   useEffect(() => () => {
     if (loaded) URL.revokeObjectURL(loaded.url);
   }, [loaded]);
+  useEffect(() => () => {
+    if (animated?.src instanceof File) URL.revokeObjectURL(animated.url);
+  }, [animated]);
+
+  function pickAnimated(next: Animated) {
+    setAnimated(next);
+    setPos(CENTER);
+  }
+
+  async function saveAnimated() {
+    if (!animated || !uploadGif) return;
+    setBusy(true);
+    try {
+      await uploadGif(animated.src, { x: pos.bannerX, y: pos.bannerY, zoom: pos.bannerZoom });
+      toast.info("Foto atualizada.");
+      setAnimated(null);
+      onDone();
+    } catch (err) {
+      toast.fromError(err, "Não foi possível enviar o GIF");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   // Rodinha do mouse dá zoom. Ouvinte nativo (não passivo) para a página não rolar junto.
   useEffect(() => {
@@ -71,6 +111,11 @@ export function AvatarEditor({
 
   function pick(file: File | undefined) {
     if (!file) return;
+    // shortcut: só .gif segue animado; WebP/PNG animados passam pelo recorte e viram foto parada
+    if (uploadGif && file.type === "image/gif") {
+      if (file.size > LIMITS.avatarMaxBytes) return toast.error(`O GIF pode ter no máximo ${LIMITS.avatarMaxBytes / 1024 / 1024} MB.`);
+      return pickAnimated({ url: URL.createObjectURL(file), src: file });
+    }
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
@@ -153,7 +198,7 @@ export function AvatarEditor({
     <input
       ref={input}
       type="file"
-      accept="image/png,image/jpeg,image/webp"
+      accept={uploadGif ? "image/png,image/jpeg,image/webp,image/gif" : "image/png,image/jpeg,image/webp"}
       hidden
       onChange={(e) => {
         pick(e.target.files?.[0]);
@@ -162,6 +207,28 @@ export function AvatarEditor({
     />
   );
 
+  if (animated) {
+    return (
+      <div className="avatar-editor">
+        <BannerEditor
+          src={animated.url}
+          pos={pos}
+          onChange={(p) => setPos((cur) => ({ ...cur, ...p }))}
+          round
+          hint="Arraste para enquadrar e use o zoom. O círculo mostra como fica; o GIF continua animado."
+        />
+        <div className="row-actions">
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void saveAnimated()}>
+            {busy ? "Enviando…" : "Usar este GIF"}
+          </button>
+          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setAnimated(null)}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!loaded || !crop) {
     return (
       <div className="row-actions">
@@ -169,10 +236,31 @@ export function AvatarEditor({
         <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
           <ImagePlus size={16} aria-hidden="true" /> {hasImage ? "Trocar foto" : "Enviar foto"}
         </button>
+        {gifs && (
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            aria-expanded={!!gifAnchor}
+            onClick={(e) => setGifAnchor(gifAnchor ? null : e.currentTarget)}
+          >
+            Escolher GIF
+          </button>
+        )}
         {hasImage && (
           <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void remove()}>
             <Trash2 size={16} aria-hidden="true" /> Remover foto
           </button>
+        )}
+        {gifAnchor && (
+          <GifPicker
+            anchor={gifAnchor}
+            onClose={() => setGifAnchor(null)}
+            onPick={(g) => {
+              setGifAnchor(null);
+              pickAnimated({ url: g.imageUrl, src: g.imageUrl });
+            }}
+          />
         )}
       </div>
     );

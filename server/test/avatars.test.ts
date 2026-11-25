@@ -67,12 +67,29 @@ describe("foto de perfil", () => {
     expect(existsSync(t.ctx.avatars.pathFor(second.split("/").pop()!))).toBe(false);
   });
 
-  it("recusa o que não é foto parada de tamanho razoável", async () => {
+  it("GIF vai inteiro, com a posição no círculo; foto parada depois volta ao enquadramento padrão", async () => {
+    const gif = Buffer.concat([Buffer.from("GIF89a", "latin1"), Buffer.from([200, 0, 150, 0]), Buffer.alloc(32)]);
+    const { payload, headers } = multipart("eu.gif", gif);
+    const res = await t.app.inject({
+      method: "POST",
+      url: "/api/me/avatar?x=20&y=70&zoom=1.5",
+      headers: { ...headers, cookie: alice.cookie },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().me.look).toMatchObject({ avatarX: 20, avatarY: 70, avatarZoom: 1.5 });
+    const file = await t.app.inject({ method: "GET", url: res.json().me.avatarUrl, headers: { cookie: bob.cookie } });
+    expect(file.headers["content-type"]).toBe("image/gif");
+
+    expect((await sendAvatar(alice, png(64, 64, { animated: true }))).statusCode).toBe(200);
+    expect((await sendAvatar(alice, webpLossless(256, 256))).json().me.look).toMatchObject({ avatarX: 50, avatarY: 50, avatarZoom: 1 });
+  });
+
+  it("recusa o que não é imagem de tamanho razoável", async () => {
     const html = await sendAvatar(alice, Buffer.from("<html><script>alert(1)</script></html>"), "foto.png");
     expect(html.statusCode).toBe(400);
     expect((await sendAvatar(alice, webpExtended(5000, 5000))).statusCode).toBe(400); // bomba de descompressão
     expect((await sendAvatar(alice, png(8, 8))).statusCode).toBe(400);
-    expect((await sendAvatar(alice, png(64, 64, { animated: true }))).json().error).toMatch(/animada/);
     const huge = Buffer.concat([png(64, 64), Buffer.alloc(LIMITS.avatarMaxBytes)]);
     expect((await sendAvatar(alice, huge)).statusCode).toBe(413);
     expect(t.ctx.store.allAvatarIds().size).toBe(0);

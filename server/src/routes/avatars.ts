@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { bannerGifBody, LIMITS } from "@resenha/shared";
+import { avatarGifBody, avatarPos, bannerGifBody, LIMITS } from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, HttpError, notFound, parse } from "../http.ts";
 import { toPublicUser } from "../store.ts";
@@ -11,8 +11,12 @@ import { bannerInfo, imageInfo } from "../uploads/image.ts";
 const UUID = /^[0-9a-f-]{36}$/;
 const tooLarge = () => new HttpError(413, `A foto pode ter no máximo ${LIMITS.avatarMaxBytes / 1024 / 1024} MB`);
 
-/** Recebe a foto enviada (perfil ou roda): imagem parada, no tamanho certo, gravada na pasta das fotos. */
-export async function receiveAvatar(req: FastifyRequest, ctx: AppContext): Promise<{ id: string; mime: string }> {
+/** Recebe a foto enviada (perfil ou roda), no tamanho certo, gravada na pasta das fotos. `animated`: aceita GIF (perfil). */
+export async function receiveAvatar(
+  req: FastifyRequest,
+  ctx: AppContext,
+  { animated = false } = {},
+): Promise<{ id: string; mime: string }> {
   const file = await req.file({ limits: { fileSize: LIMITS.avatarMaxBytes, files: 1 } });
   if (!file) throw badRequest("Nenhuma imagem enviada");
   let data: Buffer;
@@ -23,11 +27,14 @@ export async function receiveAvatar(req: FastifyRequest, ctx: AppContext): Promi
     throw err;
   }
   if (file.file.truncated) throw tooLarge();
+  return writeAvatar(ctx, data, animated);
+}
 
+async function writeAvatar(ctx: AppContext, data: Buffer, animated: boolean): Promise<{ id: string; mime: string }> {
   // O tipo vem dos bytes, nunca do nome nem do que o navegador diz.
-  const info = imageInfo(data);
-  if (!info) throw badRequest("Envie uma imagem PNG, JPEG ou WebP");
-  if (info.animated) throw badRequest("Foto animada não é aceita; use uma imagem parada");
+  const info = animated ? bannerInfo(data) : imageInfo(data);
+  if (!info) throw badRequest(animated ? "Envie uma imagem PNG, JPEG, WebP ou GIF" : "Envie uma imagem PNG, JPEG ou WebP");
+  if (!animated && "animated" in info && info.animated) throw badRequest("Foto animada não é aceita; use uma imagem parada");
   const { avatarMinSide: min, avatarMaxSide: max } = LIMITS;
   if (info.width < min || info.height < min || info.width > max || info.height > max) {
     throw badRequest(`A foto precisa ter entre ${min} e ${max} pixels de lado`);
@@ -70,18 +77,36 @@ export async function writeBanner(ctx: AppContext, data: Buffer): Promise<{ id: 
 export function registerAvatarRoutes(app: FastifyInstance, ctx: AppContext) {
   const { store, hub, avatars } = ctx;
 
+  // Foto do perfil: parada (já recortada no navegador) ou GIF, que vai inteiro e é enquadrado pela posição.
   app.post(
     "/api/me/avatar",
     { preHandler: requireUser, config: rateLimited(ctx, 10, "10 minutes") },
     async (req) => {
-      const user = currentUser(req);
-      const previous = store.setAvatar(user.id, await receiveAvatar(req, ctx));
-      if (previous) await avatars.remove([previous]);
-      const me = toPublicUser(store.userById(user.id)!);
-      publishUser(ctx, me);
-      return { me };
+      const pos = parse(avatarPos, req.query);
+      return saveAvatar(currentUser(req).id, await receiveAvatar(req, ctx, { animated: true }), pos);
     },
   );
+
+  app.post(
+    "/api/me/avatar/gif",
+    { preHandler: requireUser, config: rateLimited(ctx, 10, "10 minutes") },
+    async (req) => {
+      if (!ctx.gifs) throw notFound();
+      const { url, ...pos } = parse(avatarGifBody, req.body);
+      return saveAvatar(currentUser(req).id, await writeAvatar(ctx, await ctx.gifs.download(url, LIMITS.avatarMaxBytes), true), pos);
+    },
+  );
+
+  async function saveAvatar(userId: string, image: { id: string; mime: string }, pos: { x: number; y: number; zoom: number }) {
+    const previous = store.setAvatar(userId, image);
+    if (previous) await avatars.remove([previous]);
+    // a posição vale para a foto nova (a parada chega com 50/50/1, que é "como veio")
+    const { look } = store.userById(userId)!;
+    store.updateUserProfile(userId, { look: { ...look, avatarX: pos.x, avatarY: pos.y, avatarZoom: pos.zoom } });
+    const me = toPublicUser(store.userById(userId)!);
+    publishUser(ctx, me);
+    return { me };
+  }
 
   app.delete("/api/me/avatar", { preHandler: requireUser }, async (req) => {
     const user = currentUser(req);

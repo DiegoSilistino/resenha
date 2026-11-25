@@ -41,8 +41,13 @@ export const lookOf = (u: LookUser | undefined): ProfileLook => u?.look ?? DEFAU
  * zoom cresce a partir dele. A mesma conta vale no editor e no cartão, de qualquer largura.
  */
 export function bannerImageStyle(look: Pick<ProfileLook, "bannerX" | "bannerY" | "bannerZoom">): CSSProperties {
-  const at = `${look.bannerX ?? 50}% ${look.bannerY ?? 50}%`;
-  const zoom = look.bannerZoom ?? 1;
+  return focusStyle(look.bannerX, look.bannerY, look.bannerZoom);
+}
+/** Foto animada do perfil: a mesma conta da capa, dentro do círculo. */
+export const avatarImageStyle = (look: ProfileLook) => focusStyle(look.avatarX, look.avatarY, look.avatarZoom);
+
+function focusStyle(x = 50, y = 50, zoom = 1): CSSProperties {
+  const at = `${x}% ${y}%`;
   return { objectPosition: at, transformOrigin: at, transform: zoom > 1 ? `scale(${zoom})` : undefined };
 }
 export const profileColor = (u: LookUser) => lookOf(u).a ?? u.avatarColor;

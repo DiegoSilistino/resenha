@@ -4,7 +4,7 @@
  * - `ServerEvent` descreve tudo que o servidor envia pelo WebSocket.
  */
 import { z } from "zod";
-import { AVATAR_COLORS, LIMITS, PROFILE_COLORS, USERNAME_PATTERN } from "./constants.ts";
+import { AVATAR_COLORS, LIMITS, PROFILE_COLORS, shopItem, USERNAME_PATTERN, type ShopSlot } from "./constants.ts";
 import { PERMISSIONS } from "./types.ts";
 import type {
   Channel,
@@ -18,6 +18,8 @@ import type {
   PublicUser,
   Reaction,
   SoundboardSound,
+  UserNotice,
+  Wallet,
   VoiceMember,
   WatchState,
 } from "./types.ts";
@@ -58,6 +60,9 @@ export const registerBody = z.object({
   password: passwordSchema,
 });
 
+const shopSlot = (slot: ShopSlot) =>
+  z.string().refine((id) => shopItem(id)?.slot === slot, "Item desconhecido").nullable().default(null);
+
 const profileColor = z.string().refine((c) => PROFILE_COLORS.includes(c), "Cor fora da paleta");
 
 export const lookSchema = z.object({
@@ -72,7 +77,22 @@ export const lookSchema = z.object({
   frame: z.enum(["nenhuma", "anel", "duplo", "tracejado", "halo"]),
   nickStyle: z.enum(["padrao", "cor", "gradiente"]),
   font: z.enum(["onest", "mono", "larga", "serif", "pixel"]),
+  avatarX: z.number().min(0).max(100).default(50),
+  avatarY: z.number().min(0).max(100).default(50),
+  avatarZoom: z.number().min(1).max(3).default(1),
+  // item da loja daquele tipo; se a pessoa comprou, quem confere é o servidor
+  deco: shopSlot("deco"),
+  nickFx: shopSlot("nickFx"),
+  cardFx: shopSlot("cardFx"),
 });
+
+/** Posição da foto animada no círculo (query do envio do arquivo ou corpo do GIF escolhido). */
+export const avatarPos = z.object({
+  x: z.coerce.number().min(0).max(100).default(50),
+  y: z.coerce.number().min(0).max(100).default(50),
+  zoom: z.coerce.number().min(1).max(3).default(1),
+});
+export type AvatarPos = z.output<typeof avatarPos>;
 
 export const userStatusSchema = z.enum(["online", "ausente", "ocupado", "invisivel"]);
 
@@ -226,6 +246,10 @@ export interface HelloEvent {
   rodas: Roda[];
   /** Rodas abertas em que você ainda não está. */
   openRodas: RodaSummary[];
+  /** Suas moedas e o que você já comprou na loja. */
+  wallet: Wallet;
+  /** Avisos guardados para você (ex.: sugestão implementada), do mais antigo ao mais novo. */
+  notices: UserNotice[];
 }
 
 export const friendRequestBody = z.object({
@@ -341,6 +365,8 @@ export const gifSearchQuery = z.object({
 
 /** Capa do perfil escolhida no seletor de GIFs: a imagem do GIPHY (o servidor baixa e guarda). */
 export const bannerGifBody = z.object({ url: z.string().max(1_000) });
+/** Foto de perfil escolhida no seletor de GIFs, já com a posição no círculo. */
+export const avatarGifBody = bannerGifBody.merge(avatarPos);
 
 export type ServerEvent =
   | HelloEvent
@@ -357,6 +383,10 @@ export type ServerEvent =
   | { type: "voice.channel"; channelId: string; members: VoiceMember[] }
   | { type: "watch.state"; state: WatchState }
   | { type: "notice"; level: "info" | "error"; text: string }
+  /** Só para a própria pessoa: moedas ou itens mudaram (`daily`: quanto veio do bônus do dia, para o app avisar). */
+  | { type: "wallet"; wallet: Wallet; daily?: number }
+  /** Só para a própria pessoa: aviso guardado novo (fica até ela dispensar). */
+  | { type: "user.notice"; notice: UserNotice }
   | { type: "sound.upsert"; sound: SoundboardSound }
   | { type: "sound.remove"; soundId: string }
   /** Só para quem está naquela chamada. */

@@ -13,6 +13,7 @@ import type { AppContext } from "../app.ts";
 import { isSameOrigin } from "../app.ts";
 import { toPublicUser, type UserRecord } from "../store.ts";
 import { WatchError } from "../watch/service.ts";
+import { grantDaily } from "../routes/shop.ts";
 import type { Connection } from "./hub.ts";
 
 /** O cliente avisa a cada 2,5 s; aqui só se descartam repetições coladas (o flood geral é barrado abaixo). */
@@ -50,6 +51,8 @@ export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
     friends: store.listFriends(user.id),
     rodas: store.listRodasFor(user.id),
     openRodas: store.openRodasFor(user.id),
+    wallet: store.wallet(user.id),
+    notices: store.listNotices(user.id),
     serverTime: Date.now(),
     features: { gifs: !!ctx.gifs },
     sounds: store.listSounds(),
@@ -127,6 +130,7 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
 
     hub.add(conn);
     hub.send(conn, buildHello(ctx, req.auth.user));
+    grantDaily(ctx, conn.userId);
   });
 
   async function handle(conn: Connection, msg: ClientMessage): Promise<void> {

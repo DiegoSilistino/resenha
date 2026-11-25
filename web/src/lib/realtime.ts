@@ -124,6 +124,14 @@ class RealtimeClient {
         if (event.level === "error") toast.error(event.text);
         else toast.info(event.text);
         return;
+      case "wallet":
+        useApp.getState().applyEvent(event);
+        if (event.daily) toast.info(`+${event.daily} moedas por aparecer hoje. Gaste na Loja (Configurações → Loja).`);
+        return;
+      case "user.notice":
+        useApp.getState().applyEvent(event);
+        toast.info(event.notice.text);
+        return;
       default: {
         const prevVoice = event.type === "voice.channel" ? (useApp.getState().voice[event.channelId] ?? []) : null;
         useApp.getState().applyEvent(event);

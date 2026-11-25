@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowDown, ArrowUp, Copy, Download, Hash, Trash2, Volume2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Download, Hash, Trash2, Volume2 } from "lucide-react";
 import type { BackupInfo, Channel, ChannelKind, ClientErrorEntry, ClientErrorKind, PublicUser, Role } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Modal } from "../components/Modal.tsx";
@@ -477,6 +477,16 @@ function FeedbackTab() {
     }
   }
 
+  async function markDone(id: number) {
+    try {
+      const { entry } = await api.feedbackDone(id);
+      setItems((list) => list?.map((x) => (x.id === id ? entry : x)) ?? null);
+      toast.info("Pronto: quem mandou recebeu o aviso de que foi implementado.");
+    } catch (err) {
+      toast.fromError(err);
+    }
+  }
+
   if (!items) return <p className="muted">Carregando…</p>;
   if (items.length === 0) {
     return (
@@ -510,6 +520,15 @@ function FeedbackTab() {
             </div>
             <p className="error-message">{e.message}</p>
             <p className="error-meta muted">{describeUserAgent(e.userAgent)}</p>
+            {e.doneAt ? (
+              <p className="feedback-done">
+                <Check size={14} aria-hidden="true" /> Implementado em {formatDay(e.doneAt, now)}; a pessoa foi avisada.
+              </p>
+            ) : (
+              <button type="button" className="btn btn-small btn-outline feedback-done-btn" onClick={() => void markDone(e.id)}>
+                <Check size={14} aria-hidden="true" /> Marcar como implementado
+              </button>
+            )}
           </li>
         ))}
       </ul>

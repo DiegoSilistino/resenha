@@ -110,12 +110,15 @@ export function BannerEditor({
   onChange,
   hint,
   wide = false,
+  round = false,
 }: {
   src: string;
   pos: BannerPos;
   onChange(p: Partial<BannerPos>): void;
   hint: string;
   wide?: boolean;
+  /** Círculo da foto de perfil animada. */
+  round?: boolean;
 }) {
   const natural = useRef({ w: 0, h: 0 });
   const drag = useRef<{ x0: number; y0: number; bx: number; by: number } | null>(null);
@@ -138,8 +141,9 @@ export function BannerEditor({
       <div
         className="banner-editor"
         data-wide={wide || undefined}
+        data-round={round || undefined}
         tabIndex={0}
-        aria-label="Posição da capa: arraste ou use as setas"
+        aria-label={round ? "Enquadramento da foto: arraste ou use as setas" : "Posição da capa: arraste ou use as setas"}
         onPointerDown={(e) => {
           e.currentTarget.setPointerCapture(e.pointerId);
           drag.current = { x0: e.clientX, y0: e.clientY, bx: pos.bannerX, by: pos.bannerY };
@@ -173,7 +177,7 @@ export function BannerEditor({
           max={3}
           step={0.05}
           value={pos.bannerZoom}
-          aria-label="Zoom da capa"
+          aria-label={round ? "Zoom da foto" : "Zoom da capa"}
           onChange={(e) => onChange({ bannerZoom: Number(e.target.value) })}
         />
         <ZoomIn size={16} aria-hidden="true" />

@@ -143,7 +143,7 @@ export function ProfileCardView({ user, shown, children }: { user: CardUser; sho
   const look = lookOf(user);
   const image = look.banner === "imagem" && user.bannerUrl;
   return (
-    <div className="profile-card" data-two={look.twoTone || undefined} style={lookVars(user)}>
+    <div className="profile-card" data-two={look.twoTone || undefined} data-card-fx={look.cardFx || undefined} style={lookVars(user)}>
       <div className="profile-banner">{image && <img src={image} alt="" style={bannerImageStyle(look)} />}</div>
       <div className="profile-card-body">
         <span className="profile-avatar">

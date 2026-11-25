@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
+import { PartyPopper } from "lucide-react";
 import { APP_NAME, type Channel } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Nick } from "../components/Nick.tsx";
@@ -55,6 +56,8 @@ export function HomePage() {
             </button>
           </span>
         </header>
+
+        <NoticesCard />
 
         <section className="page-section" aria-labelledby="live-title">
           <div className="section-head">
@@ -119,6 +122,36 @@ export function HomePage() {
         <FeedbackCard />
       </div>
     </main>
+  );
+}
+
+/** Avisos guardados para você (ex.: sua sugestão foi implementada): ficam aqui até você dispensar. */
+function NoticesCard() {
+  const notices = useApp((s) => s.notices);
+  if (notices.length === 0) return null;
+  const dismiss = (id: number) => {
+    useApp.getState().dismissNotice(id);
+    void api.dismissNotice(id).catch(() => undefined); // se falhar, o aviso volta na próxima conexão
+  };
+  return (
+    <section className="page-section" aria-labelledby="notices-title">
+      <div className="section-head">
+        <h2 id="notices-title" className="section-title">
+          Novidades para você
+        </h2>
+      </div>
+      <ul className="notice-list">
+        {notices.map((n) => (
+          <li key={n.id} className="card notice-card">
+            <PartyPopper size={22} aria-hidden="true" />
+            <p>{n.text}</p>
+            <button type="button" className="btn btn-small btn-primary" onClick={() => dismiss(n.id)}>
+              Valeu!
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

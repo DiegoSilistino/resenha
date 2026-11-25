@@ -14,7 +14,9 @@ import type {
   Reaction,
   ServerEvent,
   SoundboardSound,
+  UserNotice,
   VoiceMember,
+  Wallet,
   WatchState,
 } from "@resenha/shared";
 import { PERMISSIONS } from "@resenha/shared";
@@ -67,8 +69,14 @@ interface AppState {
   rodas: Record<string, Roda>;
   /** Rodas abertas em que você ainda não está. */
   openRodas: RodaSummary[];
+  /** Suas moedas e itens da loja. */
+  wallet: Wallet;
+  /** Avisos guardados para você (sugestão implementada…), até você dispensar. */
+  notices: UserNotice[];
 
   setMe(me: Me | false): void;
+  setWallet(wallet: Wallet): void;
+  dismissNotice(id: number): void;
   setConnection(status: ConnectionStatus): void;
   setActiveChannel(id: string | null): void;
   /** A pessoa voltou para a janela: o que chegou no canal aberto foi visto. */
@@ -108,6 +116,8 @@ const initial = {
   friends: {} as Record<string, FriendEntry>,
   rodas: {} as Record<string, Roda>,
   openRodas: [] as RodaSummary[],
+  wallet: { coins: 0, items: [] } as Wallet,
+  notices: [] as UserNotice[],
 };
 
 /** A pessoa está olhando para o app agora? */
@@ -118,6 +128,8 @@ export const useApp = create<AppState>()((set, get) => ({
   ...initial,
 
   setMe: (me) => set({ me }),
+  setWallet: (wallet) => set({ wallet }),
+  dismissNotice: (id) => set((s) => ({ notices: s.notices.filter((n) => n.id !== id) })),
   setConnection: (connection) => set({ connection }),
   setActiveChannel: (id) =>
     set((s) => {
@@ -304,6 +316,10 @@ export const useApp = create<AppState>()((set, get) => ({
       }
       case "soundboard.played":
         return; // tocado pelo módulo da mesa de sons
+      case "wallet":
+        return set({ wallet: event.wallet });
+      case "user.notice":
+        return set({ notices: [...s.notices.filter((n) => n.id !== event.notice.id), event.notice] });
       case "pong":
       case "notice":
         return; // tratados pelo cliente de tempo real
@@ -328,6 +344,8 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
     friends: Object.fromEntries((e.friends ?? []).map((f) => [f.userId, f])),
     rodas: Object.fromEntries((e.rodas ?? []).map((r) => [r.id, r])),
     openRodas: e.openRodas ?? [],
+    wallet: e.wallet ?? { coins: 0, items: [] },
+    notices: e.notices ?? [],
     // não lidas das conversas vêm do servidor (ele guarda até onde você leu)
     unread: { ...useApp.getState().unread, ...(e.conversationUnread ?? {}) },
   };

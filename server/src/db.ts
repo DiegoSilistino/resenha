@@ -238,6 +238,28 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE rodas ADD COLUMN icon_id TEXT;
   ALTER TABLE rodas ADD COLUMN icon_mime TEXT;
   `,
+  // 12: loja (moedas, dia do bônus, moedas de call no dia, itens comprados), feedback implementado
+  // e avisos guardados para a pessoa.
+  `
+  ALTER TABLE users ADD COLUMN coins INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN daily_on TEXT;
+  ALTER TABLE users ADD COLUMN voice_on TEXT;
+  ALTER TABLE users ADD COLUMN voice_coins INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE user_items (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item TEXT NOT NULL,
+    bought_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, item)
+  );
+  ALTER TABLE client_errors ADD COLUMN done_at INTEGER;
+  CREATE TABLE notices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX notices_user ON notices(user_id);
+  `,
 ];
 
 /**

@@ -3,6 +3,7 @@
  */
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
+  COINS,
   DEFAULT_LOOK,
   LIMITS,
   lookSchema,
@@ -29,7 +30,9 @@ import {
   type Role,
   type SearchResult,
   type SoundboardSound,
+  type UserNotice,
   type UserStatus,
+  type Wallet,
 } from "@resenha/shared";
 import { transaction, type Db } from "./db.ts";
 import { ftsQuery, makeSnippet, MARK_END, MARK_START } from "./search.ts";
@@ -1532,6 +1535,7 @@ export class Store {
       user_agent: string;
       context: string;
       created_at: number;
+      done_at: number | null;
     }[];
     return rows.map((r) => ({
       id: r.id,
@@ -1542,11 +1546,83 @@ export class Store {
       userAgent: r.user_agent,
       context: safeJson(r.context),
       createdAt: r.created_at,
+      doneAt: r.done_at,
     }));
   }
 
   clearClientErrors(feedback = false): void {
     this.db.prepare("DELETE FROM client_errors WHERE (kind = 'feedback') = ?").run(feedback ? 1 : 0);
+  }
+
+  /** Marca o feedback como implementado. null = não existe ou já estava marcado (não avisa duas vezes). */
+  markFeedbackDone(id: number): ClientErrorEntry | null {
+    const res = this.db
+      .prepare("UPDATE client_errors SET done_at = ? WHERE id = ? AND kind = 'feedback' AND done_at IS NULL")
+      .run(Date.now(), id);
+    if (!res.changes) return null;
+    return this.listClientErrors(CLIENT_ERRORS_KEEP, true).find((e) => e.id === id) ?? null;
+  }
+
+  // ---------- avisos guardados para a pessoa ----------
+
+  addNotice(userId: string, text: string): UserNotice {
+    const createdAt = Date.now();
+    const res = this.db.prepare("INSERT INTO notices (user_id, text, created_at) VALUES (?, ?, ?)").run(userId, text, createdAt);
+    return { id: Number(res.lastInsertRowid), text, createdAt };
+  }
+
+  listNotices(userId: string): UserNotice[] {
+    return this.db
+      .prepare("SELECT id, text, created_at AS createdAt FROM notices WHERE user_id = ? ORDER BY id")
+      .all(userId) as unknown as UserNotice[];
+  }
+
+  deleteNotice(userId: string, id: number): boolean {
+    return this.db.prepare("DELETE FROM notices WHERE id = ? AND user_id = ?").run(id, userId).changes > 0;
+  }
+
+  // ---------- moedas e loja ----------
+
+  wallet(userId: string): Wallet {
+    const row = this.db.prepare("SELECT coins FROM users WHERE id = ?").get(userId) as { coins: number } | undefined;
+    const items = this.db.prepare("SELECT item FROM user_items WHERE user_id = ? ORDER BY bought_at").all(userId) as { item: string }[];
+    return { coins: Number(row?.coins ?? 0), items: items.map((i) => i.item) };
+  }
+
+  /** Bônus do dia (`day` = "2026-11-24"): só o primeiro pedido do dia ganha. */
+  claimDaily(userId: string, day: string): boolean {
+    return (
+      this.db
+        .prepare("UPDATE users SET coins = coins + ?, daily_on = ? WHERE id = ? AND daily_on IS NOT ?")
+        .run(COINS.daily, day, userId, day).changes > 0
+    );
+  }
+
+  /** Um minuto de call: soma a moeda até o teto do dia (o contador zera quando o dia muda). */
+  addVoiceCoin(userId: string, day: string): boolean {
+    return (
+      this.db
+        .prepare(
+          `UPDATE users SET
+             coins = coins + ?,
+             voice_coins = CASE WHEN voice_on = ? THEN voice_coins + ? ELSE ? END,
+             voice_on = ?
+           WHERE id = ? AND (voice_on IS NOT ? OR voice_coins < ?)`,
+        )
+        .run(COINS.perVoiceMinute, day, COINS.perVoiceMinute, COINS.perVoiceMinute, day, userId, day, COINS.voiceDailyMax)
+        .changes > 0
+    );
+  }
+
+  /** Compra: desconta e guarda o item juntos, ou nada acontece. */
+  buyItem(userId: string, item: string, price: number): "ok" | "owned" | "poor" {
+    return transaction(this.db, () => {
+      if (this.db.prepare("SELECT 1 FROM user_items WHERE user_id = ? AND item = ?").get(userId, item)) return "owned";
+      const paid = this.db.prepare("UPDATE users SET coins = coins - ? WHERE id = ? AND coins >= ?").run(price, userId, price);
+      if (!paid.changes) return "poor";
+      this.db.prepare("INSERT INTO user_items (user_id, item, bought_at) VALUES (?, ?, ?)").run(userId, item, Date.now());
+      return "ok";
+    });
   }
 
   // ---------- soundboard ----------

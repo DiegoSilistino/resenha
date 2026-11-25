@@ -21,6 +21,8 @@ import type {
   SearchResult,
   SoundboardSound,
   VoiceTokenResponse,
+  AvatarPos,
+  Wallet,
 } from "@resenha/shared";
 
 export class ApiError extends Error {
@@ -79,12 +81,17 @@ export const api = {
   bannerGif: (url: string) => request<{ me: Me }>("POST", "/api/me/banner/gif", { url }),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>("POST", "/api/me/password", { currentPassword, newPassword }),
-  uploadAvatar: (image: Blob) => {
+  /** Foto do perfil: parada (já recortada) ou GIF inteiro, com a posição dele no círculo. */
+  uploadAvatar: (image: Blob, pos: AvatarPos = { x: 50, y: 50, zoom: 1 }) => {
     const form = new FormData();
-    form.append("file", image, image.type === "image/webp" ? "avatar.webp" : "avatar.png");
-    return request<{ me: Me }>("POST", "/api/me/avatar", form);
+    form.append("file", image, image.type === "image/webp" ? "avatar.webp" : image.type === "image/gif" ? "avatar.gif" : "avatar.png");
+    const qs = new URLSearchParams({ x: String(pos.x), y: String(pos.y), zoom: String(pos.zoom) });
+    return request<{ me: Me }>("POST", `/api/me/avatar?${qs}`, form);
   },
+  avatarGif: (url: string, pos: AvatarPos) => request<{ me: Me }>("POST", "/api/me/avatar/gif", { url, ...pos }),
   removeAvatar: () => request<{ me: Me }>("DELETE", "/api/me/avatar"),
+  buyItem: (id: string) => request<{ wallet: Wallet }>("POST", `/api/shop/${encodeURIComponent(id)}/buy`),
+  dismissNotice: (id: number) => request<void>("DELETE", `/api/me/notices/${id}`),
 
   /** `since`: pular para uma mensagem antiga (traz tudo de `before` até ela, de uma vez). */
   messages: (channelId: string, before?: number, since?: number) => {
@@ -188,6 +195,8 @@ export const api = {
   adminErrors: () => request<{ errors: ClientErrorEntry[] }>("GET", "/api/admin/errors"),
   clearAdminErrors: () => request<void>("DELETE", "/api/admin/errors"),
   adminFeedback: () => request<{ feedback: ClientErrorEntry[] }>("GET", "/api/admin/feedback"),
+  /** Marca como implementado: quem mandou recebe o aviso. */
+  feedbackDone: (id: number) => request<{ entry: ClientErrorEntry }>("POST", `/api/admin/feedback/${id}/done`),
   clearAdminFeedback: () => request<void>("DELETE", "/api/admin/feedback"),
 
   search: (q: string, opts: { channelId?: string; before?: number } = {}) => {

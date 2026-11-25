@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { changePasswordBody, updateMeBody, WS_CLOSE_SESSION_REVOKED } from "@resenha/shared";
+import { changePasswordBody, SHOP_SLOTS, updateMeBody, WS_CLOSE_SESSION_REVOKED } from "@resenha/shared";
 import { rateLimited, requireUser, type AppContext } from "../app.ts";
 import { badRequest, currentUser, parse } from "../http.ts";
 import { hashPassword, verifyPassword } from "../auth/password.ts";
@@ -11,6 +11,13 @@ export function registerMeRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.patch("/api/me", { preHandler: requireUser }, async (req) => {
     const body = parse(updateMeBody, req.body);
+    if (body.look) {
+      const owned = store.wallet(currentUser(req).id).items;
+      for (const slot of SHOP_SLOTS) {
+        const item = body.look[slot];
+        if (item && !owned.includes(item)) throw badRequest("Compre esse item na Loja antes de usar");
+      }
+    }
     const user = store.updateUserProfile(currentUser(req).id, body);
     const me = toPublicUser(user);
     if (body.status) hub.setHidden(user.id, body.status === "invisivel");

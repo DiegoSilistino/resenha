@@ -34,6 +34,7 @@ describe("estado: mesa de sons e erros", () => {
       userAgent: "",
       context: {},
       createdAt: 0,
+      doneAt: null,
     });
     useApp.getState().applyEvent({ type: "admin.error", entry: entry(7) });
     useApp.getState().applyEvent({ type: "admin.error", entry: entry(3) });

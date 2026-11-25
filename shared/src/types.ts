@@ -47,6 +47,27 @@ export interface ProfileLook {
   frame: "nenhuma" | "anel" | "duplo" | "tracejado" | "halo";
   nickStyle: "padrao" | "cor" | "gradiente";
   font: "onest" | "mono" | "larga" | "serif" | "pixel";
+  /** Foto animada (GIF): ponto que fica à vista e zoom, como na capa. Foto parada já vem recortada (50/50/1). */
+  avatarX: number;
+  avatarY: number;
+  avatarZoom: number;
+  /** Itens da loja em uso (id de SHOP_ITEMS daquele tipo; null = nenhum). Só vale o que a pessoa comprou. */
+  deco: string | null;
+  nickFx: string | null;
+  cardFx: string | null;
+}
+
+/** Moedas e itens comprados: só a própria pessoa vê. */
+export interface Wallet {
+  coins: number;
+  items: string[];
+}
+
+/** Aviso guardado para a pessoa (ex.: "sua sugestão foi implementada"); some quando ela dispensa. */
+export interface UserNotice {
+  id: number;
+  text: string;
+  createdAt: number;
 }
 
 export type Me = PublicUser;
@@ -282,6 +303,8 @@ export interface ClientErrorEntry {
   /** Situação no momento (página aberta, estado da voz, redução de ruído…). */
   context: Record<string, string | number | boolean>;
   createdAt: number;
+  /** Feedback que o criador do site marcou como implementado (quem mandou recebe um aviso). */
+  doneAt: number | null;
 }
 
 export interface SearchResult {

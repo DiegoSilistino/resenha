@@ -5046,3 +5046,326 @@ a.roda-card:hover {
     opacity: 0;
   }
 }
+
+/* ---------- foto animada (GIF): o círculo recorta, o zoom não vaza ---------- */
+.avatar-clip {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.banner-editor[data-round] {
+  width: 240px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+/* ---------- prévia da Aparência: miniatura do app com as variáveis do tema ---------- */
+.theme-preview {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+  height: 160px;
+  padding: 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--backdrop);
+}
+.theme-preview-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px;
+  border-radius: 12px;
+  background: var(--night);
+}
+.theme-preview-side i {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+.theme-preview-side i:first-child {
+  width: 70%;
+  background: var(--accent);
+}
+.theme-preview-chat {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--chat-wall, none), var(--night);
+  overflow: hidden;
+}
+.theme-preview-msg {
+  max-width: 75%;
+  padding: 6px 11px;
+  border-radius: 14px 14px 14px 4px;
+  background: var(--panel-2);
+  color: #ececef;
+  font-size: 12.5px;
+}
+.theme-preview-msg[data-mine] {
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---------- loja: decorações do avatar (anel por cima, sem ocupar espaço nem pegar clique) ---------- */
+.avatar[data-deco]::before {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+}
+.avatar[data-deco] .presence-dot {
+  z-index: 2;
+}
+.avatar[data-deco="arco-iris"]::before {
+  background: conic-gradient(#ff5f6d, #ffc371, #f9f871, #7cf29c, #5ec8ff, #b388ff, #ff5f6d);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  animation: deco-spin 3s linear infinite;
+}
+.avatar[data-deco="neon"]::before {
+  border: 2px solid var(--pa);
+  box-shadow:
+    0 0 8px 1px var(--pa),
+    inset 0 0 6px var(--pa);
+  animation: deco-pulse 1.6s ease-in-out infinite;
+}
+.avatar[data-deco="brilho"]::before {
+  inset: -22%;
+  background:
+    radial-gradient(circle at 12% 30%, #fff 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 85% 18%, #fff7c2 0 1.6px, transparent 2.6px),
+    radial-gradient(circle at 92% 70%, #fff 0 1.1px, transparent 2px),
+    radial-gradient(circle at 25% 88%, #ffe9a8 0 1.4px, transparent 2.4px),
+    radial-gradient(circle at 55% 2%, #fff 0 1px, transparent 2px),
+    radial-gradient(circle at 60% 98%, #fff 0 1px, transparent 2px);
+  animation:
+    deco-spin 9s linear infinite,
+    deco-twinkle 1.8s ease-in-out infinite alternate;
+}
+@keyframes deco-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@keyframes deco-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+@keyframes deco-twinkle {
+  from {
+    opacity: 0.35;
+  }
+}
+
+/* ---------- loja: efeitos no nick (vencem o estilo do perfil enquanto estão em uso) ---------- */
+.nick[data-fx="nick-neon"] {
+  filter: drop-shadow(0 0 3px var(--pa)) drop-shadow(0 0 8px color-mix(in oklch, var(--pa) 70%, transparent));
+  animation: nick-glow 2s ease-in-out infinite;
+}
+.nick[data-fx="nick-brilho"],
+.nick[data-fx="nick-arco-iris"] {
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: nick-slide 3s linear infinite;
+}
+.nick[data-fx="nick-brilho"] {
+  background-image: linear-gradient(110deg, var(--pa) 0 40%, #fff 50%, var(--pa) 60% 100%);
+  background-size: 250% 100%;
+}
+.nick[data-fx="nick-arco-iris"] {
+  background-image: linear-gradient(90deg, #ff5f6d, #ffc371, #f9f871, #7cf29c, #5ec8ff, #b388ff, #ff5f6d);
+  background-size: 200% 100%;
+}
+@keyframes nick-glow {
+  50% {
+    filter: drop-shadow(0 0 1px var(--pa));
+  }
+}
+@keyframes nick-slide {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* ---------- loja: efeitos no cartão do perfil (e na amostra da loja) ---------- */
+[data-card-fx] {
+  position: relative;
+  isolation: isolate;
+}
+[data-card-fx]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+/* estrelas por cima de tudo (pontinhos não atrapalham a leitura); aurora por baixo do conteúdo */
+[data-card-fx="estrelas"]::before {
+  z-index: 1;
+  background-image:
+    radial-gradient(circle, #fff 0 1px, transparent 1.6px),
+    radial-gradient(circle, #fff 0 0.8px, transparent 1.4px),
+    radial-gradient(circle, rgb(255 255 255 / 0.8) 0 1.2px, transparent 1.8px);
+  background-size:
+    97px 89px,
+    61px 73px,
+    131px 117px;
+  background-position:
+    0 0,
+    23px 41px,
+    57px 13px;
+  opacity: 0.7;
+  animation: deco-twinkle 2.4s ease-in-out infinite alternate;
+}
+[data-card-fx="aurora"]::before {
+  z-index: -1;
+  background:
+    radial-gradient(60% 45% at 20% 30%, color-mix(in oklch, var(--pa) 55%, transparent), transparent 70%),
+    radial-gradient(55% 40% at 80% 60%, oklch(0.75 0.14 190 / 0.45), transparent 70%),
+    radial-gradient(50% 40% at 40% 90%, oklch(0.7 0.16 300 / 0.4), transparent 70%);
+  background-size: 160% 160%;
+  animation: aurora 9s ease-in-out infinite alternate;
+}
+@keyframes aurora {
+  from {
+    background-position: 0% 0%;
+  }
+  to {
+    background-position: 100% 100%;
+  }
+}
+
+/* ---------- loja ---------- */
+.shop-balance {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  color: #f5c542;
+}
+.shop-balance strong {
+  color: var(--text);
+  font-size: 26px;
+  line-height: 1;
+}
+.shop-balance span {
+  color: var(--muted);
+}
+.shop-grid {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.shop-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 12px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  text-align: center;
+}
+.shop-item[data-worn] {
+  border-color: var(--accent);
+}
+.shop-preview {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 72px;
+}
+.shop-preview .nick {
+  font-size: 18px;
+  font-weight: 700;
+}
+.shop-name {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.shop-card-swatch {
+  display: block;
+  width: 100%;
+  height: 64px;
+  border-radius: 14px;
+  background: color-mix(in oklch, var(--pa) 14%, #111113);
+}
+.topbar-coins {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font: 600 13px var(--font-mono);
+  cursor: pointer;
+}
+.topbar-coins svg {
+  color: #f5c542;
+}
+.topbar-coins:hover {
+  border-color: var(--accent);
+}
+
+/* ---------- avisos guardados (Início) e feedback implementado (admin) ---------- */
+.notice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.notice-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--line-2));
+}
+.notice-card svg {
+  flex: none;
+  color: var(--accent);
+}
+.notice-card p {
+  flex: 1;
+  margin: 0;
+}
+.feedback-done {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  color: var(--online);
+  font-size: 12.5px;
+}
+.feedback-done-btn {
+  margin-top: 8px;
+}

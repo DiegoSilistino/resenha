@@ -1,4 +1,5 @@
 import { Link, NavLink, useLocation } from "react-router";
+import { Coins } from "lucide-react";
 import { APP_NAME } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { unreadConversations, useApp } from "../state/app.ts";
@@ -53,6 +54,7 @@ function Tabs({ className }: { className: string }) {
 
 export function TopBar() {
   const me = useApp((s) => s.me);
+  const coins = useApp((s) => s.wallet.coins);
   return (
     <header className="topbar">
       <Link to="/" className="wordmark topbar-wordmark" aria-label={`${APP_NAME}: início`}>
@@ -61,6 +63,15 @@ export function TopBar() {
       <Tabs className="tabs-top" />
       <div className="topbar-spacer" />
       <CallPill place="top" />
+      <button
+        type="button"
+        className="topbar-coins"
+        onClick={() => useUi.getState().setSettingsOpen(true, "shop")}
+        aria-label={`${coins} moedas: abrir a Loja`}
+        title="Suas moedas: abrir a Loja"
+      >
+        <Coins size={16} aria-hidden="true" /> {coins}
+      </button>
       <button
         type="button"
         className="topbar-me"

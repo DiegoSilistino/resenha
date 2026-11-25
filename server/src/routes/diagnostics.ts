@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { clientErrorBody } from "@resenha/shared";
 import { rateLimited, requireAdmin, requireUser, type AppContext } from "../app.ts";
-import { currentUser, forbidden, parse } from "../http.ts";
+import { currentUser, forbidden, notFound, parse } from "../http.ts";
 
 /**
  * Painel de erros: o navegador de cada um reporta falhas (voz, microfone, tela, IA, erros
@@ -48,6 +48,17 @@ export function registerDiagnosticsRoutes(app: FastifyInstance, ctx: AppContext)
   app.get("/api/admin/feedback", { preHandler: requireUser }, async (req) => {
     ownerOnly(req);
     return { feedback: store.listClientErrors(200, true) };
+  });
+
+  // Implementou a sugestão: quem mandou ganha um aviso guardado (chega na hora se estiver online).
+  app.post<{ Params: { id: string } }>("/api/admin/feedback/:id/done", { preHandler: requireUser }, async (req) => {
+    ownerOnly(req);
+    const entry = store.markFeedbackDone(Number(req.params.id));
+    if (!entry) throw notFound("Feedback não encontrado ou já marcado");
+    const quote = entry.message.length > 160 ? `${entry.message.slice(0, 160)}…` : entry.message;
+    const notice = store.addNotice(entry.userId, `Sua ideia virou realidade! O que você mandou ("${quote}") já está no ar. Valeu!`);
+    hub.sendToUser(entry.userId, { type: "user.notice", notice });
+    return { entry };
   });
 
   app.delete("/api/admin/feedback", { preHandler: requireUser }, async (req, reply) => {

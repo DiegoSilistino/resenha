@@ -11,7 +11,7 @@ export interface JumpRequest {
 /** Abas do painel do admin (a ordem e os nomes ficam no AdminModal). */
 export type AdminTab = "invites" | "members" | "backup" | "errors" | "feedback";
 export type RodaSettingsTab = "geral" | "cargos" | "membros" | "convites" | "salas";
-export type SettingsTab = "profile" | "appearance" | "audio" | "notifications" | "captions" | "account";
+export type SettingsTab = "profile" | "shop" | "appearance" | "audio" | "notifications" | "captions" | "account";
 
 interface UiState {
   settingsOpen: boolean;

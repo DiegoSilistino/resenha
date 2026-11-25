@@ -30,6 +30,8 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
 - **Assistir juntos.** Uma fila do YouTube sincronizada no mesmo segundo para todos, que serve para música e para cinema. Quem está no canal pausa, pula e adianta. O player continua tocando enquanto você navega pelo chat.
 - **Legendas ao vivo.** Cada pessoa transcreve a própria fala no navegador e o texto vai para a sala, sem custo de servidor.
 - **Painel do site: erros e feedback.** Clicando no seu perfil, admins têm o botão "Administrar o site". Quando algo falha no navegador de alguém (entrar na chamada, microfone, tela, redução de ruído), o erro aparece em Administrar o site → Erros com quem, quando, navegador e detalhes técnicos. O feedback que as pessoas mandam pela tela inicial vai para a aba Feedback, que só o criador do site (a primeira conta admin) vê. Um aviso aparece na lateral quando chega novidade.
+  Na aba Feedback, "Marcar como implementado" deixa um aviso para quem mandou: chega na hora se a pessoa estiver online e fica no Início ("Novidades para você") até ela dispensar.
+- **Loja de moedas.** Moedas por entrar no dia (+25) e por minuto em call com mais alguém (+1, até 60 por dia) compram extras animados do perfil: decoração do avatar, efeito no nick e no cartão (Configurações → Loja, ou o botão de moedas no topo). O que já era grátis (foto e capa com GIF, molduras, degradê, fontes) continua grátis.
 - **Funciona no navegador e no celular**, e pode ser instalado como app (PWA).
 
 ## Como funciona

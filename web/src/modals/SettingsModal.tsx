@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AVATAR_COLORS, DEFAULT_LOOK, LIMITS, PROFILE_COLORS, type ProfileLook } from "@resenha/shared";
+import { AVATAR_COLORS, DEFAULT_LOOK, LIMITS, PROFILE_COLORS, type Me, type ProfileLook } from "@resenha/shared";
 import { BannerEditor, BannerPicker, type PendingBanner } from "../components/Banner.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { api, ApiError } from "../lib/api.ts";
@@ -24,10 +24,12 @@ import { speechSupported } from "../voice/speech.ts";
 import { AvatarEditor } from "./AvatarEditor.tsx";
 import { MicSensitivity } from "./MicSensitivity.tsx";
 import { ProfileCardView } from "./ProfileCard.tsx";
+import { ShopTab } from "./ShopTab.tsx";
 import comemorando from "../assets/mascote/comemorando.webp";
 
 const TABS = [
   { id: "profile", label: "Perfil" },
+  { id: "shop", label: "Loja" },
   { id: "appearance", label: "Aparência" },
   { id: "audio", label: "Áudio" },
   { id: "notifications", label: "Notificações" },
@@ -56,6 +58,7 @@ export function SettingsModal() {
       </div>
       <div role="tabpanel" className="tab-panel">
         {tab === "profile" && <ProfileTab />}
+        {tab === "shop" && <ShopTab />}
         {tab === "appearance" && <AppearanceTab />}
         {tab === "audio" && <AudioTab />}
         {tab === "notifications" && <NotificationsTab />}
@@ -99,6 +102,11 @@ function ProfileTab() {
   useEffect(() => () => void (pendingBanner?.kind === "file" && URL.revokeObjectURL(pendingBanner.url)), [pendingBanner]);
   if (!me) return null;
   const patch = (p: Partial<ProfileLook>) => setLook((l) => ({ ...l, ...p }));
+  // a foto nova chega com o enquadramento dela; o rascunho acompanha para o "Salvar perfil" não desfazer
+  const applyAvatar = (updated: Me) => {
+    useApp.getState().setMe(updated);
+    patch({ avatarX: updated.look.avatarX, avatarY: updated.look.avatarY, avatarZoom: updated.look.avatarZoom });
+  };
   const bannerSrc = pendingBanner?.url ?? me.bannerUrl;
   const draft = { ...me, displayName: name || me.displayName, avatarColor: color, activity, note, look, bannerUrl: bannerSrc };
 
@@ -128,14 +136,18 @@ function ProfileTab() {
         <div className="all-free">
           <img src={comemorando} alt="" width={480} height={437} decoding="async" />
           <p>
-            <strong>Tudo liberado.</strong> Capa com GIF, molduras, nick em degradê e fontes: tudo de graça, para todo mundo.
+            <strong>Tudo liberado.</strong> Foto e capa com GIF, molduras, nick em degradê e fontes: tudo de graça, para todo mundo.
+            Os extras animados ficam na aba Loja, comprados com moedas.
           </p>
         </div>
         <fieldset className="field">
           <legend>Foto de perfil</legend>
           <AvatarEditor
             hasImage={!!me.avatarUrl}
-            upload={async (image) => useApp.getState().setMe((await api.uploadAvatar(image)).me)}
+            upload={async (image) => applyAvatar((await api.uploadAvatar(image)).me)}
+            uploadGif={async (src, pos) =>
+              applyAvatar((typeof src === "string" ? await api.avatarGif(src, pos) : await api.uploadAvatar(src, pos)).me)
+            }
             remove={async () => useApp.getState().setMe((await api.removeAvatar()).me)}
           />
         </fieldset>
@@ -274,6 +286,29 @@ function Choice<T extends string>({
   );
 }
 
+/**
+ * Miniatura do app com as escolhas atuais: a janela das Configurações cobre a tela, então o fundo e o
+ * fundo do chat aparecem aqui. Lê as mesmas variáveis do :root que o app inteiro (mudam na hora).
+ */
+function ThemePreview() {
+  return (
+    <div className="theme-preview" role="img" aria-label="Prévia do fundo e do fundo do chat">
+      <span className="theme-preview-side">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="theme-preview-chat">
+        <span className="theme-preview-msg">Bora jogar hoje?</span>
+        <span className="theme-preview-msg">Tô dentro, 20h?</span>
+        <span className="theme-preview-msg" data-mine>
+          Fechou! Chamo a galera
+        </span>
+      </span>
+    </div>
+  );
+}
+
 /** Cor de destaque, fundo e fundo do chat: mudam só para você e aparecem na hora. */
 function AppearanceTab() {
   const accent = useSettings((s) => s.themeAccent);
@@ -283,6 +318,7 @@ function AppearanceTab() {
   return (
     <div className="form">
       <p className="small-note muted">Muda só para você, neste aparelho, e aparece na hora.</p>
+      <ThemePreview />
       <fieldset className="field">
         <legend>Cor de destaque</legend>
         <div className="swatches">

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { PublicUser } from "@resenha/shared";
 import { initials } from "../lib/format.ts";
-import { lookOf, lookVars, type LookUser } from "../lib/look.ts";
+import { avatarImageStyle, lookOf, lookVars, type LookUser } from "../lib/look.ts";
 
 interface Props {
   user:
@@ -22,7 +22,8 @@ export function Avatar({ user, size = 32, speaking = false, online, plain = fals
   // Foto que falhou ao carregar (ex.: acabou de ser trocada) cai nas iniciais em vez de ícone quebrado.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const photo = user?.avatarUrl && user.avatarUrl !== failedUrl ? user.avatarUrl : null;
-  const frame = plain ? "nenhuma" : lookOf(user).frame;
+  const look = lookOf(user);
+  const frame = plain ? "nenhuma" : look.frame;
   const dot = online === undefined ? null : online ? (user?.status ?? "online") : "offline";
   return (
     <span
@@ -30,6 +31,7 @@ export function Avatar({ user, size = 32, speaking = false, online, plain = fals
       data-speaking={speaking || undefined}
       data-photo={photo ? true : undefined}
       data-frame={frame === "nenhuma" ? undefined : frame}
+      data-deco={(!plain && look.deco) || undefined}
       style={{
         ...lookVars(user),
         width: size,
@@ -40,7 +42,19 @@ export function Avatar({ user, size = 32, speaking = false, online, plain = fals
       aria-hidden="true"
     >
       {photo ? (
-        <img src={photo} alt="" width={size} height={size} decoding="async" draggable={false} onError={() => setFailedUrl(photo)} />
+        // o recorte redondo fica no invólucro: o zoom da foto animada não vaza do círculo
+        <span className="avatar-clip">
+          <img
+            src={photo}
+            alt=""
+            width={size}
+            height={size}
+            decoding="async"
+            draggable={false}
+            style={avatarImageStyle(look)}
+            onError={() => setFailedUrl(photo)}
+          />
+        </span>
       ) : (
         initials(name)
       )}
