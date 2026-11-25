@@ -6,6 +6,7 @@ import { api, ApiError } from "../lib/api.ts";
 import { ACCENTS, accentColor, BGS, WALLS } from "../lib/theme.ts";
 import { notifyPermission, requestNotifyPermission, type NotifyPermission } from "../lib/notify.ts";
 import { logout } from "../lib/session.ts";
+import { loadedBuildId } from "../lib/realtime.ts";
 import { playSound } from "../lib/sounds.ts";
 import { useApp } from "../state/app.ts";
 import {
@@ -744,6 +745,7 @@ function AccountTab() {
       >
         Sair da conta
       </button>
+      <p className="small-note muted">Versão do site: {loadedBuildId() ?? "desenvolvimento"}</p>
     </div>
   );
 }

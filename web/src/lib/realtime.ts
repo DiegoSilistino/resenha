@@ -17,6 +17,8 @@ type Listener = () => void;
 
 /** Versão do site que esta página carregou (vem no primeiro hello). */
 let loadedBuild: string | null = null;
+/** Para mostrar em Configurações → Conta (null em desenvolvimento). */
+export const loadedBuildId = () => loadedBuild;
 
 /**
  * Conexão WebSocket com reconexão automática (backoff exponencial com jitter).
