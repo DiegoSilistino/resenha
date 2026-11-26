@@ -6,6 +6,20 @@ export interface DesktopBridge {
   onPushToTalk(cb: (down: boolean) => void): () => void;
   /** Traz a janela (minimizada ou na bandeja); `focus: false` mostra sem roubar o foco do jogo. */
   show(focus: boolean): void;
+  /** Telas e janelas abertas, com miniatura. Opcional: só o app 1.1.0 em diante tem. */
+  listScreenSources?(): Promise<ScreenSource[]>;
+  /** Avisa o app o que transmitir no próximo pedido (aí ele não mostra o menu dele). */
+  chooseScreenSource?(id: string): Promise<void>;
+}
+
+export interface ScreenSource {
+  id: string;
+  name: string;
+  /** Tela inteira (senão é a janela de um app). */
+  screen: boolean;
+  /** Miniatura (data URL); null quando o Windows não deu imagem. */
+  thumbnail: string | null;
+  icon: string | null;
 }
 
 export const desktop: DesktopBridge | undefined = (globalThis as { resenhaDesktop?: DesktopBridge }).resenhaDesktop;

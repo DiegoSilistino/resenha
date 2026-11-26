@@ -164,18 +164,51 @@ function pickSource(sources) {
   });
 }
 
+/** O que o site escolheu na janela dele; vale só para o próximo pedido de transmissão. */
+let chosenSourceId = null;
+
+ipcMain.handle("screens:list", async (e) => {
+  if (!fromSite(e.senderFrame?.url)) return [];
+  const sources = await desktopCapturer.getSources({
+    types: ["screen", "window"],
+    thumbnailSize: { width: 320, height: 180 },
+    fetchWindowIcons: true,
+  });
+  const own = win?.getMediaSourceId();
+  // sobreposições e ajudantes invisíveis (NVIDIA, Epic…) chegam totalmente pretos: fora da lista, como no Discord
+  const blank = (img) => img.isEmpty() || img.toBitmap().every((b, i) => i % 4 === 3 || b < 8);
+  return sources
+    .filter((s) => s.id !== own && (s.id.startsWith("screen:") || !blank(s.thumbnail)))
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      screen: s.id.startsWith("screen:"),
+      // JPEG: a lista se atualiza a cada poucos segundos, e PNG de cada janela pesaria
+      thumbnail: s.thumbnail.isEmpty() ? null : `data:image/jpeg;base64,${s.thumbnail.toJPEG(70).toString("base64")}`,
+      icon: s.appIcon && !s.appIcon.isEmpty() ? s.appIcon.toDataURL() : null,
+    }));
+});
+
+ipcMain.handle("screens:choose", (e, id) => {
+  if (fromSite(e.senderFrame?.url)) chosenSourceId = typeof id === "string" ? id : null;
+});
+
 function setupSession() {
-  const allowed = new Set(["media", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
+  // display-capture: sem ela o Electron recusa o "Mostrar tela" antes de chegar à escolha abaixo
+  const allowed = new Set(["media", "display-capture", "notifications", "fullscreen", "clipboard-sanitized-write", "speaker-selection"]);
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) =>
     cb(allowed.has(permission) && fromSite(details.requestingUrl)),
   );
   session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => allowed.has(permission) && fromSite(origin));
 
-  // "Mostrar tela": o Electron não tem a janela de escolha do navegador, então o app oferece a dele
+  // "Mostrar tela": o Electron não tem a janela de escolha do navegador. O site mostra a dele (como a
+  // do Discord) e avisa aqui o que foi escolhido; site antigo, ou janela que fechou nesse meio-tempo, cai no menu.
   session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
     if (!fromSite(request.securityOrigin)) return callback({});
+    const wanted = chosenSourceId;
+    chosenSourceId = null;
     const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 0, height: 0 } });
-    const chosen = await pickSource(sources);
+    const chosen = sources.find((s) => s.id === wanted) ?? (await pickSource(sources));
     if (!chosen) return callback({});
     // som do computador inteiro (Windows); inclui o que toca no próprio Resenha
     callback(request.audioRequested && process.platform === "win32" ? { video: chosen, audio: "loopback" } : { video: chosen });

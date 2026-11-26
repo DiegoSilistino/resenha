@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("resenhaDesktop", {
     return () => ipcRenderer.removeListener("ptt", listener);
   },
   show: (focus) => ipcRenderer.send("win:show", !!focus),
+  listScreenSources: () => ipcRenderer.invoke("screens:list"),
+  chooseScreenSource: (id) => ipcRenderer.invoke("screens:choose", String(id)),
   // só a tela de primeira configuração usa
   saveUrl: (url) => ipcRenderer.invoke("setup:url", String(url)),
 });

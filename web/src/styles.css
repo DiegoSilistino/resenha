@@ -2966,6 +2966,77 @@ img.roda-badge {
   opacity: 1;
 }
 
+/* escolha do que transmitir (app de computador), como no Discord */
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 2px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.source-card:hover,
+.source-card:focus-visible {
+  border-color: var(--accent);
+}
+.source-thumb {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-sm);
+  background: #000;
+  overflow: hidden;
+}
+.source-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.source-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13.5px;
+}
+.source-name img {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.source-name span,
+.source-chosen span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-chosen {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.source-chosen img {
+  width: 112px;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: #000;
+  border-radius: var(--r-sm);
+}
+.source-chosen span {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+}
+
 .quality-options {
   display: flex;
   flex-direction: column;
