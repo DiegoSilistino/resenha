@@ -22,14 +22,16 @@ export function ImageAttachment({ a }: { a: Attachment }) {
       {open && (
         <Modal title={a.filename} onClose={() => setOpen(false)} bare>
           <figure className="lightbox">
-            <img src={a.url} alt={a.filename} />
+            <div className="lightbox-frame">
+              <img src={a.url} alt={a.filename} />
+              <button type="button" className="lightbox-close" onClick={() => setOpen(false)} aria-label="Fechar" title="Fechar (Esc)">
+                <X size={20} />
+              </button>
+            </div>
             <figcaption>
               <a href={a.url} target="_blank" rel="noreferrer">
                 <ExternalLink size={14} aria-hidden="true" /> Abrir no navegador
               </a>
-              <button type="button" className="link-btn" onClick={() => setOpen(false)}>
-                <X size={14} aria-hidden="true" /> Fechar
-              </button>
             </figcaption>
           </figure>
         </Modal>

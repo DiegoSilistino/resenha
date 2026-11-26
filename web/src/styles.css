@@ -2122,10 +2122,13 @@ img.roda-badge {
   width: 72px;
   accent-color: var(--accent);
 }
-/* foto ampliada (clique numa imagem do chat) */
+/* foto ampliada (clique numa imagem do chat): tamanho real até 1200×800, acima disso reduz para caber */
 .modal[data-bare]:has(> .lightbox) {
-  width: auto;
-  max-width: calc(100vw - 32px);
+  /* do tamanho da foto: com "auto" o diálogo ocupava a tela toda e o clique fora não fechava */
+  width: fit-content;
+  max-width: none;
+  /* sem o teto de 760px dos modais: senão a janela centraliza menor que a foto e ela vaza para baixo */
+  max-height: none;
 }
 .lightbox {
   margin: 0;
@@ -2134,12 +2137,45 @@ img.roda-badge {
   align-items: center;
   gap: 10px;
 }
+.lightbox-frame {
+  position: relative;
+}
 .lightbox img {
   display: block;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100dvh - 96px);
+  /* 64px de cada lado para o X caber fora da foto */
+  max-width: min(1200px, 100vw - 128px);
+  max-height: min(800px, 100dvh - 140px);
   object-fit: contain;
   border-radius: var(--r-md);
+}
+.lightbox-close {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 12px);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  cursor: pointer;
+}
+.lightbox-close:hover {
+  filter: brightness(1.12);
+}
+@media (max-width: 760px) {
+  .lightbox img {
+    max-width: calc(100vw - 24px);
+  }
+  /* no celular não sobra lado: o X vai para cima do canto da foto */
+  .lightbox-close {
+    top: -46px;
+    left: auto;
+    right: 0;
+  }
 }
 .lightbox figcaption {
   display: flex;
