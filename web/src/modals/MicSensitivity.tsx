@@ -109,20 +109,24 @@ export function MicSensitivity() {
                 <small>Acompanha o ruído do seu ambiente. Desmarque para escolher o nível na mão.</small>
               </span>
             </label>
-            {!s.micGateAuto && (
-              <label className="field">
-                <span>Nível mínimo para transmitir: {s.micGateDb} dB</span>
-                <input
-                  type="range"
-                  min={-80}
-                  max={-10}
-                  step={1}
-                  value={s.micGateDb}
-                  onChange={(e) => s.set({ micGateDb: Number(e.target.value) })}
-                />
-                <small>Fale normalmente: a barra deve passar da marca branca. Se o teclado também passa, suba o nível.</small>
-              </label>
-            )}
+            {/* sempre à vista (apagada no automático), senão parece que não dá para ajustar */}
+            <label className="field">
+              <span>Nível mínimo para transmitir: {s.micGateAuto ? "automático" : `${s.micGateDb} dB`}</span>
+              <input
+                type="range"
+                min={-80}
+                max={-10}
+                step={1}
+                value={s.micGateDb}
+                disabled={s.micGateAuto}
+                onChange={(e) => s.set({ micGateDb: Number(e.target.value) })}
+              />
+              <small>
+                {s.micGateAuto
+                  ? 'No automático, o nível acompanha o ruído do ambiente. Desmarque "Ajustar automaticamente" para escolher na mão.'
+                  : "Fale normalmente: a barra deve passar da marca branca. Se o teclado também passa, suba o nível."}
+              </small>
+            </label>
           </>
         )}
       </fieldset>
