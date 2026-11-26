@@ -111,6 +111,30 @@ Desde 30/06/2026 o Google desligou a API do Tenor, então os GIFs vêm do GIPHY.
 
 A chave grátis permite 100 buscas por hora para o grupo todo. O servidor guarda as buscas repetidas e os "em alta" em cache, então isso costuma sobrar. A chave fica só no servidor; os navegadores nunca a veem.
 
+## Ativar o e-mail (opcional): recuperar a senha
+
+Com e-mail ligado, cada pessoa pode cadastrar um endereço (no cadastro ou em **Configurações → Conta**) e usar **Esqueci minha senha** na tela de entrada. Sem ele, tudo funciona igual, e quem esquecer a senha depende de um administrador.
+
+O servidor manda os códigos por SMTP. Um jeito grátis é o **Brevo** (300 e-mails por dia):
+
+1. Crie uma conta em [brevo.com](https://www.brevo.com). Em **Senders, domains & dedicated IPs → Senders**, cadastre e confirme o e-mail que vai aparecer como remetente.
+2. Em **SMTP & API → SMTP**, clique em **Generate a new SMTP key**. A página mostra o servidor, a porta, o login e a chave.
+3. Na VPS, abra o `.env` com `cd /opt/resenha && nano .env`, cole no fim (trocando pelos seus dados) e salve com Ctrl+O, Enter, Ctrl+X:
+   ```
+   SMTP_HOST=smtp-relay.brevo.com
+   SMTP_PORT=587
+   SMTP_USER=o-login-que-o-brevo-mostrou
+   SMTP_PASS=a-chave-smtp
+   MAIL_FROM=Resenha <o-email-que-voce-confirmou>
+   ```
+4. Rode `bash deploy/setup-vps.sh`.
+
+Para testar, cadastre o seu e-mail em **Configurações → Conta**: o código deve chegar em até um minuto (olhe também o spam).
+
+Dá para usar qualquer outro serviço com SMTP. Com um Gmail, por exemplo: `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, o seu Gmail em `SMTP_USER` e uma [senha de app](https://myaccount.google.com/apppasswords) em `SMTP_PASS` (exige a verificação em duas etapas da conta Google ligada). A chave fica só no `.env` da VPS: não a mande para ninguém.
+
+**Alguém perdeu o celular da verificação em duas etapas e os códigos de reserva?** Em **Administrar o site → Membros**, o botão **Desligar 2 etapas** deixa a pessoa entrar só com a senha.
+
 ## Atualizar depois de mudanças no código
 
 ```bash

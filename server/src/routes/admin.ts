@@ -66,8 +66,14 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     users: store
       .listUsers()
       .filter((u) => !u.removed)
-      .map(toPublicUser),
+      .map((u) => ({ ...toPublicUser(u), twoFactor: !!store.accountSecrets(u.id).totpSecret })),
   }));
+
+  // Perdeu o celular e os códigos de reserva: o admin desliga a verificação e a pessoa entra só com a senha.
+  app.post<{ Params: { id: string } }>("/api/admin/users/:id/2fa/disable", { preHandler: requireAdmin }, async (req, reply) => {
+    store.disableTotp(manageableUser(req.params.id).id);
+    return reply.status(204).send();
+  });
 
   app.post<{ Params: { id: string } }>(
     "/api/admin/users/:id/disable",

@@ -17,7 +17,9 @@ export function useAdminBadge() {
   const newErrors = useApp((s) => s.latestErrorId) > useSettings((s) => s.errorsSeenId);
   // feedback novo (só o criador do site recebe) também acende o aviso
   const newFeedback = (useApp((s) => s.latestFeedbackId) ?? 0) > useSettings((s) => s.feedbackSeenId);
-  return { isAdmin, newErrors: isAdmin && (newErrors || newFeedback) };
+  // denúncia em aberto fica acesa até alguém resolver
+  const openReports = useApp((s) => s.openReports) > 0;
+  return { isAdmin, newErrors: isAdmin && (newErrors || newFeedback || openReports) };
 }
 
 /** Ícone da roda: a foto dela ou, sem foto, um quadradinho na cor dela com as iniciais. */

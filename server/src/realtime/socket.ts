@@ -59,6 +59,8 @@ export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
     features: { gifs: !!ctx.gifs },
     sounds: store.listSounds(user.id),
     stickers: store.myStickerIds(user.id),
+    blocked: store.blockedIds(user.id),
+    ...(user.role === "admin" ? { openReports: store.openReportCount() } : {}),
     ...(user.role === "admin" ? { latestErrorId: store.latestClientErrorId() } : {}),
     ...(user.id === store.siteOwnerId() ? { latestFeedbackId: store.latestClientErrorId(true) } : {}),
   };

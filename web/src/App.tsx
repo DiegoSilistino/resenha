@@ -9,6 +9,7 @@ import { Toasts } from "./components/Toasts.tsx";
 import { Shell } from "./layout/Shell.tsx";
 import { InvitePage } from "./pages/InvitePage.tsx";
 import { LoginPage } from "./pages/LoginPage.tsx";
+import { TermsPage } from "./pages/TermsPage.tsx";
 
 export function App() {
   const me = useApp((s) => s.me);
@@ -40,6 +41,7 @@ export function App() {
     <>
       <Routes>
         <Route path="/convite/:code" element={<InvitePage />} />
+        <Route path="/termos" element={<TermsPage />} />
         {/* sem login, guarda para onde ia (link de amizade, notificação) e volta para lá depois de entrar */}
         <Route path="/login" element={loggedIn ? <Navigate to={from ?? "/"} replace /> : <LoginPage />} />
         <Route

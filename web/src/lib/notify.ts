@@ -117,7 +117,7 @@ export function notificationBody(m: Pick<Message, "content" | "attachments">): s
 
 export function onNewMessage(m: Message): void {
   const s = useApp.getState();
-  if (!s.me) return;
+  if (!s.me || s.blocked.includes(m.authorId)) return; // de quem você bloqueou: nem som, nem aviso
   const settings = useSettings.getState();
   const conv = s.conversations[m.channelId];
   // Conversa privada conta como menção: é com você.

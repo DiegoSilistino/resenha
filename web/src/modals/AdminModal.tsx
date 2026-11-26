@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ArrowDown, ArrowUp, Check, Copy, Download, Hash, Trash2, Volume2 } from "lucide-react";
-import type { BackupInfo, Channel, ChannelKind, ClientErrorEntry, ClientErrorKind, PublicUser, Role } from "@resenha/shared";
+import type { AdminUser, BackupInfo, Channel, ChannelKind, ClientErrorEntry, ClientErrorKind, PublicUser, Report, Role } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { api, BACKUP_DOWNLOAD_URL, type InviteWithUrl } from "../lib/api.ts";
@@ -14,6 +14,7 @@ import { useUi } from "../state/ui.ts";
 const TABS = [
   { id: "invites", label: "Convites" },
   { id: "members", label: "Membros" },
+  { id: "reports", label: "Denúncias" },
   { id: "backup", label: "Backup" },
   { id: "errors", label: "Erros" },
   { id: "feedback", label: "Feedback" },
@@ -25,9 +26,12 @@ export function AdminModal() {
   // Feedback é um canal só do criador do site: para os outros admins a aba nem aparece.
   const owner = useApp((s) => s.latestFeedbackId !== null);
   const hasNewFeedback = useApp((s) => s.latestFeedbackId ?? 0) > useSettings((s) => s.feedbackSeenId);
-  // Aba pedida por quem abriu; senão, a novidade (feedback, depois erro) abre direto na aba dela.
+  const openReports = useApp((s) => s.openReports) > 0;
+  // Aba pedida por quem abriu; senão, a novidade (denúncia, feedback, depois erro) abre direto na aba dela.
   const [tab, setTab] = useState<TabId>(
-    () => useUi.getState().adminTab ?? (hasNewFeedback ? "feedback" : hasNewErrors ? "errors" : "invites"),
+    () =>
+      useUi.getState().adminTab ??
+      (openReports ? "reports" : hasNewFeedback ? "feedback" : hasNewErrors ? "errors" : "invites"),
   );
   const tabs = TABS.filter((t) => t.id !== "feedback" || owner);
   return (
@@ -44,6 +48,7 @@ export function AdminModal() {
           >
             {t.label}
             {t.id === "errors" && hasNewErrors && tab !== "errors" && <span className="unread-dot" aria-label="erros novos" />}
+            {t.id === "reports" && openReports && <span className="unread-dot" aria-label="denúncias em aberto" />}
             {t.id === "feedback" && hasNewFeedback && tab !== "feedback" && (
               <span className="unread-dot" aria-label="feedback novo" />
             )}
@@ -53,6 +58,7 @@ export function AdminModal() {
       <div role="tabpanel" className="tab-panel">
         {tab === "invites" && <InvitesTab />}
         {tab === "members" && <MembersTab />}
+        {tab === "reports" && <ReportsTab />}
         {tab === "backup" && <BackupTab />}
         {tab === "errors" && <ErrorsTab />}
         {tab === "feedback" && owner && <FeedbackTab />}
@@ -219,7 +225,7 @@ function InvitesTab() {
  * conhece; o painel busca a lista completa para dar para administrar quem ele não conhece.
  */
 function useAllUsers() {
-  const [users, setUsers] = useState<Record<string, PublicUser> | null>(null);
+  const [users, setUsers] = useState<Record<string, AdminUser> | null>(null);
   const load = useCallback(() => {
     api
       .adminUsers()
@@ -282,6 +288,19 @@ function MembersTab() {
                   <option value="member">Membro</option>
                   <option value="admin">Administrador</option>
                 </select>
+                {u.twoFactor && (
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    title="Para quem perdeu o celular e os códigos de reserva"
+                    onClick={() => {
+                      if (!confirm(`Desligar a verificação em duas etapas de ${u.displayName}? A pessoa passa a entrar só com a senha.`)) return;
+                      void run(api.adminDisableTwoFactor(u.id));
+                    }}
+                  >
+                    Desligar 2 etapas
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn-small"
@@ -309,6 +328,90 @@ function MembersTab() {
         ))}
       </ul>
     </div>
+  );
+}
+
+/** Denúncias: em aberto primeiro. Dá para apagar a mensagem (até de conversa privada), desativar a conta ou só resolver. */
+function ReportsTab() {
+  const [reports, setReports] = useState<Report[] | null>(null);
+  const open = useApp((s) => s.openReports);
+  const live = useApp((s) => s.users);
+  const { users: all, load: loadUsers } = useAllUsers();
+  const users: Record<string, PublicUser> = { ...all, ...live };
+  const load = useCallback(() => {
+    api.adminReports().then((r) => setReports(r.reports), (err) => toast.fromError(err));
+  }, []);
+  // denúncia nova (ou resolvida por outro admin) chega pela contagem: recarrega a lista
+  useEffect(load, [load, open]);
+
+  const name = (id: string) => {
+    const u = users[id];
+    return u ? `${u.displayName} (@${u.username})` : "Conta removida";
+  };
+
+  async function act(p: Promise<unknown>, done: string) {
+    try {
+      await p;
+      toast.info(done);
+      load();
+      loadUsers();
+    } catch (err) {
+      toast.fromError(err);
+    }
+  }
+
+  if (!reports) return <p className="muted">Carregando…</p>;
+  if (reports.length === 0) {
+    return <p className="muted">Nenhuma denúncia. Quando alguém denunciar uma mensagem ou uma pessoa, aparece aqui.</p>;
+  }
+  return (
+    <ul className="report-list">
+      {reports.map((r) => {
+        const target = users[r.targetUserId];
+        return (
+          <li key={r.id} className="report-item" data-done={r.doneAt ? true : undefined}>
+            <p className="report-head">
+              <strong>{name(r.reporterId)}</strong> denunciou {r.messageId !== null ? "uma mensagem de " : ""}
+              <strong>{name(r.targetUserId)}</strong> <span className="muted">· {formatFull(r.createdAt)}</span>
+            </p>
+            {r.messageId !== null && <blockquote className="report-preview">{r.content || "(sem texto: anexo)"}</blockquote>}
+            {r.reason && <p className="report-reason">Motivo: {r.reason}</p>}
+            {r.doneAt ? (
+              <p className="muted small-note">Resolvida em {formatFull(r.doneAt)}</p>
+            ) : (
+              <div className="row-actions">
+                {r.messageId !== null && (
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    data-danger
+                    onClick={() => confirm("Apagar a mensagem denunciada? Não dá para desfazer.") && void act(api.deleteReportedMessage(r.id), "Mensagem apagada.")}
+                  >
+                    Apagar a mensagem
+                  </button>
+                )}
+                {target && !target.disabled && (
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    data-danger
+                    onClick={() =>
+                      confirm(`Desativar ${target.displayName}? A pessoa é desconectada na hora (dá para reativar em Membros).`) &&
+                      void act(api.setUserDisabled(r.targetUserId, true), "Conta desativada.")
+                    }
+                  >
+                    Desativar a conta
+                  </button>
+                )}
+                <button type="button" className="btn btn-small btn-primary" onClick={() => void act(api.resolveReport(r.id), "Denúncia resolvida.")}>
+                  Resolvida
+                </button>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

@@ -322,6 +322,34 @@ export interface SearchResult {
   snippet: string;
 }
 
+/** Denúncia de uma mensagem ou de uma pessoa, para os administradores. */
+export interface Report {
+  id: number;
+  reporterId: string;
+  targetUserId: string;
+  /** A mensagem denunciada; null = a pessoa em geral (pelo perfil). */
+  messageId: number | null;
+  channelId: string | null;
+  /** Texto da mensagem quando foi denunciada (depois ela pode ser editada ou apagada). */
+  content: string;
+  reason: string;
+  createdAt: number;
+  doneAt: number | null;
+}
+
+/** Segurança da conta, só para a própria pessoa (nunca vai no perfil público). */
+export interface AccountSecurity {
+  email: string | null;
+  /** E-mail esperando o código de confirmação. */
+  pendingEmail: string | null;
+  twoFactor: boolean;
+  /** O servidor sabe mandar e-mail (sem isso, recuperar a senha por e-mail fica desligado). */
+  mailEnabled: boolean;
+}
+
+/** Na lista de membros do admin: dá para desligar a verificação em duas etapas de quem perdeu o celular. */
+export type AdminUser = PublicUser & { twoFactor: boolean };
+
 export interface SoundboardSound {
   id: string;
   name: string;

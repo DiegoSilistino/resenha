@@ -29,6 +29,13 @@ const envSchema = z.object({
   /** Chave da API do GIPHY (grátis em developers.giphy.com). Sem ela, o botão de GIF não aparece. */
   GIPHY_API_KEY: z.string().optional(),
   GIPHY_API_URL: z.url().default("https://api.giphy.com"),
+  /** E-mail (códigos para confirmar o endereço e trocar a senha). Sem SMTP_HOST, fica desligado. */
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  /** Remetente, ex.: "Resenha <nao-responda@seudominio.com>". Sem ele, usa o SMTP_USER. */
+  MAIL_FROM: z.string().optional(),
 });
 
 export interface Config {
@@ -53,6 +60,7 @@ export interface Config {
     apiSecret: string;
   };
   giphy: { apiKey: string; baseUrl: string } | null;
+  smtp: { host: string; port: number; user: string | null; pass: string | null; from: string } | null;
 }
 
 export class ConfigError extends Error {}
@@ -79,6 +87,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const publicUrl = (e.PUBLIC_URL ?? (production ? "" : "http://localhost:5173")).replace(/\/+$/, "");
   if (!publicUrl) throw new ConfigError("Defina PUBLIC_URL em produção (ex.: https://resenha.seudominio.com).");
 
+  const mailFrom = e.MAIL_FROM ?? e.SMTP_USER;
+  if (e.SMTP_HOST && !mailFrom) {
+    throw new ConfigError("Defina MAIL_FROM (o remetente dos e-mails), ex.: Resenha <nao-responda@seudominio.com>.");
+  }
+
   const dataDir = path.resolve(e.DATA_DIR);
   return {
     env: e.NODE_ENV,
@@ -103,6 +116,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       apiSecret,
     },
     giphy: e.GIPHY_API_KEY ? { apiKey: e.GIPHY_API_KEY.trim(), baseUrl: e.GIPHY_API_URL } : null,
+    smtp: e.SMTP_HOST
+      ? { host: e.SMTP_HOST.trim(), port: e.SMTP_PORT, user: e.SMTP_USER ?? null, pass: e.SMTP_PASS ?? null, from: mailFrom! }
+      : null,
   };
 }
 

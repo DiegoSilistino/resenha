@@ -56,7 +56,10 @@ export function registerMessageRoutes(app: FastifyInstance, ctx: AppContext) {
       const channel = messageChannel(req.params.id, currentUser(req).id);
       const body = parse(createMessageBody, req.body);
       const perms = store.channelPerms(currentUser(req), channel.id);
-      if (!perms.has("enviar")) throw forbidden("Seu cargo não pode mandar mensagens aqui");
+      if (!perms.has("enviar")) {
+        // na conversa a dois, só falta "enviar" quando há um bloqueio
+        throw forbidden(channel.conversation ? "Não dá para mandar mensagem nesta conversa" : "Seu cargo não pode mandar mensagens aqui");
+      }
       if (body.attachmentIds.length > 0 && !perms.has("anexar")) throw forbidden("Seu cargo não pode mandar arquivos aqui");
       if (body.replyTo !== undefined) {
         const original = store.messageById(body.replyTo);

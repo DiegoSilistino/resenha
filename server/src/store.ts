@@ -27,6 +27,7 @@ import {
   type ProfileLook,
   type PublicUser,
   type Reaction,
+  type Report,
   type Role,
   type SearchResult,
   type SoundboardSound,
@@ -100,6 +101,33 @@ function parseLook(json: string): ProfileLook {
 }
 
 export type ReactionResult = "added" | "exists" | "limit";
+
+/** Código por e-mail: confirmar o endereço ou trocar a senha esquecida. */
+export type AuthCodePurpose = "email" | "reset";
+
+interface ReportRow {
+  id: number;
+  reporter_id: string;
+  target_user_id: string;
+  message_id: number | null;
+  channel_id: string | null;
+  content: string;
+  reason: string;
+  created_at: number;
+  done_at: number | null;
+}
+
+const toReport = (r: ReportRow): Report => ({
+  id: r.id,
+  reporterId: r.reporter_id,
+  targetUserId: r.target_user_id,
+  messageId: r.message_id,
+  channelId: r.channel_id,
+  content: r.content,
+  reason: r.reason,
+  createdAt: r.created_at,
+  doneAt: r.done_at,
+});
 
 interface ChannelRow {
   id: string;
@@ -494,6 +522,7 @@ export class Store {
           `UPDATE users SET username = ?, display_name = ?, password_hash = '!', role = 'member',
              avatar_color = ?, avatar_id = NULL, avatar_mime = NULL, banner_id = NULL, banner_mime = NULL,
              status = 'online', activity = '', note = '', look = '{}',
+             email = NULL, totp_secret = NULL, totp_pending = NULL, totp_last_step = NULL,
              disabled_at = COALESCE(disabled_at, ?), removed_at = ?
            WHERE id = ?`,
         )
@@ -506,6 +535,9 @@ export class Store {
       this.db.prepare("DELETE FROM friendships WHERE user_id = ? OR friend_id = ?").run(id, id);
       this.db.prepare("DELETE FROM roda_members WHERE user_id = ?").run(id);
       this.db.prepare("DELETE FROM roda_requests WHERE user_id = ?").run(id);
+      this.db.prepare("DELETE FROM auth_codes WHERE user_id = ?").run(id);
+      this.db.prepare("DELETE FROM recovery_codes WHERE user_id = ?").run(id);
+      this.db.prepare("DELETE FROM blocks WHERE blocker_id = ? OR blocked_id = ?").run(id, id);
       return { user: this.userById(id)!, avatarId: before.avatarId, bannerId: before.bannerId, orphanAttachmentIds: orphans };
     });
   }
@@ -708,7 +740,14 @@ export class Store {
   channelPerms(user: Pick<UserRecord, "id" | "role">, channelId: string): Set<Permission> {
     const c = this.channelById(channelId);
     if (!c || !this.canAccess(user.id, channelId)) return new Set();
-    if (c.conversation) return new Set<Permission>(["ver", "enviar", "anexar", "voz", "tela"]);
+    if (c.conversation) {
+      // conversa a dois com bloqueio (de qualquer lado): o histórico fica, mas não dá para mandar nem ligar
+      if (c.conversation === "dm") {
+        const other = this.memberIds(channelId).find((id) => id !== user.id);
+        if (other && this.isBlockedEitherWay(user.id, other)) return new Set<Permission>(["ver"]);
+      }
+      return new Set<Permission>(["ver", "enviar", "anexar", "voz", "tela"]);
+    }
     return c.rodaId ? this.permsOf(user, c.rodaId) : new Set();
   }
 
@@ -1695,6 +1734,128 @@ export class Store {
 
   removeSticker(userId: string, stickerId: string): void {
     this.db.prepare("DELETE FROM user_stickers WHERE user_id = ? AND sticker_id = ?").run(userId, stickerId);
+  }
+
+  // ---------- segurança da conta (nada disso vai no perfil público) ----------
+
+  accountSecrets(userId: string): { email: string | null; totpSecret: string | null; totpPending: string | null; totpLastStep: number | null } {
+    const r = this.db.prepare("SELECT email, totp_secret, totp_pending, totp_last_step FROM users WHERE id = ?").get(userId) as
+      | { email: string | null; totp_secret: string | null; totp_pending: string | null; totp_last_step: number | null }
+      | undefined;
+    return { email: r?.email ?? null, totpSecret: r?.totp_secret ?? null, totpPending: r?.totp_pending ?? null, totpLastStep: r?.totp_last_step ?? null };
+  }
+
+  userByEmail(email: string): UserRecord | null {
+    const r = this.db.prepare("SELECT * FROM users WHERE email = ? AND removed_at IS NULL").get(email) as UserRow | undefined;
+    return r ? toUser(r) : null;
+  }
+
+  setEmail(userId: string, email: string | null): void {
+    this.db.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, userId);
+  }
+
+  /** Um código por finalidade: pedir outro substitui o anterior (e zera as tentativas). */
+  saveAuthCode(userId: string, purpose: AuthCodePurpose, email: string, codeHash: string, expiresAt: number): void {
+    this.db
+      .prepare("INSERT OR REPLACE INTO auth_codes (user_id, purpose, email, code_hash, expires_at, attempts) VALUES (?, ?, ?, ?, ?, 0)")
+      .run(userId, purpose, email, codeHash, expiresAt);
+  }
+
+  authCode(userId: string, purpose: AuthCodePurpose): { email: string; codeHash: string; expiresAt: number; attempts: number } | null {
+    const r = this.db.prepare("SELECT email, code_hash, expires_at, attempts FROM auth_codes WHERE user_id = ? AND purpose = ?").get(userId, purpose) as
+      | { email: string; code_hash: string; expires_at: number; attempts: number }
+      | undefined;
+    return r ? { email: r.email, codeHash: r.code_hash, expiresAt: r.expires_at, attempts: r.attempts } : null;
+  }
+
+  countAuthCodeAttempt(userId: string, purpose: AuthCodePurpose): void {
+    this.db.prepare("UPDATE auth_codes SET attempts = attempts + 1 WHERE user_id = ? AND purpose = ?").run(userId, purpose);
+  }
+
+  deleteAuthCode(userId: string, purpose: AuthCodePurpose): void {
+    this.db.prepare("DELETE FROM auth_codes WHERE user_id = ? AND purpose = ?").run(userId, purpose);
+  }
+
+  /** Segredo gerado mas ainda não confirmado com um código do app. */
+  setTotpPending(userId: string, secret: string | null): void {
+    this.db.prepare("UPDATE users SET totp_pending = ? WHERE id = ?").run(secret, userId);
+  }
+
+  enableTotp(userId: string, secret: string, recoveryHashes: string[]): void {
+    transaction(this.db, () => {
+      this.db.prepare("UPDATE users SET totp_secret = ?, totp_pending = NULL, totp_last_step = NULL WHERE id = ?").run(secret, userId);
+      this.db.prepare("DELETE FROM recovery_codes WHERE user_id = ?").run(userId);
+      const insert = this.db.prepare("INSERT INTO recovery_codes (user_id, code_hash) VALUES (?, ?)");
+      for (const hash of recoveryHashes) insert.run(userId, hash);
+    });
+  }
+
+  disableTotp(userId: string): void {
+    transaction(this.db, () => {
+      this.db.prepare("UPDATE users SET totp_secret = NULL, totp_pending = NULL, totp_last_step = NULL WHERE id = ?").run(userId);
+      this.db.prepare("DELETE FROM recovery_codes WHERE user_id = ?").run(userId);
+    });
+  }
+
+  /** Último código do app aceito: o mesmo não serve de novo (quem viu por cima do ombro não reaproveita). */
+  setTotpLastStep(userId: string, step: number): void {
+    this.db.prepare("UPDATE users SET totp_last_step = ? WHERE id = ?").run(step, userId);
+  }
+
+  useRecoveryCode(userId: string, codeHash: string): boolean {
+    return Number(this.db.prepare("DELETE FROM recovery_codes WHERE user_id = ? AND code_hash = ?").run(userId, codeHash).changes) > 0;
+  }
+
+  // ---------- bloqueios ----------
+
+  blockedIds(userId: string): string[] {
+    const rows = this.db.prepare("SELECT blocked_id FROM blocks WHERE blocker_id = ? ORDER BY created_at").all(userId);
+    return (rows as { blocked_id: string }[]).map((r) => r.blocked_id);
+  }
+
+  block(blockerId: string, blockedId: string): void {
+    this.db.prepare("INSERT OR IGNORE INTO blocks (blocker_id, blocked_id, created_at) VALUES (?, ?, ?)").run(blockerId, blockedId, Date.now());
+  }
+
+  unblock(blockerId: string, blockedId: string): void {
+    this.db.prepare("DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?").run(blockerId, blockedId);
+  }
+
+  isBlockedEitherWay(a: string, b: string): boolean {
+    return !!this.db
+      .prepare("SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)")
+      .get(a, b, b, a);
+  }
+
+  // ---------- denúncias ----------
+
+  insertReport(r: Omit<Report, "id" | "createdAt" | "doneAt">): Report {
+    const res = this.db
+      .prepare(
+        "INSERT INTO reports (reporter_id, target_user_id, message_id, channel_id, content, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(r.reporterId, r.targetUserId, r.messageId, r.channelId, r.content, r.reason, Date.now());
+    return this.reportById(Number(res.lastInsertRowid))!;
+  }
+
+  reportById(id: number): Report | null {
+    const r = this.db.prepare("SELECT * FROM reports WHERE id = ?").get(id) as ReportRow | undefined;
+    return r ? toReport(r) : null;
+  }
+
+  /** As em aberto primeiro, depois as resolvidas; das mais novas para as mais antigas. */
+  listReports(limit = 200): Report[] {
+    const rows = this.db.prepare("SELECT * FROM reports ORDER BY done_at IS NOT NULL, id DESC LIMIT ?").all(limit);
+    return (rows as unknown as ReportRow[]).map(toReport);
+  }
+
+  markReportDone(id: number): Report | null {
+    const res = this.db.prepare("UPDATE reports SET done_at = ? WHERE id = ? AND done_at IS NULL").run(Date.now(), id);
+    return Number(res.changes) > 0 ? this.reportById(id) : null;
+  }
+
+  openReportCount(): number {
+    return (this.db.prepare("SELECT COUNT(*) AS n FROM reports WHERE done_at IS NULL").get() as { n: number }).n;
   }
 
   // ---------- valores do sistema ----------

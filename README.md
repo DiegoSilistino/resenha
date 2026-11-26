@@ -16,6 +16,12 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
   - notificações do Windows quando o app está minimizado (todas as mensagens, só menções ou nunca);
   - formatação estilo Discord.
 - **Perfil com foto**, recortada no próprio navegador (arrastar e zoom).
+- **Segurança da conta e moderação:**
+  - e-mail opcional (confirmado por código) para **Esqueci minha senha**, se o servidor tiver SMTP (veja o DEPLOY.md);
+  - verificação em duas etapas opcional com app autenticador (QR), com 10 códigos de reserva; o admin desliga para quem perdeu o celular;
+  - **Bloquear** (no perfil): desfaz a amizade, corta mensagem e ligação no privado e esconde as mensagens da pessoa nas rodas;
+  - **Denunciar** uma mensagem ou uma pessoa: vai para Administrar o site → Denúncias, onde dá para apagar a mensagem (até de conversa privada), desativar a conta ou marcar como resolvida;
+  - página pública de **Termos e privacidade** (`/termos`), linkada no cadastro, na entrada e em Configurações → Conta.
 - **Canais de voz** com qualidade de SFU e chat próprio ao lado da chamada (dá para ler sem entrar):
   - mutar e ensurdecer, com sons de entrar, sair e mutar;
   - aviso opcional "fulano entrou na voz" quando você não está em chamada;

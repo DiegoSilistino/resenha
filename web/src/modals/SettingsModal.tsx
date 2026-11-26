@@ -26,6 +26,8 @@ import { AvatarEditor } from "./AvatarEditor.tsx";
 import { MicSensitivity } from "./MicSensitivity.tsx";
 import { ProfileCardView } from "./ProfileCard.tsx";
 import { ShopTab } from "./ShopTab.tsx";
+import { AccountSecurity } from "./AccountSecurity.tsx";
+import { Link } from "react-router";
 import comemorando from "../assets/mascote/comemorando.webp";
 
 const TABS = [
@@ -735,6 +737,8 @@ function AccountTab() {
         </button>
       </form>
       <hr />
+      <AccountSecurity />
+      <hr />
       <button
         type="button"
         className="btn btn-danger"
@@ -745,7 +749,12 @@ function AccountTab() {
       >
         Sair da conta
       </button>
-      <p className="small-note muted">Versão do site: {loadedBuildId() ?? "desenvolvimento"}</p>
+      <p className="small-note muted">
+        Versão do site: {loadedBuildId() ?? "desenvolvimento"} ·{" "}
+        <Link to="/termos" onClick={() => useUi.getState().setSettingsOpen(false)}>
+          Termos e privacidade
+        </Link>
+      </p>
     </div>
   );
 }

@@ -60,6 +60,10 @@ interface AppState {
   sounds: SoundboardSound[];
   /** Suas figurinhas (criadas e favoritadas), das mais novas para as mais antigas. */
   stickers: string[];
+  /** Quem você bloqueou: as mensagens dessas pessoas ficam escondidas. */
+  blocked: string[];
+  /** Admins: denúncias ainda não resolvidas (acende o aviso do painel). */
+  openReports: number;
   /** Admins: id do erro mais recente no painel de erros (compara com o último visto neste aparelho). */
   latestErrorId: number;
   /** Criador do site: feedback mais recente. null = você não é o criador (a aba Feedback não aparece). */
@@ -118,6 +122,8 @@ const initial = {
   features: { gifs: false },
   sounds: [] as SoundboardSound[],
   stickers: [] as string[],
+  blocked: [] as string[],
+  openReports: 0,
   latestErrorId: 0,
   latestFeedbackId: null,
   conversations: {} as Record<string, Conversation>,
@@ -292,6 +298,10 @@ export const useApp = create<AppState>()((set, get) => ({
         return set({ sounds: s.sounds.filter((x) => x.id !== event.soundId) });
       case "stickers":
         return set({ stickers: event.ids });
+      case "blocks":
+        return set({ blocked: event.ids });
+      case "admin.reports":
+        return set({ openReports: event.open });
       case "admin.error":
         return set({ latestErrorId: Math.max(s.latestErrorId, event.entry.id) });
       case "admin.feedback":
@@ -359,6 +369,8 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
     features: e.features ?? { gifs: false },
     sounds: e.sounds ?? [],
     stickers: e.stickers ?? [],
+    blocked: e.blocked ?? [],
+    openReports: e.openReports ?? 0,
     latestErrorId: e.latestErrorId ?? 0,
     latestFeedbackId: e.latestFeedbackId ?? null,
     conversations: Object.fromEntries((e.conversations ?? []).map((c) => [c.id, c])),

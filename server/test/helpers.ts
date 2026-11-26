@@ -11,6 +11,7 @@ import { bootstrap } from "../src/bootstrap.ts";
 import type { VoiceGateway, VoiceHealth } from "../src/voice/livekit.ts";
 import type { TitleFetcher, TitleLookup } from "../src/watch/oembed.ts";
 import { newInviteCode } from "../src/routes/admin.ts";
+import type { Mailer } from "../src/mail.ts";
 
 export class FakeGateway implements VoiceGateway {
   kicked: { userId: string; channelId: string }[] = [];
@@ -38,7 +39,7 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export async function createTestApp(opts: { gifFetch?: typeof fetch; webDist?: string } = {}): Promise<TestApp> {
+export async function createTestApp(opts: { gifFetch?: typeof fetch; webDist?: string; mailer?: Mailer } = {}): Promise<TestApp> {
   const dataDir = mkdtempSync(path.join(tmpdir(), "resenha-test-"));
   const config = loadConfig({
     NODE_ENV: "test",
@@ -51,7 +52,14 @@ export async function createTestApp(opts: { gifFetch?: typeof fetch; webDist?: s
   const gateway = new FakeGateway();
   const titles = new Map<string, TitleLookup>();
   const fetchTitle: TitleFetcher = async (id) => titles.get(id) ?? { ok: true, title: `Título ${id}` };
-  const { app, ctx } = await buildApp({ config, db, voiceGateway: gateway, fetchTitle, ...(opts.gifFetch ? { gifFetch: opts.gifFetch } : {}) });
+  const { app, ctx } = await buildApp({
+    config,
+    db,
+    voiceGateway: gateway,
+    fetchTitle,
+    ...(opts.gifFetch ? { gifFetch: opts.gifFetch } : {}),
+    ...(opts.mailer ? { mailer: opts.mailer } : {}),
+  });
   const { adminInviteUrl } = bootstrap(ctx);
   return {
     app,

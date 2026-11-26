@@ -40,6 +40,7 @@ export function registerSocialRoutes(app: FastifyInstance, ctx: AppContext) {
 
   const requestFriend = (from: UserRecord, to: UserRecord, quietIfDone = false) => {
     if (from.id === to.id) throw badRequest("Esse é você");
+    if (store.isBlockedEitherWay(from.id, to.id)) throw badRequest("Não dá para adicionar essa pessoa");
     const result = store.requestFriend(from.id, to.id);
     if (result === "already" && !quietIfDone) {
       throw badRequest(store.areFriends(from.id, to.id) ? "Vocês já são amigos" : "Pedido já enviado");
@@ -66,6 +67,33 @@ export function registerSocialRoutes(app: FastifyInstance, ctx: AppContext) {
   app.delete<{ Params: { userId: string } }>("/api/friends/:userId", { preHandler: requireUser }, async (req, reply) => {
     const me = currentUser(req);
     if (store.removeFriendship(me.id, req.params.userId)) notifyFriendship(me.id, req.params.userId);
+    return reply.status(204).send();
+  });
+
+  // ---------- bloqueio ----------
+  // Bloquear desfaz a amizade (e os pedidos) e corta a conversa a dois: nenhum dos dois manda nem liga.
+  // Nas rodas e nos grupos, o app de quem bloqueou esconde as mensagens da pessoa.
+  const syncBlocks = (userId: string) => hub.sendToUser(userId, { type: "blocks", ids: store.blockedIds(userId) });
+
+  app.put<{ Params: { userId: string } }>(
+    "/api/blocks/:userId",
+    { preHandler: requireUser, config: rateLimited(ctx, 30, "1 minute") },
+    async (req, reply) => {
+      const me = currentUser(req);
+      const other = store.userById(req.params.userId);
+      if (!other || other.removed) throw notFound("Pessoa não encontrada");
+      if (other.id === me.id) throw badRequest("Esse é você");
+      store.block(me.id, other.id);
+      if (store.removeFriendship(me.id, other.id)) notifyFriendship(me.id, other.id);
+      syncBlocks(me.id);
+      return reply.status(204).send();
+    },
+  );
+
+  app.delete<{ Params: { userId: string } }>("/api/blocks/:userId", { preHandler: requireUser }, async (req, reply) => {
+    const me = currentUser(req);
+    store.unblock(me.id, req.params.userId);
+    syncBlocks(me.id);
     return reply.status(204).send();
   });
 

@@ -48,6 +48,13 @@ export const passwordSchema = z
   .min(LIMITS.passwordMin, `A senha precisa de pelo menos ${LIMITS.passwordMin} caracteres`)
   .max(LIMITS.passwordMax);
 
+export const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(LIMITS.emailMax)
+  .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "E-mail inválido");
+
 export const loginBody = z.object({
   username: z.string().trim().toLowerCase().min(1).max(LIMITS.usernameMax),
   password: z.string().min(1).max(LIMITS.passwordMax),
@@ -59,6 +66,33 @@ export const registerBody = z.object({
   username: usernameSchema,
   displayName: displayNameSchema,
   password: passwordSchema,
+  /** Opcional: para recuperar a senha. Chega um código para confirmar. */
+  email: z.preprocess((v) => (v === "" ? undefined : v), emailSchema.optional()),
+});
+
+const sixDigits = z.string().trim().regex(/^\d{6}$/, "O código tem 6 números");
+
+export const loginTwoFactorBody = z.object({
+  ticket: z.string().min(1).max(100),
+  /** Do app autenticador (6 números) ou um código de reserva. */
+  code: z.string().trim().min(6).max(20),
+});
+
+export const setEmailBody = z.object({ email: emailSchema, password: z.string().min(1).max(LIMITS.passwordMax) });
+export const confirmCodeBody = z.object({ code: sixDigits });
+export const passwordOnlyBody = z.object({ password: z.string().min(1).max(LIMITS.passwordMax) });
+export const forgotPasswordBody = z.object({ email: emailSchema });
+export const resetPasswordBody = z.object({ email: emailSchema, code: sixDigits, password: passwordSchema });
+export const disableTwoFactorBody = z.object({
+  password: z.string().min(1).max(LIMITS.passwordMax),
+  code: z.string().trim().min(6).max(20),
+});
+
+export const reportBody = z.object({
+  userId: id,
+  /** Sem mensagem: denúncia da pessoa (pelo perfil). */
+  messageId: z.number().int().positive().optional(),
+  reason: z.string().trim().max(LIMITS.reportReasonMax).default(""),
 });
 
 const shopSlot = (slot: ShopSlot) =>
@@ -244,6 +278,10 @@ export interface HelloEvent {
   latestErrorId?: number;
   /** Só para o criador do site: id do feedback mais recente (0 = nenhum). Sem o campo, a aba Feedback não aparece. */
   latestFeedbackId?: number;
+  /** Quem você bloqueou. */
+  blocked: string[];
+  /** Só para admins: denúncias ainda não resolvidas. */
+  openReports?: number;
   /** Suas conversas privadas, com quantas mensagens você ainda não leu em cada uma. */
   conversations: Conversation[];
   conversationUnread: Record<string, number>;
@@ -403,11 +441,14 @@ export type ServerEvent =
   | { type: "call.declined"; channelId: string; userId: string; reason: "recusou" | "nao-atendeu" }
   | { type: "sound.upsert"; sound: SoundboardSound }
   | { type: "sound.remove"; soundId: string }
-  /** Só para quem está naquela chamada. */
-  /** Vai com o som: o da mesa pessoal de alguém não está na lista dos outros. */
+  /** Só para quem está naquela chamada. Vai com o som: o da mesa pessoal de alguém não está na lista dos outros. */
   | { type: "soundboard.played"; channelId: string; soundId: string; userId: string; sound: SoundboardSound }
   /** Suas figurinhas mudaram (em outro aparelho também). */
   | { type: "stickers"; ids: string[] }
+  /** Quem você bloqueou mudou (em outro aparelho também). */
+  | { type: "blocks"; ids: string[] }
+  /** Só para administradores: quantas denúncias estão em aberto. */
+  | { type: "admin.reports"; open: number }
   /** Só para administradores: um navegador reportou uma falha. */
   | { type: "admin.error"; entry: ClientErrorEntry }
   | { type: "admin.feedback"; entry: ClientErrorEntry }

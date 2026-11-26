@@ -26,6 +26,9 @@ import { registerDiagnosticsRoutes } from "./routes/diagnostics.ts";
 import { registerSearchRoutes } from "./routes/search.ts";
 import { registerSoundRoutes } from "./routes/sounds.ts";
 import { registerStickerRoutes } from "./routes/stickers.ts";
+import { registerAccountRoutes } from "./routes/account.ts";
+import { registerReportRoutes } from "./routes/reports.ts";
+import { createMailer, type Mailer } from "./mail.ts";
 import { registerShopRoutes } from "./routes/shop.ts";
 import { createGiphy, type GifProvider } from "./gifs/giphy.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
@@ -50,6 +53,8 @@ export interface AppDeps {
   fetchTitle?: TitleFetcher;
   /** fetch usado para falar com o GIPHY (substituível em testes). */
   gifFetch?: typeof fetch;
+  /** Envio de e-mail (nos testes, um que só guarda as mensagens); sem ele, vem do SMTP do .env. */
+  mailer?: Mailer | null;
 }
 
 export interface AppContext {
@@ -69,6 +74,8 @@ export interface AppContext {
   backups: BackupService;
   /** null quando o servidor não tem chave do GIPHY. */
   gifs: GifProvider | null;
+  /** null sem SMTP: recuperar a senha por e-mail fica desligado. */
+  mailer: Mailer | null;
 }
 
 export const requireUser = async (req: FastifyRequest) => {
@@ -135,6 +142,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
       sounds: config.soundsDir,
     }),
     gifs: config.giphy ? createGiphy({ ...config.giphy, ...(deps.gifFetch ? { fetch: deps.gifFetch } : {}) }) : null,
+    mailer: deps.mailer !== undefined ? deps.mailer : createMailer(config.smtp),
   };
   await ctx.uploads.init();
   await ctx.avatars.init();
@@ -213,6 +221,8 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   registerSearchRoutes(app, ctx);
   registerSoundRoutes(app, ctx);
   registerStickerRoutes(app, ctx);
+  registerAccountRoutes(app, ctx);
+  registerReportRoutes(app, ctx);
   registerVoiceRoutes(app, ctx);
   registerSocialRoutes(app, ctx);
   registerRodaRoutes(app, ctx);

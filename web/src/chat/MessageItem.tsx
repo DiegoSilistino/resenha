@@ -1,8 +1,9 @@
 import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { CornerUpLeft, Download, FileText, Image as ImageIcon, Pencil, Reply, SmilePlus, Star, Trash2, Tv } from "lucide-react";
+import { CornerUpLeft, Download, FileText, Flag, Image as ImageIcon, Pencil, Reply, SmilePlus, Star, Trash2, Tv } from "lucide-react";
 import type { Attachment, GifResult, Message, MessageReference } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Nick } from "../components/Nick.tsx";
+import { ReportDialog } from "../components/ReportDialog.tsx";
 import { api } from "../lib/api.ts";
 import { formatBytes, formatFull, formatTime } from "../lib/format.ts";
 import { realtime } from "../lib/realtime.ts";
@@ -32,6 +33,9 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
   const closePicker = useCallback(() => setPickerAnchor(null), []);
   const recent = useSettings((s) => s.recentEmojis);
   const quick = [...new Set([...recent, ...QUICK_REACTIONS])].slice(0, 3);
+  const blockedAuthor = useApp((s) => s.blocked.includes(message.authorId));
+  const [revealed, setRevealed] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   const mine = !!me && me.id === message.authorId;
   const mentionsMeHere = !!me && !mine && (message.replyTo?.authorId === me.id || mentionsUserIn(message.content, me.username));
@@ -50,6 +54,23 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
     } catch (err) {
       toast.fromError(err);
     }
+  }
+
+  // de quem você bloqueou: só uma linha, e dá para abrir se quiser
+  if (blockedAuthor && !revealed) {
+    return (
+      <article id={`msg-${message.id}`} className="message" data-grouped={grouped || undefined}>
+        <div className="message-gutter" />
+        <div className="message-main">
+          <p className="message-blocked">
+            Mensagem de alguém que você bloqueou.{" "}
+            <button type="button" className="link-btn" onClick={() => setRevealed(true)}>
+              Mostrar
+            </button>
+          </p>
+        </div>
+      </article>
+    );
   }
 
   return (
@@ -158,6 +179,11 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
           >
             <Reply size={16} />
           </button>
+          {!mine && author && !author.removed && (
+            <button type="button" className="icon-btn" onClick={() => setReporting(true)} aria-label="Denunciar mensagem" title="Denunciar">
+              <Flag size={16} />
+            </button>
+          )}
           {mine && (
             <button type="button" className="icon-btn" onClick={() => setEditing(true)} aria-label="Editar mensagem">
               <Pencil size={16} />
@@ -178,6 +204,15 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
             closePicker();
             void toggleReaction(message, emoji);
           }}
+        />
+      )}
+      {reporting && (
+        <ReportDialog
+          userId={message.authorId}
+          name={author?.displayName ?? "A pessoa"}
+          messageId={message.id}
+          preview={plainText(message.content) || "(anexo)"}
+          onClose={() => setReporting(false)}
         />
       )}
     </article>

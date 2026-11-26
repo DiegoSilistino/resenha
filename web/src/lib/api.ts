@@ -1,4 +1,7 @@
 import type {
+  AccountSecurity,
+  AdminUser,
+  Report,
   ApiErrorBody,
   Attachment,
   BackupInfo,
@@ -60,15 +63,39 @@ export type InviteWithUrl = Invite & { url: string };
 
 export const api = {
   session: () => request<{ me: Me | null }>("GET", "/api/auth/session"),
+  /** Com verificação em duas etapas, a senha certa devolve um ticket e o login termina em loginTwoFactor. */
   login: (username: string, password: string) =>
-    request<{ me: Me }>("POST", "/api/auth/login", { username, password }),
+    request<{ me: Me; twoFactor?: undefined } | { twoFactor: true; ticket: string; me?: undefined }>("POST", "/api/auth/login", {
+      username,
+      password,
+    }),
+  loginTwoFactor: (ticket: string, code: string) => request<{ me: Me }>("POST", "/api/auth/login/2fa", { ticket, code }),
+  forgotPassword: (email: string) => request<void>("POST", "/api/auth/forgot", { email }),
+  resetPassword: (email: string, code: string, password: string) =>
+    request<void>("POST", "/api/auth/reset", { email, code, password }),
+  security: () => request<AccountSecurity>("GET", "/api/me/security"),
+  setEmail: (email: string, password: string) => request<AccountSecurity>("POST", "/api/me/email", { email, password }),
+  confirmEmail: (code: string) => request<AccountSecurity>("POST", "/api/me/email/confirm", { code }),
+  removeEmail: (password: string) => request<AccountSecurity>("POST", "/api/me/email/remove", { password }),
+  setupTwoFactor: (password: string) => request<{ secret: string; url: string }>("POST", "/api/me/2fa/setup", { password }),
+  enableTwoFactor: (code: string) => request<{ recoveryCodes: string[] }>("POST", "/api/me/2fa/enable", { code }),
+  disableTwoFactor: (password: string, code: string) =>
+    request<AccountSecurity>("POST", "/api/me/2fa/disable", { password, code }),
+  block: (userId: string) => request<void>("PUT", `/api/blocks/${encodeURIComponent(userId)}`),
+  unblock: (userId: string) => request<void>("DELETE", `/api/blocks/${encodeURIComponent(userId)}`),
+  report: (b: { userId: string; messageId?: number; reason: string }) => request<void>("POST", "/api/reports", b),
+  adminReports: () => request<{ reports: Report[] }>("GET", "/api/admin/reports"),
+  resolveReport: (id: number) => request<{ report: Report }>("POST", `/api/admin/reports/${id}/done`),
+  deleteReportedMessage: (id: number) => request<void>("DELETE", `/api/admin/reports/${id}/message`),
+  adminDisableTwoFactor: (userId: string) => request<void>("POST", `/api/admin/users/${encodeURIComponent(userId)}/2fa/disable`),
   logout: () => request<void>("POST", "/api/auth/logout"),
   /** Feedback da tela inicial: vai para o painel do admin, junto com os erros (com navegador e página). */
   sendFeedback: (message: string) =>
     request<void>("POST", "/api/client-errors", { kind: "feedback", message, context: { pagina: location.pathname.slice(0, 80) } }),
   inviteInfo: (code: string) => request<InviteInfo>("GET", `/api/invites/${encodeURIComponent(code)}`),
-  register: (b: { code?: string; username: string; displayName: string; password: string }) =>
-    request<{ me: Me }>("POST", "/api/auth/register", b),
+  /** `emailPending`: chegou um código no e-mail informado (o próximo passo é confirmar, ou pular). */
+  register: (b: { code?: string; username: string; displayName: string; password: string; email?: string }) =>
+    request<{ me: Me; emailPending: boolean }>("POST", "/api/auth/register", b),
 
   updateMe: (b: Partial<Pick<Me, "displayName" | "avatarColor" | "status" | "activity" | "note" | "look">>) =>
     request<{ me: Me }>("PATCH", "/api/me", b),
@@ -189,7 +216,7 @@ export const api = {
     request<{ user: PublicUser }>("POST", `/api/admin/users/${id}/${disabled ? "disable" : "enable"}`),
   /** Remove a conta de vez (as mensagens ficam como "Ex-membro"). */
   removeUser: (id: string) => request<void>("DELETE", `/api/admin/users/${id}`),
-  adminUsers: () => request<{ users: PublicUser[] }>("GET", "/api/admin/users"),
+  adminUsers: () => request<{ users: AdminUser[] }>("GET", "/api/admin/users"),
   setUserRole: (id: string, role: Role) => request<{ user: PublicUser }>("PATCH", `/api/admin/users/${id}/role`, { role }),
   backupInfo: () => request<BackupInfo>("GET", "/api/admin/backup/info"),
   adminErrors: () => request<{ errors: ClientErrorEntry[] }>("GET", "/api/admin/errors"),

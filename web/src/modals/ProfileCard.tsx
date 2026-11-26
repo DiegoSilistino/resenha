@@ -4,6 +4,7 @@ import type { PublicUser, UserStatus } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { Modal } from "../components/Modal.tsx";
 import { Nick } from "../components/Nick.tsx";
+import { ReportDialog } from "../components/ReportDialog.tsx";
 import { api } from "../lib/api.ts";
 import { bannerImageStyle, lookOf, lookVars, shownStatus, STATUS, statusLine, type ShownStatus } from "../lib/look.ts";
 import { callFriend, openConversationWith } from "../lib/social.ts";
@@ -64,13 +65,51 @@ export function ProfileCard() {
             </div>
           </>
         )}
-        {!isMe && !user.removed && <FriendActions userId={id} onDone={close} />}
+        {!isMe && !user.removed && <OtherActions userId={id} name={user.displayName} onDone={close} />}
       </ProfileCardView>
     </Modal>
   );
 }
 
-/** No cartão de outra pessoa: conversar e ligar (amigos) ou o pedido de amizade. */
+/** No cartão de outra pessoa: amizade (ou o aviso do bloqueio) e, discretos embaixo, bloquear e denunciar. */
+function OtherActions({ userId, name, onDone }: { userId: string; name: string; onDone(): void }) {
+  const blocked = useApp((s) => s.blocked.includes(userId));
+  const [reporting, setReporting] = useState(false);
+
+  async function toggleBlock() {
+    const ask =
+      `Bloquear ${name}?\n\nA amizade é desfeita, vocês não conversam nem se ligam no privado e as mensagens ` +
+      `de ${name} nas rodas ficam escondidas para você. Dá para desbloquear depois.`;
+    if (!blocked && !confirm(ask)) return;
+    try {
+      await (blocked ? api.unblock(userId) : api.block(userId));
+      toast.info(blocked ? `Você desbloqueou ${name}.` : `Você bloqueou ${name}.`);
+    } catch (err) {
+      toast.fromError(err);
+    }
+  }
+
+  return (
+    <>
+      {blocked ? (
+        <p className="muted small-note">Você bloqueou essa pessoa: as mensagens dela ficam escondidas e vocês não conversam no privado.</p>
+      ) : (
+        <FriendActions userId={userId} onDone={onDone} />
+      )}
+      <div className="profile-safety">
+        <button type="button" className="link-btn" onClick={() => void toggleBlock()}>
+          {blocked ? "Desbloquear" : "Bloquear"}
+        </button>
+        <button type="button" className="link-btn" onClick={() => setReporting(true)}>
+          Denunciar
+        </button>
+      </div>
+      {reporting && <ReportDialog userId={userId} name={name} onClose={() => setReporting(false)} />}
+    </>
+  );
+}
+
+/** Conversar e ligar (amigos) ou o pedido de amizade. */
 function FriendActions({ userId, onDone }: { userId: string; onDone(): void }) {
   const entry = useApp((s) => s.friends[userId]);
   const navigate = useNavigate();

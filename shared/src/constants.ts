@@ -30,6 +30,9 @@ export const LIMITS = {
   personalSoundsMax: 20,
   /** Figurinhas guardadas por pessoa (as que criou e as que favoritou). */
   stickersMax: 120,
+  /** Denúncia: o que aconteceu, em poucas palavras. */
+  reportReasonMax: 500,
+  emailMax: 254,
   /** Busca: resultados por página. */
   searchPageSize: 25,
   /** Ao pular para uma mensagem antiga (busca, citação), carrega de uma vez até este tanto. */

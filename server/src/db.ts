@@ -280,6 +280,45 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (user_id, sticker_id)
   );
   `,
+  // 15: segurança: e-mail (recuperar a senha), verificação em duas etapas, bloqueios e denúncias.
+  `
+  ALTER TABLE users ADD COLUMN email TEXT;
+  ALTER TABLE users ADD COLUMN totp_secret TEXT;
+  ALTER TABLE users ADD COLUMN totp_pending TEXT;
+  ALTER TABLE users ADD COLUMN totp_last_step INTEGER;
+  CREATE UNIQUE INDEX users_email ON users(email) WHERE email IS NOT NULL;
+  CREATE TABLE auth_codes (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose TEXT NOT NULL,
+    email TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, purpose)
+  );
+  CREATE TABLE recovery_codes (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_hash TEXT NOT NULL,
+    PRIMARY KEY (user_id, code_hash)
+  );
+  CREATE TABLE blocks (
+    blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (blocker_id, blocked_id)
+  );
+  CREATE TABLE reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id TEXT NOT NULL REFERENCES users(id),
+    target_user_id TEXT NOT NULL REFERENCES users(id),
+    message_id INTEGER,
+    channel_id TEXT,
+    content TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    done_at INTEGER
+  );
+  `,
 ];
 
 /**

@@ -41,7 +41,9 @@ export function registerVoiceRoutes(app: FastifyInstance, ctx: AppContext) {
       const { channelId } = parse(voiceTokenBody, req.body);
       const channel = store.channelById(channelId);
       if (!channel || !store.canAccess(currentUser(req).id, channel.id)) throw notFound("Canal não encontrado");
-      if (!store.canCall(currentUser(req).id, channel.id)) throw badRequest("Esse canal não é de voz");
+      if (!store.canCall(currentUser(req).id, channel.id)) {
+        throw badRequest(channel.conversation ? "Não dá para ligar nesta conversa" : "Esse canal não é de voz");
+      }
       await ensureVoiceServer(req);
       // sem permissão de tela, o próprio LiveKit recusa a transmissão (não só o botão some)
       const screen = store.channelPerms(currentUser(req), channel.id).has("tela");
