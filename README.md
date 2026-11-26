@@ -7,7 +7,8 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
   - anexos de até 25 MB (imagens e vídeos, inclusive o .mov do iPhone, aparecem e tocam na conversa; se o navegador não abrir o vídeo, vira download);
   - reações com emoji (barra rápida e seletor com busca em português);
   - responder mensagens (citação clicável que leva até a original e avisa quem foi respondido);
-  - GIFs do GIPHY, figurinhas do caramelo, emoji na caixa de texto e ||spoiler||;
+  - GIFs do GIPHY, emoji na caixa de texto e ||spoiler||;
+  - figurinhas: as do caramelo e as que cada um cria com uma foto (recorte quadrado no navegador); a estrela numa figurinha da conversa guarda a de outra pessoa nas suas (até 120 por pessoa);
   - edição (seta ↑ edita a última) e exclusão;
   - "fulano está digitando";
   - busca de mensagens (em todos os canais ou só no aberto), sem ligar para acento e aceitando palavra pela metade; clicar no resultado leva até a mensagem, mesmo se for antiga;
@@ -24,7 +25,7 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
   - sensibilidade do microfone (automática ou manual, com medidor e "me ouvir"): só transmite quando você fala;
   - compartilhamento de tela com áudio e câmera, com perfis de qualidade (de "texto nítido" a 1440p a 60 fps) e indicador de resolução, fps e Mbps; a mesma qualidade no quadro pequeno e em tela cheia;
   - telas como no Discord: quem está na chamada clica em **Assistir** (antes disso não chega vídeo nem som), a tela vai para o quadro grande e dá para fixar outra ou desafixar e ver várias lado a lado na grade, que se ajusta ao número de pessoas;
-  - mesa de sons: qualquer um envia trechos de até 5 s (escolhe o pedaço do áudio, o volume é igualado sozinho) e toca para a chamada; cada um tem o próprio volume e pode desligar;
+  - mesa de sons: qualquer um envia trechos de até 5 s (escolhe o pedaço do áudio, o volume é igualado sozinho) e toca para a chamada; cada um tem o próprio volume e pode desligar; além da mesa da turma, cada um tem a sua mesa pessoal (aba "Meus sons", até 20 sons), que só a pessoa vê e toca, em qualquer chamada;
   - indicador de conexão (barrinhas) de cada pessoa, para saber de quem é a internet ruim;
   - quem fala "acende".
 - **Assistir juntos.** Uma fila do YouTube sincronizada no mesmo segundo para todos, que serve para música e para cinema. Quem está no canal pausa, pula e adianta. O player continua tocando enquanto você navega pelo chat.

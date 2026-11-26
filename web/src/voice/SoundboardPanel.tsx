@@ -52,6 +52,8 @@ export function SoundboardControl() {
 function SoundboardPanel({ anchor, onClose }: { anchor: HTMLElement; onClose(): void }) {
   const panel = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"grid" | "add">("grid");
+  /** Aba aberta: a mesa da turma ou a sua mesa pessoal (o "Adicionar" vai para a aba aberta). */
+  const [personal, setPersonal] = useState(false);
   const [pos, setPos] = useState(() => place(anchor));
   useLayoutEffect(() => setPos(place(anchor)), [anchor]);
 
@@ -81,14 +83,19 @@ function SoundboardPanel({ anchor, onClose }: { anchor: HTMLElement; onClose(): 
 
   return createPortal(
     <div ref={panel} className="soundboard" role="dialog" aria-label="Mesa de sons" style={pos}>
-      {mode === "grid" ? <SoundGrid onAdd={() => setMode("add")} /> : <AddSound onDone={() => setMode("grid")} />}
+      {mode === "grid" ? (
+        <SoundGrid personal={personal} onTab={setPersonal} onAdd={() => setMode("add")} />
+      ) : (
+        <AddSound personal={personal} onDone={() => setMode("grid")} />
+      )}
     </div>,
     document.body,
   );
 }
 
-function SoundGrid({ onAdd }: { onAdd(): void }) {
-  const sounds = useApp((s) => s.sounds);
+function SoundGrid({ personal, onTab, onAdd }: { personal: boolean; onTab(personal: boolean): void; onAdd(): void }) {
+  const all = useApp((s) => s.sounds);
+  const sounds = all.filter((s) => s.personal === personal);
   const me = useApp((s) => s.me);
   const enabled = useSettings((s) => s.soundboardEnabled);
   const volume = useSettings((s) => s.soundboardVolume);
@@ -103,7 +110,7 @@ function SoundGrid({ onAdd }: { onAdd(): void }) {
   }
 
   async function remove(sound: SoundboardSound) {
-    if (!confirm(`Apagar o som "${sound.name}" para todo mundo?`)) return;
+    if (!confirm(sound.personal ? `Apagar o som "${sound.name}" da sua mesa?` : `Apagar o som "${sound.name}" para todo mundo?`)) return;
     try {
       await api.deleteSound(sound.id);
       useApp.setState((s) => ({ sounds: s.sounds.filter((x) => x.id !== sound.id) }));
@@ -112,10 +119,19 @@ function SoundGrid({ onAdd }: { onAdd(): void }) {
     }
   }
 
-  const full = sounds.length >= LIMITS.soundsMax;
+  const max = personal ? LIMITS.personalSoundsMax : LIMITS.soundsMax;
+  const full = sounds.length >= max;
 
   return (
     <>
+      <div className="tabs" role="tablist" aria-label="Qual mesa">
+        <button type="button" role="tab" className="tab" aria-selected={!personal} onClick={() => onTab(false)}>
+          Da turma
+        </button>
+        <button type="button" role="tab" className="tab" aria-selected={personal} onClick={() => onTab(true)}>
+          Meus sons
+        </button>
+      </div>
       <header className="soundboard-head">
         <h2>Mesa de sons</h2>
         <label className="soundboard-volume" title="Volume da mesa de sons (só para você)">
@@ -146,8 +162,9 @@ function SoundGrid({ onAdd }: { onAdd(): void }) {
 
       {sounds.length === 0 ? (
         <p className="soundboard-empty muted">
-          Nenhum som ainda. Adicione o primeiro: um trecho de até {LIMITS.soundMaxSeconds} segundos que toca para todo mundo da
-          chamada.
+          {personal
+            ? "Sua mesa está vazia. Os sons daqui só aparecem para você, em qualquer chamada, e todo mundo da chamada ouve quando você toca."
+            : `Nenhum som ainda. Adicione o primeiro: um trecho de até ${LIMITS.soundMaxSeconds} segundos que toca para todo mundo da chamada.`}
         </p>
       ) : (
         <ul className="sound-grid" data-cooling={cooling || undefined}>
@@ -188,7 +205,7 @@ function SoundGrid({ onAdd }: { onAdd(): void }) {
         <button type="button" className="btn btn-small" disabled={full} onClick={onAdd}>
           <Plus size={14} aria-hidden="true" /> Adicionar som
         </button>
-        {full && <small className="muted">Limite de {LIMITS.soundsMax} sons: apague algum para adicionar.</small>}
+        {full && <small className="muted">Limite de {max} sons: apague algum para adicionar.</small>}
       </footer>
     </>
   );
@@ -202,7 +219,7 @@ interface Source {
 
 const PEAK_COLUMNS = 120;
 
-function AddSound({ onDone }: { onDone(): void }) {
+function AddSound({ personal, onDone }: { personal: boolean; onDone(): void }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [source, setSource] = useState<Source | null>(null);
   const [reading, setReading] = useState(false);
@@ -268,9 +285,9 @@ function AddSound({ onDone }: { onDone(): void }) {
     stopPreview();
     try {
       const { blob } = await buildClip(source.buffer, start);
-      const { sound } = await api.uploadSound(blob, name.trim(), emoji);
+      const { sound } = await api.uploadSound(blob, name.trim(), emoji, personal);
       useApp.setState((s) => ({ sounds: [...s.sounds.filter((x) => x.id !== sound.id), sound] }));
-      toast.info(`"${sound.name}" está na mesa de sons.`);
+      toast.info(personal ? `"${sound.name}" está na sua mesa.` : `"${sound.name}" está na mesa de sons.`);
       onDone();
     } catch (err) {
       toast.fromError(err, "Não foi possível salvar o som");
@@ -287,7 +304,7 @@ function AddSound({ onDone }: { onDone(): void }) {
         <button type="button" className="icon-btn" onClick={onDone} aria-label="Voltar para a mesa de sons" title="Voltar">
           <ArrowLeft size={18} />
         </button>
-        <h2>Adicionar som</h2>
+        <h2>{personal ? "Adicionar à sua mesa" : "Adicionar som"}</h2>
       </header>
 
       <input

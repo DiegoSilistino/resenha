@@ -57,7 +57,8 @@ export function buildHello(ctx: AppContext, user: UserRecord): ServerEvent {
     ...(ctx.build ? { build: ctx.build } : {}),
     serverTime: Date.now(),
     features: { gifs: !!ctx.gifs },
-    sounds: store.listSounds(),
+    sounds: store.listSounds(user.id),
+    stickers: store.myStickerIds(user.id),
     ...(user.role === "admin" ? { latestErrorId: store.latestClientErrorId() } : {}),
     ...(user.id === store.siteOwnerId() ? { latestFeedbackId: store.latestClientErrorId(true) } : {}),
   };
@@ -182,9 +183,11 @@ export function registerSocket(app: FastifyInstance, ctx: AppContext) {
         }
         const now = Date.now();
         if (now - (lastSound.get(conn.userId) ?? 0) < SOUNDBOARD_INTERVAL_MS) return;
-        if (!store.soundById(msg.soundId)) return;
+        const sound = store.soundById(msg.soundId);
+        // som da mesa pessoal de outra pessoa não se toca
+        if (!sound || (sound.personal && sound.uploaderId !== conn.userId)) return;
         lastSound.set(conn.userId, now);
-        const event = { type: "soundboard.played", channelId: msg.channelId, soundId: msg.soundId, userId: conn.userId } as const;
+        const event = { type: "soundboard.played", channelId: msg.channelId, soundId: msg.soundId, userId: conn.userId, sound } as const;
         for (const connId of voice.connectionsIn(msg.channelId)) hub.sendToConnection(connId, event);
         return;
       }

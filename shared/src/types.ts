@@ -327,6 +327,8 @@ export interface SoundboardSound {
   name: string;
   emoji: string;
   uploaderId: string;
+  /** Da mesa pessoal de quem enviou: só ela vê e toca (todo mundo da chamada ouve). */
+  personal: boolean;
   /** URL relativa do áudio. */
   url: string;
   createdAt: number;

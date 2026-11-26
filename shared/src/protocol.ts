@@ -236,7 +236,10 @@ export interface HelloEvent {
   serverTime: number;
   /** Recursos que dependem de configuração no servidor. */
   features: { gifs: boolean };
+  /** Mesa de sons da turma e a sua mesa pessoal. */
   sounds: SoundboardSound[];
+  /** Suas figurinhas (criadas e favoritadas), das mais novas para as mais antigas. */
+  stickers: string[];
   /** Só para admins: id do erro mais recente no painel (0 = nenhum). Acende o aviso na engrenagem. */
   latestErrorId?: number;
   /** Só para o criador do site: id do feedback mais recente (0 = nenhum). Sem o campo, a aba Feedback não aparece. */
@@ -401,7 +404,10 @@ export type ServerEvent =
   | { type: "sound.upsert"; sound: SoundboardSound }
   | { type: "sound.remove"; soundId: string }
   /** Só para quem está naquela chamada. */
-  | { type: "soundboard.played"; channelId: string; soundId: string; userId: string }
+  /** Vai com o som: o da mesa pessoal de alguém não está na lista dos outros. */
+  | { type: "soundboard.played"; channelId: string; soundId: string; userId: string; sound: SoundboardSound }
+  /** Suas figurinhas mudaram (em outro aparelho também). */
+  | { type: "stickers"; ids: string[] }
   /** Só para administradores: um navegador reportou uma falha. */
   | { type: "admin.error"; entry: ClientErrorEntry }
   | { type: "admin.feedback"; entry: ClientErrorEntry }

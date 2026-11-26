@@ -19,7 +19,7 @@ import { renderMessage, youTubeLinks } from "./markdown.tsx";
 import { mentionsUser as mentionsUserIn } from "./mentions.ts";
 import { gifFromMessage, inviteCodes, parseGifMessage, plainText } from "./plain.ts";
 import { ReactionBar, toggleReaction } from "./Reactions.tsx";
-import { stickerFromMessage } from "./stickers.ts";
+import { stickerFromMessage, toggleStickerFavorite, type Sticker } from "./stickers.ts";
 
 export const MessageItem = memo(function MessageItem({ message, grouped }: { message: Message; grouped: boolean }) {
   const author = useApp((s) => s.users[message.authorId]);
@@ -89,7 +89,7 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
         ) : gif ? (
           <GifView src={gif.src} width={gif.width} height={gif.height} favorite={gifFromMessage(message.content)} />
         ) : sticker ? (
-          <img className="sticker" src={sticker.src} alt={`Figurinha: ${sticker.name}`} title={sticker.name} decoding="async" />
+          <StickerView sticker={sticker} />
         ) : (
           message.content && (
             <div className="message-content">
@@ -268,6 +268,28 @@ function GifView({ src, width, height, favorite }: { src: string; width: number;
           <Star size={16} fill={faved ? "currentColor" : "none"} />
         </button>
       )}
+    </span>
+  );
+}
+
+/** Figurinha na conversa. A criada por alguém ganha a estrela (como no GIF): favoritar põe nas suas. */
+function StickerView({ sticker }: { sticker: Sticker }) {
+  const saved = useApp((s) => s.stickers.includes(sticker.id));
+  const img = <img className="sticker" src={sticker.src} alt={`Figurinha: ${sticker.name}`} title={sticker.name} decoding="async" />;
+  if (!sticker.custom) return img;
+  return (
+    <span className="gif-message">
+      {img}
+      <button
+        type="button"
+        className="gif-fav"
+        aria-pressed={saved}
+        aria-label={saved ? "Tirar das suas figurinhas" : "Favoritar figurinha"}
+        title={saved ? "Tirar das suas figurinhas" : "Favoritar figurinha"}
+        onClick={() => void toggleStickerFavorite(sticker.id)}
+      >
+        <Star size={16} fill={saved ? "currentColor" : "none"} />
+      </button>
     </span>
   );
 }

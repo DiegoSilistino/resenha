@@ -19,15 +19,15 @@ interface Loaded {
 }
 
 /** Recorte quadrado no navegador: a foto já chega pequena ao servidor (~20 KB). */
-async function renderCrop(img: HTMLImageElement, crop: Crop, w: number, h: number): Promise<Blob> {
+async function renderCrop(img: HTMLImageElement, crop: Crop, w: number, h: number, out: number): Promise<Blob> {
   const canvas = document.createElement("canvas");
-  canvas.width = OUT;
-  canvas.height = OUT;
+  canvas.width = out;
+  canvas.height = out;
   const g = canvas.getContext("2d");
   if (!g) throw new Error("canvas indisponível");
   g.imageSmoothingQuality = "high";
   const { sx, sy, size } = sourceRect(crop, w, h, VIEW);
-  g.drawImage(img, sx, sy, size, size, 0, 0, OUT, OUT);
+  g.drawImage(img, sx, sy, size, size, 0, 0, out, out);
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.88));
   if (blob) return blob;
   const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
@@ -50,6 +50,9 @@ export function AvatarEditor({
   remove: removeImage,
   onDone = () => undefined,
   square = false,
+  out = OUT,
+  pickText = hasImage ? "Trocar foto" : "Enviar foto",
+  savedText = "Foto atualizada.",
 }: {
   hasImage: boolean;
   upload(image: Blob): Promise<unknown>;
@@ -57,6 +60,10 @@ export function AvatarEditor({
   remove(): Promise<unknown>;
   onDone?(): void;
   square?: boolean;
+  /** Lado da imagem recortada (a figurinha usa uma maior que o avatar). */
+  out?: number;
+  pickText?: string;
+  savedText?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -140,8 +147,8 @@ export function AvatarEditor({
     if (!loaded || !crop) return;
     setBusy(true);
     try {
-      await upload(await renderCrop(loaded.img, crop, loaded.w, loaded.h));
-      toast.info("Foto atualizada.");
+      await upload(await renderCrop(loaded.img, crop, loaded.w, loaded.h, out));
+      toast.info(savedText);
       setLoaded(null);
       setCrop(null);
       onDone();
@@ -234,7 +241,7 @@ export function AvatarEditor({
       <div className="row-actions">
         {fileInput}
         <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
-          <ImagePlus size={16} aria-hidden="true" /> {hasImage ? "Trocar foto" : "Enviar foto"}
+          <ImagePlus size={16} aria-hidden="true" /> {pickText}
         </button>
         {gifs && (
           <button

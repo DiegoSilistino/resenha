@@ -56,8 +56,10 @@ interface AppState {
   activeChannelId: string | null;
   /** Recursos que dependem da configuração do servidor (ex.: chave do GIPHY). */
   features: { gifs: boolean };
-  /** Sons da mesa de sons (de todo mundo), do mais antigo para o mais novo. */
+  /** Sons da mesa da turma e da sua mesa pessoal, do mais antigo para o mais novo. */
   sounds: SoundboardSound[];
+  /** Suas figurinhas (criadas e favoritadas), das mais novas para as mais antigas. */
+  stickers: string[];
   /** Admins: id do erro mais recente no painel de erros (compara com o último visto neste aparelho). */
   latestErrorId: number;
   /** Criador do site: feedback mais recente. null = você não é o criador (a aba Feedback não aparece). */
@@ -115,6 +117,7 @@ const initial = {
   activeChannelId: null,
   features: { gifs: false },
   sounds: [] as SoundboardSound[],
+  stickers: [] as string[],
   latestErrorId: 0,
   latestFeedbackId: null,
   conversations: {} as Record<string, Conversation>,
@@ -287,6 +290,8 @@ export const useApp = create<AppState>()((set, get) => ({
         return set({ sounds: [...s.sounds.filter((x) => x.id !== event.sound.id), event.sound] });
       case "sound.remove":
         return set({ sounds: s.sounds.filter((x) => x.id !== event.soundId) });
+      case "stickers":
+        return set({ stickers: event.ids });
       case "admin.error":
         return set({ latestErrorId: Math.max(s.latestErrorId, event.entry.id) });
       case "admin.feedback":
@@ -353,6 +358,7 @@ function fromHello(e: HelloEvent, wasReady: boolean): Partial<AppState> {
     watch: e.watch,
     features: e.features ?? { gifs: false },
     sounds: e.sounds ?? [],
+    stickers: e.stickers ?? [],
     latestErrorId: e.latestErrorId ?? 0,
     latestFeedbackId: e.latestFeedbackId ?? null,
     conversations: Object.fromEntries((e.conversations ?? []).map((c) => [c.id, c])),

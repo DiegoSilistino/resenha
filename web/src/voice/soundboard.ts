@@ -107,9 +107,10 @@ export const soundboardAudio = (): AudioContext => audio();
 export async function onSoundboardPlayed(e: PlayedEvent): Promise<void> {
   const v = useVoice.getState();
   if (v.status === "idle" || v.channelId !== e.channelId) return;
-  const sound = useApp.getState().sounds.find((s) => s.id === e.soundId);
+  // o som vem no evento: o da mesa pessoal de alguém não está na sua lista
+  const sound = e.sound ?? useApp.getState().sounds.find((s) => s.id === e.soundId);
   if (!sound) return;
-  useVoice.setState((s) => ({ soundPlays: { ...s.soundPlays, [e.userId]: { soundId: sound.id, at: Date.now() } } }));
+  useVoice.setState((s) => ({ soundPlays: { ...s.soundPlays, [e.userId]: { sound, at: Date.now() } } }));
 
   const settings = useSettings.getState();
   if (!settings.soundboardEnabled || v.deafened) return;

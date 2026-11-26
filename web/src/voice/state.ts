@@ -3,6 +3,7 @@
  * a biblioteca de voz (~520 KB), que só carrega quando a pessoa entra numa chamada.
  */
 import { create } from "zustand";
+import type { SoundboardSound } from "@resenha/shared";
 
 export type VoiceStatus = "idle" | "connecting" | "connected" | "reconnecting";
 
@@ -36,7 +37,7 @@ export interface VoiceState {
   /** Tela fixada no quadro grande (identity de quem transmite). */
   focused: string | null;
   /** Último som da mesa tocado por pessoa (mostra a figurinha no quadradinho dela). */
-  soundPlays: Record<string, { soundId: string; at: number }>;
+  soundPlays: Record<string, { sound: SoundboardSound; at: number }>;
 }
 
 export const useVoice = create<VoiceState>()(() => ({

@@ -264,6 +264,22 @@ export const MIGRATIONS: string[] = [
   `
   UPDATE attachments SET inline = 1 WHERE mime = 'video/quicktime';
   `,
+  // 14: mesa de sons pessoal e figurinhas pessoais (as criadas e as favoritadas de outras pessoas).
+  `
+  ALTER TABLE sounds ADD COLUMN personal INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE stickers (
+    id TEXT PRIMARY KEY,
+    creator_id TEXT NOT NULL REFERENCES users(id),
+    mime TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE user_stickers (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sticker_id TEXT NOT NULL REFERENCES stickers(id),
+    added_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, sticker_id)
+  );
+  `,
 ];
 
 /**

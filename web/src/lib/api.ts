@@ -206,11 +206,19 @@ export const api = {
     return request<{ results: SearchResult[]; hasMore: boolean }>("GET", `/api/search?${params}`);
   },
 
-  uploadSound: (file: Blob, name: string, emoji: string) => {
+  uploadSound: (file: Blob, name: string, emoji: string, personal = false) => {
     const form = new FormData();
     form.append("file", file, "som");
-    return request<{ sound: SoundboardSound }>("POST", `/api/sounds?${new URLSearchParams({ name, emoji })}`, form);
+    const query = new URLSearchParams({ name, emoji, ...(personal ? { personal: "1" } : {}) });
+    return request<{ sound: SoundboardSound }>("POST", `/api/sounds?${query}`, form);
   },
+  createSticker: (image: Blob) => {
+    const form = new FormData();
+    form.append("file", image, image.type === "image/webp" ? "figurinha.webp" : "figurinha.png");
+    return request<{ id: string }>("POST", "/api/stickers", form);
+  },
+  favoriteSticker: (id: string) => request<void>("PUT", `/api/stickers/${encodeURIComponent(id)}`),
+  unfavoriteSticker: (id: string) => request<void>("DELETE", `/api/stickers/${encodeURIComponent(id)}`),
   deleteSound: (id: string) => request<void>("DELETE", `/api/sounds/${encodeURIComponent(id)}`),
   gifCategories: () => request<GifCategories>("GET", "/api/gifs/categories"),
   gifs: (q: string, offset = 0) =>

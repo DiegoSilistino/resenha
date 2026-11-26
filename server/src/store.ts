@@ -48,6 +48,7 @@ interface SoundRow {
   mime: string;
   size: number;
   created_at: number;
+  personal: number;
 }
 
 const toSound = (r: SoundRow): SoundboardSound => ({
@@ -55,6 +56,7 @@ const toSound = (r: SoundRow): SoundboardSound => ({
   name: r.name,
   emoji: r.emoji,
   uploaderId: r.uploader_id,
+  personal: r.personal === 1,
   url: `/api/sounds/${r.id}`,
   createdAt: r.created_at,
 });
@@ -441,8 +443,11 @@ export class Store {
   /** Foto de perfil ou de roda (as duas são servidas por /api/avatars/:id). */
   avatarById(id: string): { mime: string } | null {
     const r = this.db
-      .prepare("SELECT avatar_mime FROM users WHERE avatar_id = ? UNION ALL SELECT icon_mime FROM rodas WHERE icon_id = ?")
-      .get(id, id) as { avatar_mime: string | null } | undefined;
+      .prepare(
+        `SELECT avatar_mime FROM users WHERE avatar_id = ? UNION ALL SELECT icon_mime FROM rodas WHERE icon_id = ?
+         UNION ALL SELECT mime FROM stickers WHERE id = ?`,
+      )
+      .get(id, id, id) as { avatar_mime: string | null } | undefined;
     return r?.avatar_mime ? { mime: r.avatar_mime } : null;
   }
 
@@ -453,7 +458,8 @@ export class Store {
         `SELECT avatar_id AS id FROM users WHERE avatar_id IS NOT NULL
          UNION SELECT banner_id FROM users WHERE banner_id IS NOT NULL
          UNION SELECT banner_id FROM rodas WHERE banner_id IS NOT NULL
-         UNION SELECT icon_id FROM rodas WHERE icon_id IS NOT NULL`,
+         UNION SELECT icon_id FROM rodas WHERE icon_id IS NOT NULL
+         UNION SELECT id FROM stickers`,
       )
       .all() as { id: string }[];
     return new Set(rows.map((r) => r.id));
@@ -1627,8 +1633,11 @@ export class Store {
 
   // ---------- soundboard ----------
 
-  listSounds(): SoundboardSound[] {
-    return (this.db.prepare("SELECT * FROM sounds ORDER BY created_at").all() as unknown as SoundRow[]).map(toSound);
+  /** Mesa da turma mais a mesa pessoal de `userId` (a dos outros não aparece). */
+  listSounds(userId: string | null = null): SoundboardSound[] {
+    return (
+      this.db.prepare("SELECT * FROM sounds WHERE personal = 0 OR uploader_id = ? ORDER BY created_at").all(userId ?? "") as unknown as SoundRow[]
+    ).map(toSound);
   }
 
   soundById(id: string): (SoundboardSound & { mime: string }) | null {
@@ -1636,14 +1645,18 @@ export class Store {
     return r ? { ...toSound(r), mime: r.mime } : null;
   }
 
-  countSounds(): number {
-    return (this.db.prepare("SELECT COUNT(*) AS n FROM sounds").get() as { n: number }).n;
+  /** Sons da mesa da turma, ou da mesa pessoal de `personalOf`. */
+  countSounds(personalOf?: string): number {
+    const r = personalOf
+      ? this.db.prepare("SELECT COUNT(*) AS n FROM sounds WHERE personal = 1 AND uploader_id = ?").get(personalOf)
+      : this.db.prepare("SELECT COUNT(*) AS n FROM sounds WHERE personal = 0").get();
+    return (r as { n: number }).n;
   }
 
-  insertSound(s: { id: string; name: string; emoji: string; uploaderId: string; mime: string; size: number }): SoundboardSound {
+  insertSound(s: { id: string; name: string; emoji: string; uploaderId: string; mime: string; size: number; personal: boolean }): SoundboardSound {
     this.db
-      .prepare("INSERT INTO sounds (id, name, emoji, uploader_id, mime, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .run(s.id, s.name, s.emoji, s.uploaderId, s.mime, s.size, Date.now());
+      .prepare("INSERT INTO sounds (id, name, emoji, uploader_id, mime, size, created_at, personal) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(s.id, s.name, s.emoji, s.uploaderId, s.mime, s.size, Date.now(), s.personal ? 1 : 0);
     return this.soundById(s.id)!;
   }
 
@@ -1653,6 +1666,35 @@ export class Store {
 
   allSoundIds(): Set<string> {
     return new Set((this.db.prepare("SELECT id FROM sounds").all() as { id: string }[]).map((r) => r.id));
+  }
+
+  // ---------- figurinhas ----------
+  // A imagem mora na pasta das fotos e sai por /api/avatars/:id.
+  // shortcut: a figurinha nunca é apagada (mensagens antigas a usam), mesmo sem ninguém com ela salva; limpar se o disco apertar.
+
+  /** As que a pessoa criou ou favoritou, das mais novas para as mais antigas. */
+  myStickerIds(userId: string): string[] {
+    const rows = this.db.prepare("SELECT sticker_id FROM user_stickers WHERE user_id = ? ORDER BY added_at DESC").all(userId);
+    return (rows as { sticker_id: string }[]).map((r) => r.sticker_id);
+  }
+
+  stickerExists(id: string): boolean {
+    return !!this.db.prepare("SELECT 1 FROM stickers WHERE id = ?").get(id);
+  }
+
+  /** Cria e já põe nas figurinhas de quem criou. */
+  insertSticker(id: string, creatorId: string, mime: string): void {
+    const now = Date.now();
+    this.db.prepare("INSERT INTO stickers (id, creator_id, mime, created_at) VALUES (?, ?, ?, ?)").run(id, creatorId, mime, now);
+    this.addSticker(creatorId, id, now);
+  }
+
+  addSticker(userId: string, stickerId: string, at = Date.now()): void {
+    this.db.prepare("INSERT OR IGNORE INTO user_stickers (user_id, sticker_id, added_at) VALUES (?, ?, ?)").run(userId, stickerId, at);
+  }
+
+  removeSticker(userId: string, stickerId: string): void {
+    this.db.prepare("DELETE FROM user_stickers WHERE user_id = ? AND sticker_id = ?").run(userId, stickerId);
   }
 
   // ---------- valores do sistema ----------

@@ -26,6 +26,10 @@ export const LIMITS = {
   soundMaxSeconds: 5,
   soundNameMax: 24,
   soundsMax: 60,
+  /** Mesa pessoal: sons só seus, que você toca em qualquer chamada. */
+  personalSoundsMax: 20,
+  /** Figurinhas guardadas por pessoa (as que criou e as que favoritou). */
+  stickersMax: 120,
   /** Busca: resultados por página. */
   searchPageSize: 25,
   /** Ao pular para uma mensagem antiga (busca, citação), carrega de uma vez até este tanto. */

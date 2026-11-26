@@ -7,6 +7,7 @@ const sound = (id: string, name = id): SoundboardSound => ({
   name,
   emoji: "🔊",
   uploaderId: "u1",
+  personal: false,
   url: `/api/sounds/${id}`,
   createdAt: 1,
 });

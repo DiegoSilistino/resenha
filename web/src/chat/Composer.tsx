@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { Suspense, useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from "react";
 import { Paperclip, SendHorizontal, Smile, Sticker, X } from "lucide-react";
 import { LIMITS, type Attachment, type Channel } from "@resenha/shared";
 import { api, uploadFile } from "../lib/api.ts";
+import { lazyChunk } from "../lib/chunks.ts";
 import { formatBytes } from "../lib/format.ts";
 import { realtime } from "../lib/realtime.ts";
 import { displayNameOf, useApp } from "../state/app.ts";
@@ -12,6 +13,9 @@ import { EmojiPicker } from "./EmojiPicker.tsx";
 import { GifPicker } from "./GifPicker.tsx";
 import { parseGifMessage, parseStickerMessage, stickerMessage } from "./plain.ts";
 import { StickerPicker } from "./StickerPicker.tsx";
+
+// o editor de recorte só baixa quando alguém vai criar uma figurinha
+const StickerCreator = lazyChunk(() => import("./StickerCreator.tsx").then((m) => m.StickerCreator));
 
 export interface ComposerHandle {
   addFiles(files: File[]): void;
@@ -43,6 +47,8 @@ export function Composer({ channel, ref, canAttach = true }: { channel: Channel;
   pendingRef.current = pending;
   const [picker, setPicker] = useState<{ kind: "emoji" | "gif" | "sticker"; anchor: HTMLElement } | null>(null);
   const closePicker = useCallback(() => setPicker(null), []);
+  /** Criando figurinha: guarda o botão para reabrir o seletor quando ela estiver pronta. */
+  const [creating, setCreating] = useState<HTMLElement | null>(null);
   const gifsEnabled = useApp((s) => s.features.gifs);
   const users = useApp((s) => s.users);
 
@@ -342,7 +348,22 @@ export function Composer({ channel, ref, canAttach = true }: { channel: Channel;
           anchor={picker.anchor}
           onClose={closePicker}
           onPick={(s) => void sendNow(stickerMessage(s.id), "Não foi possível enviar a figurinha")}
+          onCreate={() => {
+            setCreating(picker.anchor);
+            closePicker();
+          }}
         />
+      )}
+      {creating && (
+        <Suspense fallback={null}>
+          <StickerCreator
+            onClose={() => setCreating(null)}
+            onCreated={() => {
+              setCreating(null);
+              setPicker({ kind: "sticker", anchor: creating }); // a nova já aparece em "Suas figurinhas"
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

@@ -151,7 +151,7 @@ export function ParticipantTile({ participant, channelId }: { participant: Parti
 /** Figurinha do som que a pessoa acabou de tocar na mesa de sons (some sozinha). */
 function SoundMark({ userId }: { userId: string }) {
   const play = useVoice((s) => s.soundPlays[userId]);
-  const sound = useApp((s) => (play ? s.sounds.find((x) => x.id === play.soundId) : undefined));
+  const sound = play?.sound;
   const [, expire] = useState(0);
   const left = play ? play.at + PLAY_MARK_MS - Date.now() : 0;
   useEffect(() => {

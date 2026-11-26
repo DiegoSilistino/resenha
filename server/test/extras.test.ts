@@ -141,11 +141,11 @@ describe("painel de erros", () => {
 
 describe("mesa de sons", () => {
   const OGG = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(200, 3)]);
-  const upload = (u: TestUser, content: Buffer, name = "Risada", emoji = "😂") => {
+  const upload = (u: TestUser, content: Buffer, name = "Risada", emoji = "😂", personal = false) => {
     const { payload, headers } = multipart("som.ogg", content);
     return t.app.inject({
       method: "POST",
-      url: `/api/sounds?name=${encodeURIComponent(name)}&emoji=${encodeURIComponent(emoji)}`,
+      url: `/api/sounds?name=${encodeURIComponent(name)}&emoji=${encodeURIComponent(emoji)}${personal ? "&personal=1" : ""}`,
       headers: { ...headers, cookie: u.cookie },
       payload,
     });
@@ -203,6 +203,32 @@ describe("mesa de sons", () => {
     expect(b.events.filter((e) => e.type === "soundboard.played")).toHaveLength(1);
     expect(c.events.some((e) => e.type === "soundboard.played")).toBe(false);
     for (const s of [a, b, c]) s.close();
+  });
+
+  it("mesa pessoal: só quem enviou vê e toca, e a chamada toda ouve", async () => {
+    const port = await listen(t);
+    const a = await TestSocket.connect(port, ana.cookie);
+    const b = await TestSocket.connect(port, admin.cookie);
+    for (const s of [a, b]) await s.waitFor("hello");
+    const res = await upload(ana, OGG, "Meu", "🎺", true);
+    expect(res.statusCode).toBe(201);
+    const { sound } = res.json();
+    expect(sound.personal).toBe(true);
+    expect((await a.waitFor("sound.upsert")).sound.id).toBe(sound.id);
+    expect(t.ctx.store.listSounds(admin.id)).toEqual([]);
+    expect(t.ctx.store.listSounds(ana.id).map((s) => s.id)).toEqual([sound.id]);
+
+    const voice = voiceChannelId(t);
+    a.send({ type: "voice.join", channelId: voice });
+    b.send({ type: "voice.join", channelId: voice });
+    await b.waitFor("voice.channel", (e) => e.members.length === 2);
+    b.send({ type: "soundboard.play", channelId: voice, soundId: sound.id }); // o som não é dele: ignorado
+    a.send({ type: "soundboard.play", channelId: voice, soundId: sound.id });
+    expect(await b.waitFor("soundboard.played")).toMatchObject({ userId: ana.id, sound: { id: sound.id, emoji: "🎺" } });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(b.events.filter((e) => e.type === "soundboard.played")).toHaveLength(1);
+    expect(b.events.some((e) => e.type === "sound.upsert")).toBe(false);
+    for (const s of [a, b]) s.close();
   });
 
   it("reconhece os formatos de áudio comuns", () => {

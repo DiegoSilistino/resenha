@@ -25,6 +25,7 @@ import { registerGifRoutes } from "./routes/gifs.ts";
 import { registerDiagnosticsRoutes } from "./routes/diagnostics.ts";
 import { registerSearchRoutes } from "./routes/search.ts";
 import { registerSoundRoutes } from "./routes/sounds.ts";
+import { registerStickerRoutes } from "./routes/stickers.ts";
 import { registerShopRoutes } from "./routes/shop.ts";
 import { createGiphy, type GifProvider } from "./gifs/giphy.ts";
 import { registerAuthRoutes } from "./routes/auth.ts";
@@ -211,6 +212,7 @@ export async function buildApp(deps: AppDeps): Promise<{ app: FastifyInstance; c
   registerDiagnosticsRoutes(app, ctx);
   registerSearchRoutes(app, ctx);
   registerSoundRoutes(app, ctx);
+  registerStickerRoutes(app, ctx);
   registerVoiceRoutes(app, ctx);
   registerSocialRoutes(app, ctx);
   registerRodaRoutes(app, ctx);

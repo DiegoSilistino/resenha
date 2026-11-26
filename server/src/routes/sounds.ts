@@ -13,12 +13,18 @@ export function registerSoundRoutes(app: FastifyInstance, ctx: AppContext) {
   const { store, hub, sounds } = ctx;
 
   // Nome e emoji vão na URL: assim não dependem da ordem dos campos no formulário.
-  app.post<{ Querystring: { name?: string; emoji?: string } }>(
+  // personal=1: vai para a mesa pessoal de quem enviou (só ela vê e toca; a chamada toda ouve).
+  app.post<{ Querystring: { name?: string; emoji?: string; personal?: string } }>(
     "/api/sounds",
     { preHandler: requireUser, config: rateLimited(ctx, 15, "10 minutes") },
     async (req, reply) => {
       const meta = parse(soundMeta, req.query);
-      if (store.countSounds() >= LIMITS.soundsMax) {
+      const user = currentUser(req);
+      const personal = req.query.personal === "1";
+      if (personal && store.countSounds(user.id) >= LIMITS.personalSoundsMax) {
+        throw badRequest(`Sua mesa já tem ${LIMITS.personalSoundsMax} sons. Apague algum antes de enviar outro.`);
+      }
+      if (!personal && store.countSounds() >= LIMITS.soundsMax) {
         throw badRequest(`O soundboard já tem ${LIMITS.soundsMax} sons. Apague algum antes de enviar outro.`);
       }
       const file = await req.file({ limits: { fileSize: LIMITS.soundMaxBytes, files: 1 } });
@@ -36,8 +42,9 @@ export function registerSoundRoutes(app: FastifyInstance, ctx: AppContext) {
 
       const id = randomUUID();
       await writeFile(sounds.pathFor(id), data, { flag: "wx" });
-      const sound = store.insertSound({ id, name: meta.name, emoji: meta.emoji, uploaderId: currentUser(req).id, mime, size: data.length });
-      hub.broadcast({ type: "sound.upsert", sound });
+      const sound = store.insertSound({ id, name: meta.name, emoji: meta.emoji, uploaderId: user.id, mime, size: data.length, personal });
+      if (personal) hub.sendToUser(user.id, { type: "sound.upsert", sound });
+      else hub.broadcast({ type: "sound.upsert", sound });
       return reply.status(201).send({ sound });
     },
   );
@@ -50,7 +57,8 @@ export function registerSoundRoutes(app: FastifyInstance, ctx: AppContext) {
     if (sound.uploaderId !== user.id && user.role !== "admin") throw forbidden("Só quem enviou (ou um admin) pode apagar");
     store.deleteSound(sound.id);
     await sounds.remove([sound.id]);
-    hub.broadcast({ type: "sound.remove", soundId: sound.id });
+    if (sound.personal) hub.sendToUser(sound.uploaderId, { type: "sound.remove", soundId: sound.id });
+    else hub.broadcast({ type: "sound.remove", soundId: sound.id });
     return reply.status(204).send();
   });
 
