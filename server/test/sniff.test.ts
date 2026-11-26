@@ -18,6 +18,7 @@ describe("tipo do anexo pelos bytes", () => {
     expect(sniffMime(bytes([0xff, 0xd8, 0xff, 0xe0]))).toEqual({ mime: "image/jpeg", inline: true });
     expect(sniffMime(bytes("RIFF", [0, 0, 0, 0], "WEBP"))).toEqual({ mime: "image/webp", inline: true });
     expect(sniffMime(bytes([0, 0, 0, 0x20], "ftypisom"))).toEqual({ mime: "video/mp4", inline: true });
+    expect(sniffMime(bytes([0, 0, 0, 0x14], "ftypqt  "))).toEqual({ mime: "video/quicktime", inline: true });
     expect(sniffMime(bytes("<svg onload=alert(1)>"))).toEqual({ mime: "application/octet-stream", inline: false });
   });
 });

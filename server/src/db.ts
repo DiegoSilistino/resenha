@@ -260,6 +260,10 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX notices_user ON notices(user_id);
   `,
+  // 13: vídeo do iPhone (.mov) passa a tocar no chat, inclusive os que já foram enviados.
+  `
+  UPDATE attachments SET inline = 1 WHERE mime = 'video/quicktime';
+  `,
 ];
 
 /**

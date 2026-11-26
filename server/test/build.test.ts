@@ -40,3 +40,13 @@ describe("versão do site no hello (aviso de atualização)", () => {
     expect(await helloBuild()).toBeUndefined();
   });
 });
+
+describe("prévia do link", () => {
+  it("o index.html sai com a imagem da prévia no endereço completo do site", async () => {
+    t = await createTestApp({ webDist: dist("<html><head><title>Resenha</title></head><body></body></html>") });
+    const res = await t.app.inject({ method: "GET", url: "/convite/abc" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^text\/html/);
+    expect(res.body).toContain('<meta property="og:image" content="http://localhost:5173/og.jpg" />');
+  });
+});

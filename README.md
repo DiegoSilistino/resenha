@@ -4,10 +4,10 @@ Voz, chat e **assistir juntos** para um grupo fechado de amigos, no lugar do Dis
 
 - **Cadastro aberto.** Qualquer pessoa cria conta em "Criar conta", na tela de entrada, e entra nas rodas abertas. Links de convite (uso único ou limitado, com validade) levam direto para uma roda, e o de admin cria contas de administração. Em Administrar o site → Membros ele também desativa (reversível) ou remove de vez uma conta, por exemplo uma duplicada: a pessoa sai na hora, o nome de usuário fica livre e as mensagens antigas ficam assinadas como "Ex-membro".
 - **Canais de texto** em tempo real:
-  - anexos (imagens e vídeos aparecem na conversa);
+  - anexos de até 25 MB (imagens e vídeos, inclusive o .mov do iPhone, aparecem e tocam na conversa; se o navegador não abrir o vídeo, vira download);
   - reações com emoji (barra rápida e seletor com busca em português);
   - responder mensagens (citação clicável que leva até a original e avisa quem foi respondido);
-  - GIFs do GIPHY, emoji na caixa de texto e ||spoiler||;
+  - GIFs do GIPHY, figurinhas do caramelo, emoji na caixa de texto e ||spoiler||;
   - edição (seta ↑ edita a última) e exclusão;
   - "fulano está digitando";
   - busca de mensagens (em todos os canais ou só no aberto), sem ligar para acento e aceitando palavra pela metade; clicar no resultado leva até a mensagem, mesmo se for antiga;

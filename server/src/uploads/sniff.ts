@@ -23,7 +23,8 @@ export function sniffMime(head: Buffer): Sniffed {
   if (startsWith(head, [0x1a, 0x45, 0xdf, 0xa3])) return { mime: "video/webm", inline: true };
   if (ascii(head, 4, 8) === "ftyp") {
     const brand = ascii(head, 8, 12);
-    if (brand === "qt  ") return { mime: "video/quicktime", inline: false };
+    // vídeo do iPhone; se o navegador não abrir o codec, o chat mostra o download no lugar
+    if (brand === "qt  ") return { mime: "video/quicktime", inline: true };
     if (brand === "M4A ") return { mime: "audio/mp4", inline: true }; // áudio do celular/iTunes
     return { mime: "video/mp4", inline: true };
   }

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { APP_NAME } from "@resenha/shared";
+import rindo from "../assets/mascote/rindo.webp";
 import { api, ApiError } from "../lib/api.ts";
 import { useApp } from "../state/app.ts";
 import { SignupForm } from "./SignupForm.tsx";
@@ -27,6 +28,7 @@ export function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-card">
+        <img className="auth-mascot" src={rindo} alt="" width={464} height={480} decoding="async" />
         <h1 className="wordmark wordmark-lg">{APP_NAME}</h1>
         <p className="auth-lede">Voz, chat e vídeo para a sua turma.</p>
         {mode === "signup" ? (

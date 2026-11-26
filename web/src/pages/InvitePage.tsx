@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { APP_NAME, type InviteInfo } from "@resenha/shared";
+import rindo from "../assets/mascote/rindo.webp";
+import surpreso from "../assets/mascote/surpreso.webp";
 import { api, ApiError } from "../lib/api.ts";
 import { waitForRoda } from "../lib/rodas.ts";
 import { logout } from "../lib/session.ts";
@@ -119,6 +121,7 @@ export function InvitePage() {
   return (
     <main className="auth-page">
       <section className="auth-card">
+        <img className="auth-mascot" src={invalid ? surpreso : rindo} alt="" width={invalid ? 408 : 464} height={480} decoding="async" />
         <h1 className="wordmark wordmark-lg">{APP_NAME}</h1>
         {body}
       </section>

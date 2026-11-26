@@ -238,6 +238,11 @@ async function registerFrontend(app: FastifyInstance, config: Config) {
     app.setNotFoundHandler((_req, reply) => sendError(reply, new HttpError(404, "Não encontrado")));
     return;
   }
+  // A prévia do link (WhatsApp, Discord) só aceita o endereço completo da imagem, e o domínio só o servidor sabe.
+  const html = readFileSync(path.join(dist, "index.html"), "utf8").replace(
+    "</head>",
+    `  <meta property="og:image" content="${config.publicUrl}/og.jpg" />\n  </head>`,
+  );
   await app.register(fastifyStatic, {
     root: dist,
     decorateReply: false,
@@ -265,7 +270,7 @@ async function registerFrontend(app: FastifyInstance, config: Config) {
       return sendError(reply, new HttpError(404, "Não encontrado"));
     }
     reply.header("Cache-Control", "no-cache");
-    return reply.sendFile("index.html", dist, { cacheControl: false });
+    return reply.type("text/html; charset=utf-8").send(html);
   });
 }
 

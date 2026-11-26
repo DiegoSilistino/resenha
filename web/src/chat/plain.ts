@@ -15,6 +15,13 @@ export function parseGifMessage(content: string): { src: string; width: number; 
   return { src: src!, width: w && w > 0 ? w : 480, height: h && h > 0 ? h : 270 };
 }
 
+/** Figurinha do caramelo: a mensagem é só "[figurinha:<id>]", que o seletor manda. */
+const STICKER = /^\[figurinha:([a-z0-9-]+)\]$/;
+export const stickerMessage = (id: string) => `[figurinha:${id}]`;
+export function parseStickerMessage(content: string): string | null {
+  return STICKER.exec(content.trim())?.[1] ?? null;
+}
+
 /**
  * GIF da conversa como item dos favoritos. O id do GIPHY sai do link (/media/<id>/giphy.mp4), o
  * mesmo que o seletor usa: favoritar aqui ou lá marca o mesmo GIF.
@@ -40,6 +47,7 @@ export function inviteCodes(content: string, origin = location.origin): string[]
 
 export function plainText(content: string): string {
   if (parseGifMessage(content)) return "GIF";
+  if (parseStickerMessage(content)) return "Figurinha";
   return content
     .replace(/```[a-z0-9]*\n?([\s\S]*?)```/gi, "$1")
     .replace(/\|\|[^|\n]+?\|\|/g, "▒▒▒▒")

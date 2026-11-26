@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { gifFromMessage, inviteCodes, parseGifMessage, plainText } from "../src/chat/plain.ts";
+import { gifFromMessage, inviteCodes, parseGifMessage, parseStickerMessage, plainText, stickerMessage } from "../src/chat/plain.ts";
+
+describe("figurinha", () => {
+  it("a mensagem do seletor volta como figurinha e aparece como 'Figurinha' nas prévias", () => {
+    expect(parseStickerMessage(stickerMessage("rindo"))).toBe("rindo");
+    expect(plainText(stickerMessage("brinde"))).toBe("Figurinha");
+  });
+  it("texto em volta ou formato diferente continua sendo texto", () => {
+    expect(parseStickerMessage("olha [figurinha:rindo]")).toBeNull();
+    expect(parseStickerMessage("[figurinha:Rindo!]")).toBeNull();
+    expect(plainText("olha [figurinha:rindo]")).toBe("olha [figurinha:rindo]");
+  });
+});
 
 describe("favoritar GIF pela conversa", () => {
   it("usa o id do GIPHY do link (o mesmo do seletor), com e sem o prefixo v1", () => {

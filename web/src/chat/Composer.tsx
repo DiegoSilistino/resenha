@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from "react";
-import { Paperclip, SendHorizontal, Smile, X } from "lucide-react";
-import { LIMITS, type Attachment, type Channel, type GifResult } from "@resenha/shared";
+import { Paperclip, SendHorizontal, Smile, Sticker, X } from "lucide-react";
+import { LIMITS, type Attachment, type Channel } from "@resenha/shared";
 import { api, uploadFile } from "../lib/api.ts";
 import { formatBytes } from "../lib/format.ts";
 import { realtime } from "../lib/realtime.ts";
@@ -10,7 +10,8 @@ import { toast } from "../state/toasts.ts";
 import { useUi } from "../state/ui.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
 import { GifPicker } from "./GifPicker.tsx";
-import { parseGifMessage } from "./plain.ts";
+import { parseGifMessage, parseStickerMessage, stickerMessage } from "./plain.ts";
+import { StickerPicker } from "./StickerPicker.tsx";
 
 export interface ComposerHandle {
   addFiles(files: File[]): void;
@@ -40,7 +41,7 @@ export function Composer({ channel, ref, canAttach = true }: { channel: Channel;
   const lastTyping = useRef(0);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
-  const [picker, setPicker] = useState<{ kind: "emoji" | "gif"; anchor: HTMLElement } | null>(null);
+  const [picker, setPicker] = useState<{ kind: "emoji" | "gif" | "sticker"; anchor: HTMLElement } | null>(null);
   const closePicker = useCallback(() => setPicker(null), []);
   const gifsEnabled = useApp((s) => s.features.gifs);
   const users = useApp((s) => s.users);
@@ -130,15 +131,15 @@ export function Composer({ channel, ref, canAttach = true }: { channel: Channel;
     }
   }
 
-  /** GIF vai na hora, como no Discord (o texto e os anexos da caixa continuam lá). */
-  async function sendGif(gif: GifResult) {
+  /** GIF e figurinha vão na hora, como no Discord (o texto e os anexos da caixa continuam lá). */
+  async function sendNow(content: string, failure: string) {
     closePicker();
     try {
-      const { message } = await api.sendMessage(channel.id, `${gif.mp4Url}#${gif.width}x${gif.height}`, [], replyingId);
+      const { message } = await api.sendMessage(channel.id, content, [], replyingId);
       useApp.getState().upsertMessage(message);
       cancelReply();
     } catch (err) {
-      toast.fromError(err, "Não foi possível enviar o GIF");
+      toast.fromError(err, failure);
     } finally {
       textarea.current?.focus();
     }
@@ -160,7 +161,7 @@ export function Composer({ channel, ref, canAttach = true }: { channel: Channel;
     const s = useApp.getState();
     const meId = s.me ? s.me.id : null;
     const items = s.messages[channel.id]?.items ?? [];
-    const last = items.findLast((m) => m.authorId === meId && m.content && !parseGifMessage(m.content));
+    const last = items.findLast((m) => m.authorId === meId && m.content && !parseGifMessage(m.content) && !parseStickerMessage(m.content));
     if (!last) return false;
     useUi.getState().setEditing(last.id);
     document.getElementById(`msg-${last.id}`)?.scrollIntoView({ block: "nearest" });
@@ -231,7 +232,7 @@ export function Composer({ channel, ref, canAttach = true }: { channel: Channel;
             className="icon-btn"
             onClick={() => fileInput.current?.click()}
             aria-label="Anexar arquivo"
-            title="Anexar arquivo"
+            title={`Anexar arquivo (até ${LIMITS.uploadMaxBytes / 1024 / 1024} MB)`}
           >
             <Paperclip size={20} />
           </button>
@@ -290,6 +291,16 @@ export function Composer({ channel, ref, canAttach = true }: { channel: Channel;
         <button
           type="button"
           className="icon-btn"
+          aria-label="Enviar figurinha"
+          title="Enviar figurinha"
+          aria-expanded={picker?.kind === "sticker"}
+          onClick={(e) => setPicker(picker?.kind === "sticker" ? null : { kind: "sticker", anchor: e.currentTarget })}
+        >
+          <Sticker size={20} />
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
           aria-label="Inserir emoji"
           title="Inserir emoji"
           aria-expanded={picker?.kind === "emoji"}
@@ -319,7 +330,20 @@ export function Composer({ channel, ref, canAttach = true }: { channel: Channel;
           }}
         />
       )}
-      {picker?.kind === "gif" && <GifPicker anchor={picker.anchor} onClose={closePicker} onPick={(g) => void sendGif(g)} />}
+      {picker?.kind === "gif" && (
+        <GifPicker
+          anchor={picker.anchor}
+          onClose={closePicker}
+          onPick={(g) => void sendNow(`${g.mp4Url}#${g.width}x${g.height}`, "Não foi possível enviar o GIF")}
+        />
+      )}
+      {picker?.kind === "sticker" && (
+        <StickerPicker
+          anchor={picker.anchor}
+          onClose={closePicker}
+          onPick={(s) => void sendNow(stickerMessage(s.id), "Não foi possível enviar a figurinha")}
+        />
+      )}
     </div>
   );
 }

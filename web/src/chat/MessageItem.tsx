@@ -19,6 +19,7 @@ import { renderMessage, youTubeLinks } from "./markdown.tsx";
 import { mentionsUser as mentionsUserIn } from "./mentions.ts";
 import { gifFromMessage, inviteCodes, parseGifMessage, plainText } from "./plain.ts";
 import { ReactionBar, toggleReaction } from "./Reactions.tsx";
+import { stickerFromMessage } from "./stickers.ts";
 
 export const MessageItem = memo(function MessageItem({ message, grouped }: { message: Message; grouped: boolean }) {
   const author = useApp((s) => s.users[message.authorId]);
@@ -38,6 +39,7 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
   const knownUser = (username: string) => Object.values(users).some((u) => u.username === username);
   const ytLinks = voiceChannelId ? youTubeLinks(message.content) : [];
   const gif = parseGifMessage(message.content);
+  const sticker = gif ? undefined : stickerFromMessage(message.content);
   const invites = gif ? [] : inviteCodes(message.content);
   const openAuthor = () => author && !author.removed && useUi.getState().openProfile(author.id);
 
@@ -86,6 +88,8 @@ export const MessageItem = memo(function MessageItem({ message, grouped }: { mes
           <EditBox message={message} onDone={() => setEditing(false)} />
         ) : gif ? (
           <GifView src={gif.src} width={gif.width} height={gif.height} favorite={gifFromMessage(message.content)} />
+        ) : sticker ? (
+          <img className="sticker" src={sticker.src} alt={`Figurinha: ${sticker.name}`} title={sticker.name} decoding="async" />
         ) : (
           message.content && (
             <div className="message-content">
@@ -316,9 +320,13 @@ function EditBox({ message, onDone }: { message: Message; onDone(): void }) {
 }
 
 function AttachmentView({ attachment: a }: { attachment: Attachment }) {
+  // vídeo que este navegador não abre (ex.: .mov do iPhone num PC sem o codec) vira o cartão de download
+  const [unplayable, setUnplayable] = useState(false);
   if (a.inline && a.mime.startsWith("image/")) return <ImageAttachment a={a} />;
-  if (a.inline && a.mime.startsWith("video/")) {
-    return <video className="attachment-video" src={a.url} controls preload="metadata" />;
+  if (a.inline && a.mime.startsWith("video/") && !unplayable) {
+    return (
+      <video className="attachment-video" src={a.url} controls playsInline preload="metadata" onError={() => setUnplayable(true)} />
+    );
   }
   if (a.inline && a.mime.startsWith("audio/")) return <AudioAttachment a={a} />;
   return (
