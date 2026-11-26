@@ -3048,6 +3048,12 @@ img.roda-badge {
 .stream-volume[data-open] {
   opacity: 1;
 }
+/* no celular não existe passar o mouse: sem isso o botão de tela cheia ficava invisível */
+@media (hover: none) {
+  .screen-controls > * {
+    opacity: 1;
+  }
+}
 .stream-volume {
   position: relative;
 }

@@ -289,8 +289,28 @@ export function ScreenTile({ participant, focused = false }: { participant: Part
 
   // Já em tela cheia, o mesmo botão sai dela (antes só o Esc saía).
   function toggleFullscreen() {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-    else void ref.current?.requestFullscreen?.().catch(() => undefined);
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+    const el = ref.current;
+    const video = videoEl as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+    if (el?.requestFullscreen) {
+      void el
+        .requestFullscreen()
+        .then(() => {
+          // celular em pé: vira de lado para a tela (deitada) ocupar a tela toda; sai sozinho ao fechar
+          const wide = !video || video.videoWidth >= video.videoHeight;
+          const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+          if (wide) return orientation.lock?.("landscape");
+        })
+        .catch(() => undefined);
+    } else if (video?.webkitEnterFullscreen) {
+      // iPhone: o Safari não põe um <div> em tela cheia, só o próprio <video> (player nativo),
+      // e pausa o vídeo ao sair dele
+      video.addEventListener("webkitendfullscreen", () => void video.play().catch(() => undefined), { once: true });
+      video.webkitEnterFullscreen();
+    }
   }
   const onVideo = (e: React.MouseEvent) => !(e.target as Element).closest(".screen-controls");
 
