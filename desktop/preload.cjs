@@ -11,6 +11,13 @@ contextBridge.exposeInMainWorld("resenhaDesktop", {
   show: (focus) => ipcRenderer.send("win:show", !!focus),
   listScreenSources: () => ipcRenderer.invoke("screens:list"),
   chooseScreenSource: (id) => ipcRenderer.invoke("screens:choose", String(id)),
+  appUpdateStatus: () => ipcRenderer.invoke("update:status"),
+  onAppUpdateReady: (cb) => {
+    const listener = (_event, version) => cb(String(version));
+    ipcRenderer.on("update:ready", listener);
+    return () => ipcRenderer.removeListener("update:ready", listener);
+  },
+  installAppUpdate: () => ipcRenderer.send("update:install"),
   // só a tela de primeira configuração usa
   saveUrl: (url) => ipcRenderer.invoke("setup:url", String(url)),
 });

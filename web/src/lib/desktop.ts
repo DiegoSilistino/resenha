@@ -10,6 +10,12 @@ export interface DesktopBridge {
   listScreenSources?(): Promise<ScreenSource[]>;
   /** Avisa o app o que transmitir no próximo pedido (aí ele não mostra o menu dele). */
   chooseScreenSource?(id: string): Promise<void>;
+  /** Versão do app e a nova que já baixou (null: nenhuma). Opcional: só o app 1.2.0 em diante tem. */
+  appUpdateStatus?(): Promise<{ version: string; ready: string | null } | null>;
+  /** Avisa quando terminou de baixar uma versão nova. Devolve como parar de ouvir. */
+  onAppUpdateReady?(cb: (version: string) => void): () => void;
+  /** Fecha, instala a versão baixada por cima (as configurações ficam) e abre de novo. */
+  installAppUpdate?(): void;
 }
 
 export interface ScreenSource {

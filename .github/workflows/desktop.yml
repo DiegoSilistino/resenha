@@ -1,6 +1,7 @@
 # Monta o instalador do Resenha para Windows e publica numa Release do GitHub.
 # O botão "Baixar app" do site aponta para releases/latest/download/Resenha-Setup.exe.
 # Nova versão do instalador: suba "version" em desktop/package.json (o site em si atualiza sozinho no app).
+# Do 1.2.0 em diante o app instalado baixa a versão nova sozinho e oferece "Atualizar" (electron-updater).
 name: App de desktop
 
 on:
@@ -40,5 +41,9 @@ jobs:
           tag_name: desktop-v${{ steps.version.outputs.value }}
           name: Resenha para Windows ${{ steps.version.outputs.value }}
           body: Instalador do Resenha para Windows. Baixe o Resenha-Setup.exe e abra.
-          files: desktop/dist/Resenha-Setup.exe
+          # latest.yml e .blockmap: é por eles que o app instalado descobre e baixa a versão nova sozinho
+          files: |
+            desktop/dist/Resenha-Setup.exe
+            desktop/dist/Resenha-Setup.exe.blockmap
+            desktop/dist/latest.yml
           make_latest: true

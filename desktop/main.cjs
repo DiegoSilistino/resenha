@@ -276,6 +276,37 @@ ipcMain.handle("setup:url", (e, raw) => {
   return null;
 });
 
+// ---------------------------------------------------------------- atualização automática
+
+// Baixa sozinho a versão nova (Release do GitHub, latest.yml) e instala por cima ao clicar em Atualizar
+// ou ao sair pela bandeja. Endereço, janela, login e configurações ficam em userData (%APPDATA%),
+// que a instalação não toca.
+let updateReady = null;
+
+function setupUpdates() {
+  if (!app.isPackaged) return;
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require("electron-updater"));
+  } catch {
+    return;
+  }
+  autoUpdater.on("update-downloaded", (info) => {
+    updateReady = info.version;
+    win?.webContents.send("update:ready", updateReady);
+  });
+  autoUpdater.on("error", () => undefined); // sem internet ou GitHub fora do ar: tenta de novo na próxima hora
+  const check = () => void autoUpdater.checkForUpdates().catch(() => undefined);
+  check();
+  setInterval(check, 60 * 60 * 1000);
+  ipcMain.on("update:install", (e) => {
+    // silencioso e abrindo de novo no fim; o before-quit libera o fechamento da janela
+    if (fromSite(e.senderFrame?.url) && updateReady) autoUpdater.quitAndInstall(true, true);
+  });
+}
+
+ipcMain.handle("update:status", (e) => (fromSite(e.senderFrame?.url) ? { version: app.getVersion(), ready: updateReady } : null));
+
 // ---------------------------------------------------------------- início
 
 if (!app.requestSingleInstanceLock()) {
@@ -293,5 +324,6 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
     createTray();
     setupPushToTalk();
+    setupUpdates();
   });
 }

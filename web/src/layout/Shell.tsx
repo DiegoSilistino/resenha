@@ -4,6 +4,7 @@ import { BellRing, RefreshCw, X } from "lucide-react";
 import { hasUnsentDraft } from "../chat/Composer.tsx";
 import { useVoice } from "../voice/state.ts";
 import { lazyChunk } from "../lib/chunks.ts";
+import { desktop } from "../lib/desktop.ts";
 import { notifyPermission, requestNotifyPermission, setNotifyNavigator } from "../lib/notify.ts";
 import { unreadTotal, useApp } from "../state/app.ts";
 import { useSettings } from "../state/settings.ts";
@@ -152,6 +153,19 @@ function UpdateBanner() {
     };
   }, [update]);
 
+  const appUpdate = useAppUpdateReady();
+  // O app novo reabre já com o site novo: um aviso só.
+  if (appUpdate) {
+    return (
+      <div className="notify-prompt" role="status">
+        <RefreshCw size={18} aria-hidden="true" />
+        <span>Saiu a versão {appUpdate} do app do Resenha.</span>
+        <button type="button" className="btn btn-small btn-primary" onClick={() => desktop?.installAppUpdate?.()}>
+          {inCall ? "Atualizar (sai da chamada)" : "Atualizar"}
+        </button>
+      </div>
+    );
+  }
   if (!update) return null;
   return (
     <div className="notify-prompt" role="status">
@@ -162,6 +176,17 @@ function UpdateBanner() {
       </button>
     </div>
   );
+}
+
+/** Versão nova do app de desktop já baixada, esperando o clique (null: nenhuma, ou no navegador). */
+function useAppUpdateReady(): string | null {
+  const [ready, setReady] = useState<string | null>(null);
+  useEffect(() => {
+    if (!desktop?.onAppUpdateReady) return;
+    void desktop.appUpdateStatus?.().then((s) => s?.ready && setReady(s.ready));
+    return desktop.onAppUpdateReady(setReady);
+  }, []);
+  return ready;
 }
 
 /** Sala aberta: painel das salas à esquerda (some no celular) e a conversa ou a chamada. */
