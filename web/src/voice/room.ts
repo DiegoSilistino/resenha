@@ -34,6 +34,7 @@ import { MicProcessor } from "./gate/processor.ts";
 import { useVoice } from "./state.ts";
 import { participantVolumes } from "./volumes.ts";
 import { parsePing } from "./quality.ts";
+import { CallEncryption, e2eeSupported } from "./e2ee.ts";
 
 const setV = useVoice.setState;
 const bump = () => setV((s) => ({ version: s.version + 1 }));
@@ -42,6 +43,8 @@ let room: Room | null = null;
 let joinSeq = 0;
 /** Cadeia do microfone (IA + sensibilidade) da chamada atual. */
 let gate: MicProcessor | null = null;
+/** Criptografia de ponta a ponta da chamada atual (troca de chaves e legendas). */
+let e2ee: CallEncryption | null = null;
 /** Até quando ignorar entradas/saídas dos outros (a reconexão da sala gera eventos em rajada). */
 let quietUntil = 0;
 /** Salas que chegaram a conectar (antes disso, falhas são tratadas pelo joinVoice). */
@@ -61,20 +64,28 @@ export async function joinVoice(channelId: string): Promise<void> {
   const st = useVoice.getState();
   if (st.channelId === channelId && st.status !== "idle") return;
   if (room) await leaveVoice({ sound: false });
+  // toda chamada é criptografada de ponta a ponta: sem suporte, não entra (nada de cair para uma chamada aberta)
+  if (!e2eeSupported()) {
+    toast.error("Este navegador não faz chamadas criptografadas de ponta a ponta. Use o Chrome, o Edge, o Safari ou o app do Resenha.");
+    return;
+  }
 
   const seq = ++joinSeq;
   quietUntil = 0;
   setV({ status: "connecting", channelId, screenSharing: false, cameraOn: false, speaking: {}, captions: {} });
   let r: Room | null = null;
   let url = "";
+  const encryption = new CallEncryption();
   try {
     const credentials = await api.voiceToken(channelId);
     url = credentials.url;
     const { token } = credentials;
-    if (seq !== joinSeq) return;
+    await encryption.prepare();
+    if (seq !== joinSeq) return encryption.stop();
 
     const s = useSettings.getState();
     r = new Room({
+      e2ee: { keyProvider: encryption.keyProvider, worker: encryption.worker },
       // "screen": usa a escala real da tela (125%/150% no Windows) para pedir a camada
       // de vídeo certa; sem isso, quem assiste recebe uma resolução abaixo da que vê.
       adaptiveStream: { pixelDensity: "screen" },
@@ -90,11 +101,16 @@ export async function joinVoice(channelId: string): Promise<void> {
     });
     room = r;
     wire(r);
+    await r.setE2EEEnabled(true);
     await r.connect(url, token);
     if (seq !== joinSeq) {
       await r.disconnect();
+      encryption.stop();
       return;
     }
+    // chave e troca de chaves prontas antes de publicar o microfone: nada sai sem cifra
+    e2ee = encryption;
+    await encryption.start(r);
 
     established.add(r);
     setV({ status: "connected", audioBlocked: !r.canPlaybackAudio });
@@ -106,8 +122,10 @@ export async function joinVoice(channelId: string): Promise<void> {
     syncFlags();
     bump();
   } catch (err) {
-    if (seq !== joinSeq) return;
+    if (seq !== joinSeq) return encryption.stop();
     if (r) await r.disconnect().catch(() => undefined);
+    encryption.stop();
+    if (e2ee === encryption) e2ee = null;
     if (room === r) room = null;
     resetCallState();
     console.error("[voz] falha ao conectar em", url || "(sem URL)", err);
@@ -146,11 +164,14 @@ export function joinErrorMessage(err: unknown, url: string): string {
 export async function leaveVoice({ sound = true }: { sound?: boolean } = {}): Promise<void> {
   joinSeq++;
   const r = room;
+  const encryption = e2ee;
   room = null;
   gate = null;
+  e2ee = null;
   if (r && sound) playSound("leave");
   captioner.setActive(false, useSettings.getState().captionsLang);
   if (r) await r.disconnect().catch(() => undefined);
+  encryption?.stop();
   clearAudioSink();
   resetCallState();
   realtime.send({ type: "voice.leave" });
@@ -171,6 +192,7 @@ function resetCallState() {
     pings: {},
     watching: {},
     focused: null,
+    e2ee: null,
     version: s.version + 1,
   }));
 }
@@ -276,12 +298,16 @@ function wire(r: Room) {
     .on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
       if (topic === PING_TOPIC && participant) return receivePing(participant.identity, payload);
       if (topic !== CAPTIONS_TOPIC || !participant) return;
-      try {
-        const chunk = JSON.parse(new TextDecoder().decode(payload)) as CaptionChunk;
-        if (typeof chunk.text === "string") setCaption(participant.identity, chunk);
-      } catch {
-        // pacote malformado: ignora
-      }
+      // legendas também vão cifradas: sem a chave de quem falou (ainda), a linha é descartada
+      void e2ee?.openCaption(participant.identity, payload).then((plain) => {
+        if (!plain) return;
+        try {
+          const chunk = JSON.parse(new TextDecoder().decode(plain)) as CaptionChunk;
+          if (typeof chunk.text === "string") setCaption(participant.identity, chunk);
+        } catch {
+          // pacote malformado: ignora
+        }
+      });
     })
     .on(RoomEvent.AudioPlaybackStatusChanged, () => setV({ audioBlocked: !r.canPlaybackAudio }))
     .on(RoomEvent.Reconnecting, () => {
@@ -615,8 +641,10 @@ function publishCaption(chunk: CaptionChunk) {
   const r = room;
   if (!r) return;
   const data = new TextEncoder().encode(JSON.stringify(chunk));
-  // Final: confiável. Parcial: pode perder pacote, o próximo substitui.
-  void r.localParticipant.publishData(data, { reliable: chunk.final, topic: CAPTIONS_TOPIC }).catch(() => undefined);
+  // Final: confiável. Parcial: pode perder pacote, o próximo substitui. Cifrada com a chave da chamada.
+  void e2ee?.sealCaption(data).then((sealed) => {
+    if (sealed) void r.localParticipant.publishData(sealed, { reliable: chunk.final, topic: CAPTIONS_TOPIC }).catch(() => undefined);
+  });
 }
 
 const captioner = new SpeechCaptioner(

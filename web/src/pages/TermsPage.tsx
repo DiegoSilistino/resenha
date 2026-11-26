@@ -19,8 +19,12 @@ export function TermsPage() {
         <ul>
           <li>O {APP_NAME} é um espaço para conversar, ligar e assistir junto com a sua turma.</li>
           <li>
-            Quem mantém o servidor no ar tem acesso técnico ao que fica guardado nele. As conversas <strong>não</strong> são
-            criptografadas de ponta a ponta.
+            As <strong>chamadas</strong> (voz, câmera, tela e legendas) são criptografadas de ponta a ponta: nem o servidor ouve
+            ou vê.
+          </li>
+          <li>
+            As <strong>mensagens de texto</strong> não são: quem mantém o servidor no ar tem acesso técnico ao que fica guardado
+            nele.
           </li>
           <li>Seus dados não são vendidos nem usados para propaganda.</li>
         </ul>
@@ -41,7 +45,8 @@ export function TermsPage() {
             que ficam pouco tempo (têm tamanho máximo e vão sendo sobrescritos).
           </li>
           <li>
-            <strong>Voz, vídeo e tela não são gravados:</strong> passam pelo servidor só enquanto a chamada acontece.
+            <strong>Voz, câmera e tela não são gravados</strong> e saem do seu aparelho criptografados de ponta a ponta: o
+            servidor só repassa o que não consegue abrir.
           </li>
         </ul>
 
@@ -49,9 +54,13 @@ export function TermsPage() {
         <ul>
           <li>As mensagens de uma roda aparecem para os membros dela; as conversas privadas, só para quem participa.</li>
           <li>
-            Quem mantém o servidor tem acesso técnico ao banco de dados e aos arquivos, incluindo as conversas privadas: eles
-            ficam guardados sem criptografia no servidor. O caminho entre o seu aparelho e o servidor é criptografado (HTTPS e,
-            nas chamadas, WebRTC).
+            Quem mantém o servidor tem acesso técnico ao banco de dados e aos arquivos, incluindo as mensagens das conversas
+            privadas: elas ficam guardadas sem criptografia no servidor. O caminho entre o seu aparelho e o servidor é
+            criptografado (HTTPS).
+          </li>
+          <li>
+            Nas chamadas, cada pessoa cifra o próprio áudio e vídeo com uma chave só dela, que muda sempre que alguém entra ou
+            sai. O cadeado no topo da chamada mostra um código de segurança: se for igual para todos, ninguém está no meio.
           </li>
           <li>Quando alguém denuncia uma mensagem, os administradores veem a denúncia e o texto dela, mesmo de uma conversa privada.</li>
           <li>
@@ -64,7 +73,8 @@ export function TermsPage() {
         <ul>
           <li>
             <strong>Legendas ao vivo:</strong> quando você liga a transcrição, a sua fala vai para o Google (no Chrome) ou para a
-            Microsoft (no Edge) para virar texto.
+            Microsoft (no Edge) para virar texto. Esse serviço ouve o que você fala, mesmo com a chamada criptografada; o texto
+            que vai para a chamada segue cifrado.
           </li>
           <li>
             <strong>GIFs e Assistir juntos:</strong> os GIFs vêm do GIPHY e os vídeos do YouTube. Ao carregar, esses serviços

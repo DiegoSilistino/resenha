@@ -3,6 +3,7 @@ import {
   Captions as CaptionsIcon,
   Headphones,
   HeadphoneOff,
+  Lock,
   MessageSquare,
   Mic,
   MicOff,
@@ -19,7 +20,7 @@ import type { Channel } from "@resenha/shared";
 import { Avatar } from "../components/Avatar.tsx";
 import { ChatPanel } from "../chat/ChatPanel.tsx";
 import { BackToRoda } from "../layout/BackToRoda.tsx";
-import { useApp, useChannelPerm } from "../state/app.ts";
+import { displayNameOf, useApp, useChannelPerm } from "../state/app.ts";
 import dormindo from "../assets/mascote/dormindo.webp";
 import { useSettings } from "../state/settings.ts";
 import { SearchButton } from "../search/SearchButton.tsx";
@@ -43,6 +44,45 @@ import { fitGrid } from "./grid.ts";
 import { SoundboardControl } from "./SoundboardPanel.tsx";
 import { ParticipantTile, ScreenTile } from "./Tiles.tsx";
 import { OutgoingRing } from "../layout/IncomingCall.tsx";
+
+/**
+ * Cadeado da chamada (como no Discord): abre o código de segurança. Todo mundo da chamada vê o mesmo
+ * código; se for diferente para alguém, alguém está no meio.
+ */
+function EncryptionBadge() {
+  const e2ee = useVoice((s) => s.e2ee);
+  const users = useApp((s) => s.users);
+  if (!e2ee) return null;
+  const waiting = e2ee.waiting.map((id) => displayNameOf(users, id));
+  return (
+    <details className="e2ee-badge">
+      <summary title="Chamada criptografada de ponta a ponta">
+        <Lock size={13} aria-hidden="true" /> {waiting.length ? "Combinando chaves…" : "Ponta a ponta"}
+      </summary>
+      <div className="e2ee-pop">
+        <p>
+          <strong>Criptografada de ponta a ponta.</strong> Voz, câmera, tela e legendas saem cifradas do seu aparelho: nem o
+          servidor ouve ou vê.
+        </p>
+        {waiting.length > 0 ? (
+          <p className="muted">
+            Combinando as chaves com {waiting.join(", ")}. Se não terminar em alguns segundos, peça para recarregar a página
+            (deve ser uma versão antiga do app).
+          </p>
+        ) : (
+          <>
+            <span className="mono-label">código de segurança</span>
+            <code className="e2ee-code">{e2ee.code}</code>
+            <p className="muted small-note">
+              Compare com quem está na chamada (lendo em voz alta, por exemplo). Se for igual para todos, ninguém está no meio. Ele
+              muda quando alguém entra ou sai.
+            </p>
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
 
 export function VoiceView({ channel }: { channel: Channel }) {
   const status = useVoice((s) => s.status);
@@ -83,6 +123,7 @@ export function VoiceView({ channel }: { channel: Channel }) {
           <h1 className="main-title">{channel.name}</h1>
         </div>
         <span className="mono-label voice-count">{inCall > 0 ? `${inCall} na call` : "ninguém na call"}</span>
+        {here && status === "connected" && <EncryptionBadge />}
         <div className="header-actions">
           <SearchButton />
           <button

@@ -38,6 +38,8 @@ export interface VoiceState {
   focused: string | null;
   /** Último som da mesa tocado por pessoa (mostra a figurinha no quadradinho dela). */
   soundPlays: Record<string, { sound: SoundboardSound; at: number }>;
+  /** Criptografia de ponta a ponta: código de segurança e quem ainda não combinou a chave. */
+  e2ee: { code: string; waiting: string[] } | null;
 }
 
 export const useVoice = create<VoiceState>()(() => ({
@@ -57,4 +59,5 @@ export const useVoice = create<VoiceState>()(() => ({
   watching: {},
   focused: null,
   soundPlays: {},
+  e2ee: null,
 }));
