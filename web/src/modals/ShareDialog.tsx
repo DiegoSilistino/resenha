@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal.tsx";
-import { desktop, type ScreenSource } from "../lib/desktop.ts";
+import { desktop, DESKTOP_DOWNLOAD_URL, type ScreenSource } from "../lib/desktop.ts";
 import { useSettings } from "../state/settings.ts";
 import { useUi } from "../state/ui.ts";
 import { startScreenShare } from "../voice/controller.ts";
@@ -22,6 +22,23 @@ export function ShareDialog() {
   const [withAudio, setWithAudio] = useState(savedAudio);
   const [source, setSource] = useState<ScreenSource | null>(null);
   const close = () => useUi.getState().setShareDialogOpen(false);
+
+  // app 1.0.0: o Windows nunca liberava a captura (faltava a permissão display-capture); só atualizando
+  if (desktop && !listSources) {
+    return (
+      <Modal title="Transmitir a tela" onClose={close}>
+        <div className="form">
+          <p>
+            Para transmitir a tela, atualize o app do Resenha. A versão instalada tem um defeito que impede o Windows de
+            liberar a captura.
+          </p>
+          <a className="btn btn-primary" href={DESKTOP_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+            Baixar a versão nova
+          </a>
+        </div>
+      </Modal>
+    );
+  }
 
   if (listSources && !source) {
     return (
