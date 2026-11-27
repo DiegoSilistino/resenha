@@ -4,6 +4,9 @@ const { app, BrowserWindow, Menu, Tray, desktopCapturer, ipcMain, nativeImage, s
 const fs = require("node:fs");
 const path = require("node:path");
 
+// O ganho automático do WebRTC mexe no volume do microfone no Windows; assim ele só ajusta o ganho digital.
+app.commandLine.appendSwitch("disable-features", "WebRtcAllowInputVolumeAdjustment");
+
 let uIOhook = null;
 let UiohookKey = {};
 try {
