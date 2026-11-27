@@ -16,6 +16,9 @@ export interface DesktopBridge {
   onAppUpdateReady?(cb: (version: string) => void): () => void;
   /** Fecha, instala a versão baixada por cima (as configurações ficam) e abre de novo. */
   installAppUpdate?(): void;
+  /** O app abre junto com o Windows (escondido na bandeja)? Opcional: só o app 1.3.0 em diante tem. */
+  getOpenAtLogin?(): Promise<boolean>;
+  setOpenAtLogin?(on: boolean): Promise<void>;
 }
 
 export interface ScreenSource {

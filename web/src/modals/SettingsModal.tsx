@@ -39,15 +39,18 @@ const TABS = [
   { id: "notifications", label: "Notificações" },
   { id: "captions", label: "Legendas" },
   { id: "account", label: "Conta" },
+  { id: "windows", label: "Windows" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
+/** A aba Windows só existe no app de desktop (e nas versões que sabem iniciar com o Windows). */
+const VISIBLE_TABS = TABS.filter((t) => t.id !== "windows" || desktop?.getOpenAtLogin);
 
 export function SettingsModal() {
   const [tab, setTab] = useState<TabId>(() => useUi.getState().settingsTab ?? "profile");
   return (
     <Modal title="Configurações" onClose={() => useUi.getState().setSettingsOpen(false)} wide>
       <div className="tabs" role="tablist">
-        {TABS.map((t) => (
+        {VISIBLE_TABS.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -68,6 +71,7 @@ export function SettingsModal() {
         {tab === "notifications" && <NotificationsTab />}
         {tab === "captions" && <CaptionsTab />}
         {tab === "account" && <AccountTab />}
+        {tab === "windows" && <WindowsTab />}
       </div>
     </Modal>
   );
@@ -631,6 +635,38 @@ function NotificationsTab() {
           </label>
         )}
       </fieldset>
+    </div>
+  );
+}
+
+function WindowsTab() {
+  const [openAtLogin, setOpenAtLogin] = useState<boolean | null>(null);
+  useEffect(() => {
+    void desktop?.getOpenAtLogin?.().then(setOpenAtLogin);
+  }, []);
+
+  async function toggle(on: boolean) {
+    await desktop?.setOpenAtLogin?.(on);
+    // relê do Windows: mostra o que valeu de fato
+    setOpenAtLogin((await desktop?.getOpenAtLogin?.()) ?? false);
+  }
+
+  return (
+    <div className="form">
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={!!openAtLogin}
+          disabled={openAtLogin === null}
+          onChange={(e) => void toggle(e.target.checked)}
+        />
+        <span>
+          Iniciar o Resenha com o Windows
+          <small>
+            Abre escondido na bandeja, perto do relógio: as mensagens e chamadas chegam sem a janela pular na tela.
+          </small>
+        </span>
+      </label>
     </div>
   );
 }

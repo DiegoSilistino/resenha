@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("resenhaDesktop", {
     return () => ipcRenderer.removeListener("update:ready", listener);
   },
   installAppUpdate: () => ipcRenderer.send("update:install"),
+  getOpenAtLogin: () => ipcRenderer.invoke("login:get"),
+  setOpenAtLogin: (on) => ipcRenderer.invoke("login:set", !!on),
   // só a tela de primeira configuração usa
   saveUrl: (url) => ipcRenderer.invoke("setup:url", String(url)),
 });

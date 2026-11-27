@@ -43,11 +43,16 @@ let win = null;
 let tray = null;
 let quitting = false;
 
+/** Aberto com o Windows (escondido): maximiza só quando a pessoa abrir; maximizar antes mostraria a janela. */
+let maximizeOnShow = false;
+
 function show(focus = true) {
   if (!win) return;
   if (win.isMinimized()) win.restore();
   if (focus) {
     win.show();
+    if (maximizeOnShow) win.maximize();
+    maximizeOnShow = false;
     win.focus();
   } else if (!win.isVisible()) {
     win.showInactive();
@@ -106,8 +111,12 @@ function createWindow() {
       backgroundThrottling: false,
     },
   });
-  if (maximized) win.maximize();
-  win.show();
+  if (process.argv.includes(LOGIN_ARG)) {
+    maximizeOnShow = maximized; // ligou junto com o Windows: fica só na bandeja
+  } else {
+    if (maximized) win.maximize();
+    win.show();
+  }
   const url = siteUrl();
   if (url) void win.loadURL(url);
   else void win.loadFile(path.join(__dirname, "setup.html"));
@@ -274,6 +283,23 @@ ipcMain.handle("setup:url", (e, raw) => {
   fs.writeFileSync(configFile(), JSON.stringify({ url: url.origin }));
   void win.loadURL(url.origin);
   return null;
+});
+
+// ---------------------------------------------------------------- iniciar com o Windows
+
+/** Marca de quando o Windows abre o app no login: aí ele começa só na bandeja, como o Discord. */
+const LOGIN_ARG = "--hidden";
+
+// Fica no registro do Windows (HKCU\...\Run), não nas configurações do site: vale para este PC.
+// executableWillLaunchAtLogin também enxerga quando a pessoa desligou pelo Gerenciador de Tarefas.
+ipcMain.handle("login:get", (e) =>
+  fromSite(e.senderFrame?.url) && app.isPackaged
+    ? app.getLoginItemSettings({ args: [LOGIN_ARG] }).executableWillLaunchAtLogin
+    : false,
+);
+ipcMain.handle("login:set", (e, on) => {
+  // fora do instalador o caminho gravado seria o electron.exe de desenvolvimento
+  if (fromSite(e.senderFrame?.url) && app.isPackaged) app.setLoginItemSettings({ openAtLogin: !!on, args: [LOGIN_ARG] });
 });
 
 // ---------------------------------------------------------------- atualização automática
