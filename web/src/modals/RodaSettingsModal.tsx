@@ -107,9 +107,13 @@ function GeneralTab({ roda, onDeleted }: { roda: Roda; onDeleted(): void }) {
     setBusy(false);
   }
 
+  // confirmação na própria tela: o prompt() do navegador não existe no app (Electron) e o botão não fazia nada
+  const [confirming, setConfirming] = useState(false);
+  const [typedName, setTypedName] = useState("");
+  const nameMatches = typedName.trim() === roda.name.trim();
+
   async function remove() {
-    const typed = prompt(`Apagar ${roda.name} com todas as salas e mensagens? Não dá para desfazer.\nDigite o nome da roda para confirmar:`);
-    if (typed?.trim() !== roda.name) return;
+    if (!nameMatches) return;
     if (await run(() => api.deleteRoda(roda.id), "Roda apagada.")) {
       onDeleted();
       void navigate("/rodas", { replace: true });
@@ -184,9 +188,45 @@ function GeneralTab({ roda, onDeleted }: { roda: Roda; onDeleted(): void }) {
         Salvar
       </button>
       <hr />
-      <button type="button" className="btn btn-danger" onClick={() => void remove()}>
-        Apagar a roda
-      </button>
+      {confirming ? (
+        <div className="field">
+          <label className="field">
+            <span>
+              Apagar {roda.name} com todas as salas e mensagens? Não dá para desfazer. Digite o nome da roda para confirmar:
+            </span>
+            <input
+              value={typedName}
+              autoFocus
+              onChange={(e) => setTypedName(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter aqui não pode salvar o formulário da roda
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                void remove();
+              }}
+            />
+          </label>
+          <div className="row-actions">
+            <button type="button" className="btn btn-danger" disabled={!nameMatches} onClick={() => void remove()}>
+              Apagar de vez
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                setConfirming(false);
+                setTypedName("");
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="btn btn-danger" onClick={() => setConfirming(true)}>
+          Apagar a roda
+        </button>
+      )}
     </form>
   );
 }

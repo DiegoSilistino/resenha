@@ -18,7 +18,8 @@ export function qualityInfo(q: string | undefined): QualityInfo {
     case "good":
       return { bars: 2, tone: "fair", label: "Conexão boa, com pequenas oscilações" };
     case "poor":
-      return { bars: 1, tone: "bad", label: "Conexão ruim: a voz pode picotar" };
+      // o ping (ms) pode estar ótimo e mesmo assim perder pacote: o texto diz o que as barrinhas medem
+      return { bars: 1, tone: "bad", label: "Conexão instável: pacotes de voz se perdendo, a voz pode picotar" };
     case "lost":
       return { bars: 0, tone: "bad", label: "Conexão perdida, tentando voltar" };
     default:
