@@ -5,6 +5,7 @@
 import {
   ConnectionError,
   ConnectionErrorReason,
+  ConnectionQuality,
   ConnectionState,
   DisconnectReason,
   type LocalAudioTrack,
@@ -33,7 +34,7 @@ import { micChainConfig, micOptions } from "./controller.ts";
 import { MicProcessor } from "./gate/processor.ts";
 import { useVoice } from "./state.ts";
 import { participantVolumes } from "./volumes.ts";
-import { parsePing } from "./quality.ts";
+import { linkSnapshot, parsePing, type LinkTotals, type StatLike } from "./quality.ts";
 import { CallEncryption, e2eeSupported } from "./e2ee.ts";
 
 const setV = useVoice.setState;
@@ -235,12 +236,70 @@ function receivePing(identity: string, payload: Uint8Array): void {
 function startPing(r: Room): void {
   stopPing();
   void sharePing(r);
-  pingTimer = setInterval(() => void sharePing(r), PING_EVERY_MS);
+  pingTimer = setInterval(() => {
+    void sharePing(r);
+    void watchSignal(r);
+  }, PING_EVERY_MS);
 }
 
 function stopPing(): void {
   if (pingTimer) clearInterval(pingTimer);
   pingTimer = null;
+  lastTotals = null;
+  badSince = 0;
+  badReported = false;
+}
+
+// ---------------------------------------------------------------- sinal ruim: os números vão para o admin
+
+/**
+ * Sinal ruim (nota do LiveKit) por 15 s seguidos vira um relatório em Admin → Erros com os números da
+ * conexão naquela hora: caminho, perda e variação de atraso nos dois sentidos. Um por episódio.
+ */
+const BAD_SIGNAL_REPORT_MS = 15_000;
+let lastTotals: LinkTotals | null = null;
+let badSince = 0;
+let badReported = false;
+
+async function roomStats(r: Room): Promise<StatLike[]> {
+  // o microfone traz o lado de envio; o som de outra pessoa, o de recebimento
+  const remote = [...r.remoteParticipants.values()]
+    .map((p) => p.getTrackPublication(Track.Source.Microphone)?.track)
+    .find(Boolean);
+  const merged = new Map<string, StatLike>();
+  for (const track of [r.localParticipant.getTrackPublication(Track.Source.Microphone)?.track, remote]) {
+    const report = await track?.getRTCStatsReport().catch(() => undefined);
+    report?.forEach((s: StatLike) => merged.set(s.id, s));
+  }
+  return [...merged.values()];
+}
+
+async function watchSignal(r: Room): Promise<void> {
+  const snap = linkSnapshot(await roomStats(r), lastTotals, PING_EVERY_MS / 1000);
+  if (room !== r) return;
+  lastTotals = snap.totals;
+  const quality = r.localParticipant.connectionQuality;
+  if (quality !== ConnectionQuality.Poor && quality !== ConnectionQuality.Lost) {
+    badSince = 0;
+    badReported = false;
+    return;
+  }
+  badSince ||= Date.now();
+  if (badReported || Date.now() - badSince < BAD_SIGNAL_REPORT_MS) return;
+  badReported = true;
+  reportError("voz", "Sinal ruim na chamada (medido automaticamente)", undefined, {
+    qualidade: quality,
+    caminho: snap.path,
+    pingMs: snap.rttMs ?? -1,
+    perdaEnvioPct: snap.upLossPct,
+    jitterEnvioMs: snap.upJitterMs,
+    perdaRecebePct: snap.downLossPct,
+    jitterRecebeMs: snap.downJitterMs,
+    envioKbps: snap.upKbps,
+    pessoas: r.remoteParticipants.size + 1,
+    transmitindoTela: r.localParticipant.isScreenShareEnabled,
+    app: desktop ? "desktop" : "navegador",
+  });
 }
 
 // ---------------------------------------------------------------- eventos da sala

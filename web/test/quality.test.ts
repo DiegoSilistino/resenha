@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePing, qualityInfo } from "../src/voice/quality.ts";
+import { linkSnapshot, parsePing, qualityInfo } from "../src/voice/quality.ts";
 
 describe("ping que chega pela sala", () => {
   const bytes = (s: string) => new TextEncoder().encode(s);
@@ -9,6 +9,29 @@ describe("ping que chega pela sala", () => {
     expect(parsePing(bytes('{"ms":99999}'))).toBeNull();
     expect(parsePing(bytes('{"ms":"42"}'))).toBeNull();
     expect(parsePing(bytes("lixo"))).toBeNull();
+  });
+});
+
+describe("resumo da conexão para o relatório de sinal ruim", () => {
+  const stats = (sent: number, lostUp: number, received: number, lostDown: number, bytes: number, local: Record<string, string> = { candidateType: "srflx", protocol: "udp" }) => [
+    { type: "transport", id: "T", selectedCandidatePairId: "P" },
+    { type: "candidate-pair", id: "P", localCandidateId: "L", currentRoundTripTime: 0.019, bytesSent: bytes },
+    { type: "local-candidate", id: "L", ...local },
+    { type: "outbound-rtp", id: "O", packetsSent: sent },
+    { type: "remote-inbound-rtp", id: "R", packetsLost: lostUp, jitter: 0.004 },
+    { type: "inbound-rtp", id: "I", packetsReceived: received, packetsLost: lostDown, jitter: 0.03 },
+  ];
+
+  it("calcula perda e envio só do intervalo desde a última leitura", () => {
+    const first = linkSnapshot(stats(1000, 0, 2000, 0, 1_000_000), null, 5);
+    const s = linkSnapshot(stats(1250, 0, 2190, 10, 1_625_000), first.totals, 5);
+    expect(s).toMatchObject({ path: "UDP direto", rttMs: 19, upLossPct: 0, downLossPct: 5, downJitterMs: 30, upKbps: 1000 });
+  });
+
+  it("diz quando a voz passa por TURN ou TCP, que costumam piorar a nota", () => {
+    expect(linkSnapshot(stats(1, 0, 1, 0, 0, { candidateType: "relay", protocol: "udp", relayProtocol: "tcp" }), null, 5).path).toBe("TURN (tcp)");
+    expect(linkSnapshot(stats(1, 0, 1, 0, 0, { candidateType: "host", protocol: "tcp" }), null, 5).path).toBe("TCP direto");
+    expect(linkSnapshot([], null, 5).path).toBe("desconhecido");
   });
 });
 
