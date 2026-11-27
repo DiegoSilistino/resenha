@@ -74,7 +74,7 @@ export function MicSensitivity() {
       test.current?.stop();
       test.current = null;
     };
-  }, [testing, inCall, s.micDeviceId, s.noiseMode, s.echoCancellation]);
+  }, [testing, inCall, s.micDeviceId, s.noiseMode, s.echoCancellation, s.autoGainControl]);
 
   const monitorRef = useRef(monitor);
   useEffect(() => {

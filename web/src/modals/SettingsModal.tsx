@@ -489,6 +489,17 @@ function AudioTab() {
         </span>
       </label>
       <label className="check">
+        <input
+          type="checkbox"
+          checked={s.autoGainControl}
+          onChange={(e) => s.set({ autoGainControl: e.target.checked })}
+        />
+        <span>
+          Ajuste automático do volume do microfone
+          <small>Iguala voz baixa e alta. No navegador, pode mexer no volume do microfone do Windows.</small>
+        </span>
+      </label>
+      <label className="check">
         <input type="checkbox" checked={s.pttEnabled} onChange={(e) => s.set({ pttEnabled: e.target.checked })} />
         <span>
           Apertar para falar (push-to-talk)

@@ -765,7 +765,11 @@ useSettings.subscribe((s, prev) => {
     );
   }
   // Reiniciar o microfone também reconstrói a cadeia (o LiveKit chama restart no processador).
-  if (s.noiseMode !== prev.noiseMode || s.echoCancellation !== prev.echoCancellation) {
+  if (
+    s.noiseMode !== prev.noiseMode ||
+    s.echoCancellation !== prev.echoCancellation ||
+    s.autoGainControl !== prev.autoGainControl
+  ) {
     const track = r.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
     void track?.restartTrack(micOptions()).catch((e) => toast.error(deviceErrorMessage(e)));
   }

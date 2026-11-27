@@ -42,7 +42,7 @@ export function micOptions() {
     echoCancellation: s.echoCancellation,
     // Com a IA, a redução do navegador fica desligada: as duas juntas pioram a voz.
     noiseSuppression: s.noiseMode === "browser",
-    autoGainControl: true,
+    autoGainControl: s.autoGainControl,
   };
 }
 

@@ -13,6 +13,8 @@ export interface Settings {
    */
   noiseMode: NoiseMode;
   echoCancellation: boolean;
+  /** Ganho automático do navegador: no Chrome ele também mexe no volume do microfone do Windows. */
+  autoGainControl: boolean;
   pttEnabled: boolean;
   /** KeyboardEvent.code da tecla do push-to-talk */
   pttKey: string;
@@ -102,6 +104,7 @@ export const useSettings = create<Settings>()(
       speakerDeviceId: null,
       noiseMode: "ai",
       echoCancellation: true,
+      autoGainControl: false,
       pttEnabled: false,
       pttKey: "Backquote",
       userVolumes: {},
